@@ -1516,13 +1516,20 @@ const { apiBaseUrl = '' } = Astro.props;
       } catch (error) {
         console.error('送信エラー:', error);
         showError('メッセージの送信に失敗しました。');
-      } finally {
-        isProcessing = false;
-        sendBtn.disabled = false;
-        micBtn.disabled = false;
-        userInput.disabled = false;
-        userInput.focus();
-      }
+} finally {
+  isProcessing = false;
+  sendBtn.disabled = false;
+  micBtn.disabled = false;
+  userInput.disabled = false;
+  
+  // ショップカードが表示される場合はフォーカスしない
+  // （スマホでキーボードが出るのを防ぐ）
+  if (currentShops.length === 0) {
+    userInput.focus();
+  } else {
+    userInput.blur(); // 明示的にフォーカスを外す
+  }
+}
     }
 
     // 予約依頼モーダルを開く
