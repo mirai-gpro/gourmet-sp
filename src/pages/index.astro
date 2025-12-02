@@ -3,6 +3,8 @@
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
+// ▼▼▼ 追加: インストールボタンコンポーネントの読み込み ▼▼▼
+import InstallPrompt from '../components/InstallPrompt.astro';
 
 // APIベースURL（Cloud Runのエンドポイント）
 // 本番環境では環境変数から取得
@@ -15,6 +17,9 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>グルメサポートAI - お店探しをお手伝い</title>
+  
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -164,7 +169,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     </footer>
   </div>
 
-  <!-- 予約依頼モーダル -->
   <ReservationModal apiBaseUrl={apiBaseUrl} />
+
+  <InstallPrompt />
+
+  <script>
+    import { registerSW } from 'virtual:pwa-register';
+    registerSW({ immediate: true });
+  </script>
 </body>
 </html>
