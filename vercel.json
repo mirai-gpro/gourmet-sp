@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://gourmet-support-6s2ds5mdba-uc.a.run.app"
+      "destination": "https://gourmet-support-6s2ds5mdba-uc.a.run.app/api/:path*"
     }
   ]
 }
