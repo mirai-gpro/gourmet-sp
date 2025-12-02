@@ -3,36 +3,26 @@ import AstroPWA from '@vite-pwa/astro';
 
 // https://astro.build/config
 export default defineConfig({
-  // Cloud Runで静的ファイルをホスティングする場合
   output: 'static',
-
-  // ビルド設定
   build: {
-    // アセットの出力先
     assets: 'assets'
   },
-
-  // 開発サーバー設定
   server: {
     port: 4321,
     host: true
   },
-
-  // Vite設定
   vite: {
-    // 環境変数のプレフィックス
     envPrefix: 'PUBLIC_',
-    // ビルド設定
     build: {
-      // 文字エンコーディングを明示
       charset: 'utf8'
     }
   },
-
-  // ▼▼▼ ここからPWAの設定を追加しました ▼▼▼
   integrations: [
     AstroPWA({
       registerType: 'autoUpdate',
+      // ▼▼▼ この1行が超重要です！ ▼▼▼
+      manifestFilename: 'manifest.webmanifest',
+      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Gourmet SP',
