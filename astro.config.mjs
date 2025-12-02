@@ -1,10 +1,11 @@
+// astro.config.mjs
 import { defineConfig } from 'astro/config';
 import AstroPWA from '@vite-pwa/astro';
 
 export default defineConfig({
   output: 'static',
   build: {
-    assets: 'assets' // アセットの出力先
+    assets: 'assets'
   },
   server: {
     port: 4321,
@@ -19,13 +20,11 @@ export default defineConfig({
   integrations: [
     AstroPWA({
       registerType: 'autoUpdate',
-      
-      // ★重要: Vercelで確実に認識させるため、拡張子を .json に固定する
-      manifestFilename: 'manifest.json',
-      
+      // ▼▼▼ 重要: 生成されるファイル名をHTMLと一致させる ▼▼▼
+      manifestFilename: 'manifest.webmanifest',
+      // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      
-      // ★重要: マニフェストの中身はここに書く（publicにファイルを置かない）
       manifest: {
         name: 'Gourmet SP',
         short_name: 'Gourmet',
@@ -33,19 +32,16 @@ export default defineConfig({
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',
-        
-        // ★重要: スコープを明示する（Vercelのサブディレクトリ対策）
         scope: '/',
         start_url: '/',
-        
         icons: [
           {
-            src: 'pwa-192x192.png', // publicフォルダの画像を指定
+            src: 'pwa-192x192.png', // publicフォルダにこの画像があること！
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'pwa-512x512.png', // publicフォルダにこの画像があること！
             sizes: '512x512',
             type: 'image/png'
           }
