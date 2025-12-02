@@ -1,0 +1,149 @@
+---
+// src/components/InstallPrompt.astro
+---
+<div id="install-toast" class="install-toast hidden">
+  <div class="monster-icon">
+    ??
+  </div>
+  <div class="content">
+    <p class="title">Gourmet SP</p>
+    <p class="desc">アプリを入れてAIとグルメ探索！</p>
+  </div>
+  <button id="install-button" class="install-btn">
+    インストール
+  </button>
+  <button id="close-toast" class="close-btn">×</button>
+</div>
+
+<script>
+  // クライアントサイドで実行されるスクリプト
+  let deferredPrompt;
+  const toast = document.getElementById('install-toast');
+  const installBtn = document.getElementById('install-button');
+  const closeBtn = document.getElementById('close-toast');
+
+  // ブラウザが「インストールできるよ」と合図を出したら発火
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // デフォルトのブラウザプロンプトを阻止
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    // トーストを表示
+    toast.classList.remove('hidden');
+    toast.classList.add('show');
+  });
+
+  // インストールボタンが押されたら
+  installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`User response to the install prompt: ${outcome}`);
+      deferredPrompt = null;
+      // トーストを隠す
+      toast.classList.remove('show');
+      toast.classList.add('hidden');
+    }
+  });
+
+  // 閉じるボタン
+  closeBtn.addEventListener('click', () => {
+    toast.classList.remove('show');
+    toast.classList.add('hidden');
+  });
+</script>
+
+<style>
+  .install-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px); /* 最初は下に隠しておく */
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 2px solid #FF8C00; /* テーマカラーのオレンジ */
+    border-radius: 16px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    z-index: 9999;
+    width: 90%;
+    max-width: 400px;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  /* 表示状態 */
+  .install-toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  /* 最初から隠しておくクラス */
+  .hidden {
+    display: none; /* JSが読み込まれるまで非表示 */
+    visibility: hidden;
+  }
+  
+  /* JSでクラス操作用（display: flexに戻す） */
+  .install-toast.hidden {
+    display: none;
+  }
+  .install-toast.show {
+    display: flex;
+    visibility: visible;
+  }
+
+  .monster-icon {
+    font-size: 2rem;
+    animation: bounce 2s infinite;
+  }
+
+  .content {
+    flex: 1;
+  }
+
+  .title {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .desc {
+    font-size: 0.75rem;
+    color: #666;
+    margin: 0;
+  }
+
+  .install-btn {
+    background: #FF8C00;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 4px 6px rgba(255, 140, 0, 0.3);
+  }
+
+  .install-btn:active {
+    transform: scale(0.95);
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 4px;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+</style>
