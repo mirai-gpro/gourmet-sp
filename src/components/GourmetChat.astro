@@ -855,28 +855,34 @@ const { apiBaseUrl = '' } = Astro.props;
     };
 
     // UI言語を更新
+// UI言語を更新
     function updateUILanguage() {
       // チャットコンポーネント内の要素
       voiceStatus.innerHTML = t('voiceStatusStopped');
-      userInput.placeholder = t('inputPlaceholder');
+userInput.placeholder = t('inputPlaceholder');
       micBtn.title = t('btnVoiceInput');
       speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       sendBtn.textContent = t('btnSend');
       reservationBtn.innerHTML = t('btnReservation');
-
-      // ページ全体の要素（index.astro内）
+// ページ全体の要素（index.astro内）
       const pageTitle = document.getElementById('pageTitle');
       const pageSubtitle = document.getElementById('pageSubtitle');
       const shopListTitle = document.getElementById('shopListTitle');
-      const shopListEmpty = document.getElementById('shopListEmpty');
+const shopListEmpty = document.getElementById('shopListEmpty');
       const pageFooter = document.getElementById('pageFooter');
 
-      if (pageTitle) pageTitle.innerHTML = `&#127869; ${t('pageTitle')}`;
-      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
-      if (shopListTitle) shopListTitle.innerHTML = `&#127869; ${t('shopListTitle')}`;
-      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
-      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} &#10024;`;
+      // [変更前] 絵文字「🍽」で上書きされていた
+      // if (pageTitle) pageTitle.innerHTML = `🍽 ${t('pageTitle')}`;
 
+      // [変更後] 画像タグを使って更新するように修正
+      if (pageTitle) {
+        pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
+      }
+
+      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
+if (shopListTitle) shopListTitle.innerHTML = `🍽 ${t('shopListTitle')}`;
+      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
+      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} ✨`;
       // チャットの最初の挨拶メッセージを更新
       const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
       if (initialMessage) {
