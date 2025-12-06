@@ -43,10 +43,22 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       padding: 20px 0 30px;
     }
 
-    .page-header h1 {
+.page-header h1 {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px; /* 画像と文字の間隔 */
       font-size: 28px;
       font-weight: 900;
       margin-bottom: 8px;
+    }
+
+/* [修正後] :global() を付けることで、JSで追加された .app-logo にも確実に適用させる */
+    :global(.app-logo) {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
     .page-header p {
@@ -139,9 +151,11 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   </style>
 </head>
 <body>
-  <div class="page-container">
     <header class="page-header">
-      <h1 id="pageTitle">&#127869; グルメサポートAI</h1>
+      <h1 id="pageTitle">
+        <img src="/pwa-152x152.png" alt="Logo" class="app-logo" />
+        グルメサポートAI
+      </h1>
       <p id="pageSubtitle">AIがあなたにぴったりのお店をご提案します</p>
     </header>
 
