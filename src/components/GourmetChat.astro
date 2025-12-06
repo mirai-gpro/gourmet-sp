@@ -8,6 +8,16 @@ const { apiBaseUrl = '' } = Astro.props;
 ---
 
 <div class="gourmet-chat-container" data-api-base={apiBaseUrl}>
+  <!-- 言語選択UI -->
+  <div class="language-selector">
+    <select id="languageSelect" class="language-dropdown">
+      <option value="ja">日本語 (Japanese)</option>
+      <option value="en">English</option>
+      <option value="zh">中文 (Chinese)</option>
+      <option value="ko">$D55C$AD6D$C5B4 (Korean)</option>
+    </select>
+  </div>
+
   <div class="voice-status stopped" id="voiceStatus">
     &#127908; 音声認識: 停止中
   </div>
@@ -18,9 +28,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
   <div class="input-area">
     <div class="input-group">
-      <input 
-        type="text" 
-        id="userInput" 
+      <input
+        type="text"
+        id="userInput"
         placeholder="メッセージを入力..."
         disabled
       />
@@ -36,7 +46,7 @@ const { apiBaseUrl = '' } = Astro.props;
     </div>
     <div class="input-actions">
       <button class="btn btn-reservation" id="reservationBtn" disabled>
-        &#128222; 予約依頼する
+        $D83D$DCDE 予約依頼する
       </button>
     </div>
   </div>
@@ -54,6 +64,36 @@ const { apiBaseUrl = '' } = Astro.props;
     flex-direction: column;
     overflow: hidden;
     margin: 0 auto;
+  }
+
+  .language-selector {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .language-dropdown {
+    padding: 6px 12px;
+    border: 2px solid white;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #667eea;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .language-dropdown:hover {
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .language-dropdown:focus {
+    border-color: #fbbf24;
   }
 
   .chat-header {
@@ -393,13 +433,385 @@ const { apiBaseUrl = '' } = Astro.props;
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
+  // 多言語対応i18nオブジェクト
+  const i18n = {
+    ja: {
+      pageTitle: 'グルメサポートAI',
+      pageSubtitle: 'AIがあなたにぴったりのお店をご提案します',
+      shopListTitle: 'おすすめのお店',
+      shopListEmpty: 'チャットで検索すると、ここにお店が表示されます',
+      footerMessage: '素敵なグルメ体験をお楽しみください',
+      initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
+      voiceStatusStopped: '$D83C$DFA4 音声認識: 停止中',
+      voiceStatusListening: '$D83C$DFA4 話してください...',
+      voiceStatusRecording: '$D83C$DFA4 録音中...',
+      voiceStatusWaiting: '$D83C$DFA4 認識待機中...',
+      voiceStatusRecognizing: '$D83D$DD0A 音声認識中...',
+      voiceStatusSynthesizing: '$D83D$DD0A 音声合成中...',
+      voiceStatusSpeaking: '$D83D$DD0A 音声再生中...',
+      voiceStatusComplete: '$2705 認識完了',
+      inputPlaceholder: 'メッセージを入力...',
+      btnVoiceInput: '音声入力',
+      btnTTSOn: '音声読み上げON',
+      btnTTSOff: '音声読み上げOFF',
+      btnSend: '送信',
+      btnReservation: '$D83D$DCDE 予約依頼する',
+      clickPrompt: '音声を再生するには、画面をクリックしてください',
+      recordingTimeLimit: '録音時間が上限（55秒）に達したため自動停止しました',
+      micAccessError: 'マイクアクセスエラー:',
+      voiceNotRecognized: '音声が認識されませんでした',
+      sttError: '音声認識エラー:',
+      initError: '初期化に失敗しました。ページを再読み込みしてください。',
+      searchError: 'お店を検索してからご利用ください。',
+      loadingMessage: '提案するお店の情報を探しています。少々お待ちください...',
+      summaryTitle: '$D83D$DCCB 質問要約書',
+      summaryFooter: '担当スタッフが内容を確認し、追ってご連絡いたします。',
+      ackConfirm: '確認しますので、少々お待ちください。',
+      ackSearch: 'お調べします。',
+      ackUnderstood: 'かしこまりました。',
+      ackYes: 'はい、承知しました。',
+      fallbackResponse: (text: string) => `"${text}"とのこと。お調べしますので、少々お待ちください。`,
+      additionalResponse: '只今、お店の情報を確認中です。もう少々お待ちください。',
+      ttsIntro: 'お待たせしました。',
+      // 予約モーダル
+      reservationModalTitle: '予約依頼',
+      reservationShopSelect: 'お店を選択',
+      reservationSelectionGuide: '優先順にクリックしてください（最大3件）',
+      reservationResetBtn: 'やり直し',
+      reservationPriorityNote: '①→②→③の順で電話します。予約成立時点で終了します。',
+      reservationContentTitle: '予約内容',
+      reservationGuestCount: '人数',
+      reservationGuestOption: (n: number) => n === 10 ? '10名以上' : `${n}名`,
+      reservationDate: '希望日',
+      reservationTime: '開始時間',
+      reservationSelectPlaceholder: '選択してください',
+      reservationTimeFlexibility: '時間の許容範囲',
+      reservationTimeExact: '開始時間優先',
+      reservationTimePlus30: '+30分まで',
+      reservationTimePlus60: '+60分まで',
+      reservationTimePlus90: '+90分まで',
+      reservationSeatPreference: '席の希望',
+      reservationSeatTable: 'テーブル席',
+      reservationSeatCounter: 'カウンター席',
+      reservationSeatPrivate: '個室',
+      reservationOtherRequests: 'その他の希望',
+      reservationOtherRequestsPlaceholder: '誕生日ケーキ、アレルギー対応、禁煙席など',
+      reservationPerShopBtn: 'お店毎に予約内容を変える',
+      reservationBackToCommon: '共通設定に戻す',
+      reservationReserverInfo: '予約者情報',
+      reservationReserverName: 'お名前',
+      reservationReserverNamePlaceholder: '予約者のお名前',
+      reservationReserverPhone: '携帯番号',
+      reservationReserverPhoneHint: '※ 店舗への連絡先として伝えます',
+      reservationCancel: 'キャンセル',
+      reservationSubmit: '予約依頼を開始する',
+      reservationSelectionRemaining: (n: number) => `あと${n}件選択できます`,
+      reservationSelectionComplete: '選択完了（変更するには店舗をクリック）',
+      reservationSelectShopsFirst: '先にお店を選択してください',
+      reservationPhoneLabel: '電話番号',
+      reservationPhoneHint: '※ Places APIから取得。修正可能',
+      reservationPerShopPlaceholder: 'このお店への特別なリクエスト',
+      reservationAlertTitle: '予約依頼を受け付けました。',
+      reservationAlertReserver: '予約者',
+      reservationAlertContact: '連絡先',
+      reservationAlertShops: '選択されたお店',
+      reservationAlertNoPhone: '電話番号なし',
+      reservationAlertDevNote: '（この機能は現在開発中です）',
+      reservationVoiceRecording: '録音中...',
+      reservationVoiceWaiting: '認識待機中...',
+      reservationVoiceSpeaking: '話してください...',
+      reservationVoiceError: 'マイクアクセスエラー',
+      reservationVoiceRecognizing: '音声認識中...',
+      reservationVoiceComplete: '入力完了',
+      reservationVoiceNotRecognized: '音声が認識されませんでした'
+    },
+    en: {
+      pageTitle: 'Gourmet Support AI',
+      pageSubtitle: 'AI will suggest the perfect restaurant for you',
+      shopListTitle: 'Recommended Restaurants',
+      shopListEmpty: 'Search in the chat to see restaurants here',
+      footerMessage: 'Enjoy your wonderful dining experience',
+      initialGreeting: 'Hello! I\'m the Gourmet Support AI.\n\nWhat kind of restaurant are you looking for today? I can help you find restaurants anywhere in the world.',
+      voiceStatusStopped: '$D83C$DFA4 Voice Recognition: Stopped',
+      voiceStatusListening: '$D83C$DFA4 Please speak...',
+      voiceStatusRecording: '$D83C$DFA4 Recording...',
+      voiceStatusWaiting: '$D83C$DFA4 Waiting for recognition...',
+      voiceStatusRecognizing: '$D83D$DD0A Recognizing voice...',
+      voiceStatusSynthesizing: '$D83D$DD0A Synthesizing voice...',
+      voiceStatusSpeaking: '$D83D$DD0A Playing audio...',
+      voiceStatusComplete: '$2705 Recognition complete',
+      inputPlaceholder: 'Enter message...',
+      btnVoiceInput: 'Voice input',
+      btnTTSOn: 'Voice reading ON',
+      btnTTSOff: 'Voice reading OFF',
+      btnSend: 'Send',
+      btnReservation: '$D83D$DCDE Request reservation',
+      clickPrompt: 'Click the screen to play audio',
+      recordingTimeLimit: 'Recording stopped automatically (55s limit reached)',
+      micAccessError: 'Microphone access error:',
+      voiceNotRecognized: 'Voice not recognized',
+      sttError: 'Voice recognition error:',
+      initError: 'Initialization failed. Please reload the page.',
+      searchError: 'Please search for restaurants first.',
+      loadingMessage: 'Searching for restaurant recommendations. Please wait...',
+      summaryTitle: '$D83D$DCCB Inquiry Summary',
+      summaryFooter: 'Our staff will review your inquiry and contact you shortly.',
+      ackConfirm: 'Let me check. Please wait a moment.',
+      ackSearch: 'Let me look that up.',
+      ackUnderstood: 'Understood.',
+      ackYes: 'Yes, I understand.',
+      fallbackResponse: (text: string) => `You said "${text}". Let me search for that. Please wait.`,
+      additionalResponse: 'Currently searching for restaurant information. Please wait a moment.',
+      ttsIntro: 'Thank you for waiting.',
+      // Reservation Modal
+      reservationModalTitle: 'Reservation Request',
+      reservationShopSelect: 'Select Restaurants',
+      reservationSelectionGuide: 'Click in priority order (up to 3)',
+      reservationResetBtn: 'Reset',
+      reservationPriorityNote: 'We will call in order ①→②→③. Process ends when reservation is confirmed.',
+      reservationContentTitle: 'Reservation Details',
+      reservationGuestCount: 'Party Size',
+      reservationGuestOption: (n: number) => n === 10 ? '10+ people' : `${n} ${n === 1 ? 'person' : 'people'}`,
+      reservationDate: 'Preferred Date',
+      reservationTime: 'Start Time',
+      reservationSelectPlaceholder: 'Please select',
+      reservationTimeFlexibility: 'Time Flexibility',
+      reservationTimeExact: 'Exact time preferred',
+      reservationTimePlus30: 'Up to +30 min',
+      reservationTimePlus60: 'Up to +60 min',
+      reservationTimePlus90: 'Up to +90 min',
+      reservationSeatPreference: 'Seating Preference',
+      reservationSeatTable: 'Table',
+      reservationSeatCounter: 'Counter',
+      reservationSeatPrivate: 'Private room',
+      reservationOtherRequests: 'Special Requests',
+      reservationOtherRequestsPlaceholder: 'Birthday cake, allergy accommodations, non-smoking, etc.',
+      reservationPerShopBtn: 'Set different details per restaurant',
+      reservationBackToCommon: 'Back to common settings',
+      reservationReserverInfo: 'Your Information',
+      reservationReserverName: 'Name',
+      reservationReserverNamePlaceholder: 'Your name',
+      reservationReserverPhone: 'Phone Number',
+      reservationReserverPhoneHint: '※ Will be provided to the restaurant',
+      reservationCancel: 'Cancel',
+      reservationSubmit: 'Submit Reservation Request',
+      reservationSelectionRemaining: (n: number) => `${n} more can be selected`,
+      reservationSelectionComplete: 'Selection complete (click to change)',
+      reservationSelectShopsFirst: 'Please select restaurants first',
+      reservationPhoneLabel: 'Phone Number',
+      reservationPhoneHint: '※ Retrieved from Places API. Editable',
+      reservationPerShopPlaceholder: 'Special requests for this restaurant',
+      reservationAlertTitle: 'Reservation request received.',
+      reservationAlertReserver: 'Name',
+      reservationAlertContact: 'Contact',
+      reservationAlertShops: 'Selected Restaurants',
+      reservationAlertNoPhone: 'No phone',
+      reservationAlertDevNote: '(This feature is currently under development)',
+      reservationVoiceRecording: 'Recording...',
+      reservationVoiceWaiting: 'Waiting for recognition...',
+      reservationVoiceSpeaking: 'Please speak...',
+      reservationVoiceError: 'Microphone access error',
+      reservationVoiceRecognizing: 'Recognizing voice...',
+      reservationVoiceComplete: 'Input complete',
+      reservationVoiceNotRecognized: 'Voice not recognized'
+    },
+    zh: {
+      pageTitle: '美食支持AI',
+      pageSubtitle: 'AI$4E3A$60A8推荐完美的餐$5385',
+      shopListTitle: '推荐餐$5385',
+      shopListEmpty: '在聊天中搜索后，餐$5385将$663E示在$8FD9里',
+      footerMessage: '祝$60A8享受美好的美食体$9A8C',
+      initialGreeting: '$60A8好！我是美食支持AI。\n\n今天$60A8想找什$4E48$6837的餐$5385$5462？我可以$5E2E$60A8搜索全球各地的餐$5385。',
+      voiceStatusStopped: '$D83C$DFA4 $8BED音$8BC6$522B: 已停止',
+      voiceStatusListening: '$D83C$DFA4 $8BF7$8BF4$8BDD...',
+      voiceStatusRecording: '$D83C$DFA4 $5F55音中...',
+      voiceStatusWaiting: '$D83C$DFA4 等待$8BC6$522B...',
+      voiceStatusRecognizing: '$D83D$DD0A $8BC6$522B$8BED音中...',
+      voiceStatusSynthesizing: '$D83D$DD0A $8BED音合成中...',
+      voiceStatusSpeaking: '$D83D$DD0A 播放音$9891中...',
+      voiceStatusComplete: '$2705 $8BC6$522B完成',
+      inputPlaceholder: '$8F93入消息...',
+      btnVoiceInput: '$8BED音$8F93入',
+      btnTTSOn: '$8BED音朗$8BFB$5F00$542F',
+      btnTTSOff: '$8BED音朗$8BFB$5173$95ED',
+      btnSend: '$53D1送',
+      btnReservation: '$D83D$DCDE 申$8BF7$9884$7EA6',
+      clickPrompt: '点$51FB屏幕播放音$9891',
+      recordingTimeLimit: '$5F55音已自$52A8停止（$8FBE到55秒上限）',
+      micAccessError: '麦克$98CE$8BBF$95EE$9519$8BEF:',
+      voiceNotRecognized: '未$8BC6$522B到$8BED音',
+      sttError: '$8BED音$8BC6$522B$9519$8BEF:',
+      initError: '初始化失$8D25。$8BF7重新加$8F7D$9875面。',
+      searchError: '$8BF7先搜索餐$5385。',
+      loadingMessage: '正在搜索推荐餐$5385。$8BF7稍候...',
+      summaryTitle: '$D83D$DCCB 咨$8BE2摘要',
+      summaryFooter: '我$4EEC的工作人$5458将$5BA1核$60A8的咨$8BE2并尽快$8054系$60A8。',
+      ackConfirm: '我$786E$8BA4一下。$8BF7稍等。',
+      ackSearch: '我$67E5一下。',
+      ackUnderstood: '明白了。',
+      ackYes: '好的，我知道了。',
+      fallbackResponse: (text: string) => `$60A8$8BF4"${text}"。我搜索一下。$8BF7稍等。`,
+      additionalResponse: '正在$786E$8BA4餐$5385信息。$8BF7稍候。',
+      ttsIntro: '$8BA9$60A8久等了。',
+      // $9884$7EA6模$6001框
+      reservationModalTitle: '$9884$7EA6申$8BF7',
+      reservationShopSelect: '$9009$62E9餐$5385',
+      reservationSelectionGuide: '按$4F18先$987A序点$51FB（最多3家）',
+      reservationResetBtn: '重置',
+      reservationPriorityNote: '将按①→②→③的$987A序致$7535。$9884$7EA6成功后$7ED3束。',
+      reservationContentTitle: '$9884$7EA6$8BE6情',
+      reservationGuestCount: '人数',
+      reservationGuestOption: (n: number) => n === 10 ? '10人以上' : `${n}人`,
+      reservationDate: '希望日期',
+      reservationTime: '$5F00始$65F6$95F4',
+      reservationSelectPlaceholder: '$8BF7$9009$62E9',
+      reservationTimeFlexibility: '$65F6$95F4$5F39性',
+      reservationTimeExact: '$4F18先$5F00始$65F6$95F4',
+      reservationTimePlus30: '最多+30分$949F',
+      reservationTimePlus60: '最多+60分$949F',
+      reservationTimePlus90: '最多+90分$949F',
+      reservationSeatPreference: '座位偏好',
+      reservationSeatTable: '$684C席',
+      reservationSeatCounter: '$5427台席',
+      reservationSeatPrivate: '包$95F4',
+      reservationOtherRequests: '其他要求',
+      reservationOtherRequestsPlaceholder: '生日蛋$7CD5、$8FC7敏$5BF9$5E94、禁烟座位等',
+      reservationPerShopBtn: '$4E3A$6BCF家餐$5385$8BBE置不同$8BE6情',
+      reservationBackToCommon: '返回通用$8BBE置',
+      reservationReserverInfo: '$9884$7EA6人信息',
+      reservationReserverName: '姓名',
+      reservationReserverNamePlaceholder: '$9884$7EA6人姓名',
+      reservationReserverPhone: '手机号$7801',
+      reservationReserverPhoneHint: '※ 将告知餐$5385作$4E3A$8054系方式',
+      reservationCancel: '取消',
+      reservationSubmit: '提交$9884$7EA6申$8BF7',
+      reservationSelectionRemaining: (n: number) => `$8FD8可$9009$62E9${n}家`,
+      reservationSelectionComplete: '$9009$62E9完成（点$51FB可更改）',
+      reservationSelectShopsFirst: '$8BF7先$9009$62E9餐$5385',
+      reservationPhoneLabel: '$7535$8BDD号$7801',
+      reservationPhoneHint: '※ 从Places API$83B7取。可$7F16$8F91',
+      reservationPerShopPlaceholder: '$5BF9此餐$5385的特殊要求',
+      reservationAlertTitle: '已接受$9884$7EA6申$8BF7。',
+      reservationAlertReserver: '$9884$7EA6人',
+      reservationAlertContact: '$8054系方式',
+      reservationAlertShops: '$9009$62E9的餐$5385',
+      reservationAlertNoPhone: '无$7535$8BDD',
+      reservationAlertDevNote: '（此功能目前正在$5F00$53D1中）',
+      reservationVoiceRecording: '$5F55音中...',
+      reservationVoiceWaiting: '等待$8BC6$522B...',
+      reservationVoiceSpeaking: '$8BF7$8BF4$8BDD...',
+      reservationVoiceError: '麦克$98CE$8BBF$95EE$9519$8BEF',
+      reservationVoiceRecognizing: '$8BC6$522B$8BED音中...',
+      reservationVoiceComplete: '$8F93入完成',
+      reservationVoiceNotRecognized: '未$8BC6$522B到$8BED音'
+    },
+    ko: {
+      pageTitle: '$BBF8$C2DD $C9C0$C6D0 AI',
+      pageSubtitle: 'AI$AC00 $C644$BCBD$D55C $B808$C2A4$D1A0$B791$C744 $CD94$CC9C$D574 $B4DC$B9BD$B2C8$B2E4',
+      shopListTitle: '$CD94$CC9C $B808$C2A4$D1A0$B791',
+      shopListEmpty: '$CC44$D305$C5D0$C11C $AC80$C0C9$D558$BA74 $C5EC$AE30$C5D0 $B808$C2A4$D1A0$B791$C774 $D45C$C2DC$B429$B2C8$B2E4',
+      footerMessage: '$BA4B$C9C4 $BBF8$C2DD $ACBD$D5D8$C744 $C990$AE30$C138$C694',
+      initialGreeting: '$C548$B155$D558$C138$C694! $BBF8$C2DD $C9C0$C6D0 AI$C785$B2C8$B2E4.\n\n$C624$B298$C740 $C5B4$B5A4 $C74C$C2DD$C810$C744 $CC3E$C73C$C2DC$B098$C694? $C804 $C138$ACC4 $C5B4$B514$B4E0 $C74C$C2DD$C810$C744 $AC80$C0C9$D574 $B4DC$B9B4 $C218 $C788$C2B5$B2C8$B2E4.',
+      voiceStatusStopped: '$D83C$DFA4 $C74C$C131 $C778$C2DD: $C815$C9C0$B428',
+      voiceStatusListening: '$D83C$DFA4 $B9D0$C500$D574 $C8FC$C138$C694...',
+      voiceStatusRecording: '$D83C$DFA4 $B179$C74C $C911...',
+      voiceStatusWaiting: '$D83C$DFA4 $C778$C2DD $B300$AE30 $C911...',
+      voiceStatusRecognizing: '$D83D$DD0A $C74C$C131 $C778$C2DD $C911...',
+      voiceStatusSynthesizing: '$D83D$DD0A $C74C$C131 $D569$C131 $C911...',
+      voiceStatusSpeaking: '$D83D$DD0A $C624$B514$C624 $C7AC$C0DD $C911...',
+      voiceStatusComplete: '$2705 $C778$C2DD $C644$B8CC',
+      inputPlaceholder: '$BA54$C2DC$C9C0 $C785$B825...',
+      btnVoiceInput: '$C74C$C131 $C785$B825',
+      btnTTSOn: '$C74C$C131 $C77D$AE30 $CF1C$C9D0',
+      btnTTSOff: '$C74C$C131 $C77D$AE30 $AEBC$C9D0',
+      btnSend: '$C804$C1A1',
+      btnReservation: '$D83D$DCDE $C608$C57D $C2E0$CCAD',
+      clickPrompt: '$C624$B514$C624$B97C $C7AC$C0DD$D558$B824$BA74 $D654$BA74$C744 $D074$B9AD$D558$C138$C694',
+      recordingTimeLimit: '$B179$C74C$C774 $C790$B3D9$C73C$B85C $C911$C9C0$B418$C5C8$C2B5$B2C8$B2E4 (55$CD08 $C81C$D55C $B3C4$B2EC)',
+      micAccessError: '$B9C8$C774$D06C $C561$C138$C2A4 $C624$B958:',
+      voiceNotRecognized: '$C74C$C131$C774 $C778$C2DD$B418$C9C0 $C54A$C558$C2B5$B2C8$B2E4',
+      sttError: '$C74C$C131 $C778$C2DD $C624$B958:',
+      initError: '$CD08$AE30$D654 $C2E4$D328. $D398$C774$C9C0$B97C $C0C8$B85C$ACE0$CE68$D558$C138$C694.',
+      searchError: '$BA3C$C800 $B808$C2A4$D1A0$B791$C744 $AC80$C0C9$D558$C138$C694.',
+      loadingMessage: '$CD94$CC9C $B808$C2A4$D1A0$B791$C744 $AC80$C0C9 $C911$C785$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694...',
+      summaryTitle: '$D83D$DCCB $BB38$C758 $C694$C57D',
+      summaryFooter: '$B2F4$B2F9$C790$AC00 $BB38$C758 $B0B4$C6A9$C744 $AC80$D1A0$D558$ACE0 $ACE7 $C5F0$B77D$B4DC$B9AC$ACA0$C2B5$B2C8$B2E4.',
+      ackConfirm: '$D655$C778$D558$ACA0$C2B5$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.',
+      ackSearch: '$CC3E$C544$BCF4$ACA0$C2B5$B2C8$B2E4.',
+      ackUnderstood: '$C54C$ACA0$C2B5$B2C8$B2E4.',
+      ackYes: '$B124, $C54C$ACA0$C2B5$B2C8$B2E4.',
+      fallbackResponse: (text: string) => `"${text}"$B77C$ACE0 $B9D0$C500$D558$C168$B124$C694. $AC80$C0C9$D574 $BCF4$ACA0$C2B5$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.`,
+      additionalResponse: '$C9C0$AE08 $B808$C2A4$D1A0$B791 $C815$BCF4$B97C $D655$C778 $C911$C785$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.',
+      ttsIntro: '$AE30$B2E4$B824 $C8FC$C154$C11C $AC10$C0AC$D569$B2C8$B2E4.',
+      // $C608$C57D $BAA8$B2EC
+      reservationModalTitle: '$C608$C57D $C2E0$CCAD',
+      reservationShopSelect: '$B808$C2A4$D1A0$B791 $C120$D0DD',
+      reservationSelectionGuide: '$C6B0$C120$C21C$C704$B300$B85C $D074$B9AD$D558$C138$C694 ($CD5C$B300 3$ACF3)',
+      reservationResetBtn: '$B2E4$C2DC $D558$AE30',
+      reservationPriorityNote: '①→②→③ $C21C$C11C$B85C $C804$D654$D569$B2C8$B2E4. $C608$C57D $C131$B9BD $C2DC $C885$B8CC$D569$B2C8$B2E4.',
+      reservationContentTitle: '$C608$C57D $B0B4$C6A9',
+      reservationGuestCount: '$C778$C6D0',
+      reservationGuestOption: (n: number) => n === 10 ? '10$BA85 $C774$C0C1' : `${n}$BA85`,
+      reservationDate: '$D76C$B9DD $B0A0$C9DC',
+      reservationTime: '$C2DC$C791 $C2DC$AC04',
+      reservationSelectPlaceholder: '$C120$D0DD$D558$C138$C694',
+      reservationTimeFlexibility: '$C2DC$AC04 $D5C8$C6A9 $BC94$C704',
+      reservationTimeExact: '$C2DC$C791 $C2DC$AC04 $C6B0$C120',
+      reservationTimePlus30: '+30$BD84$AE4C$C9C0',
+      reservationTimePlus60: '+60$BD84$AE4C$C9C0',
+      reservationTimePlus90: '+90$BD84$AE4C$C9C0',
+      reservationSeatPreference: '$C88C$C11D $D76C$B9DD',
+      reservationSeatTable: '$D14C$C774$BE14$C11D',
+      reservationSeatCounter: '$CE74$C6B4$D130$C11D',
+      reservationSeatPrivate: '$B8F8',
+      reservationOtherRequests: '$AE30$D0C0 $C694$CCAD',
+      reservationOtherRequestsPlaceholder: '$C0DD$C77C $CF00$C774$D06C, $C54C$B808$B974$AE30 $B300$C751, $AE08$C5F0$C11D $B4F1',
+      reservationPerShopBtn: '$B808$C2A4$D1A0$B791$BCC4$B85C $C608$C57D $B0B4$C6A9 $B2E4$B974$AC8C $C124$C815',
+      reservationBackToCommon: '$ACF5$D1B5 $C124$C815$C73C$B85C $B3CC$C544$AC00$AE30',
+      reservationReserverInfo: '$C608$C57D$C790 $C815$BCF4',
+      reservationReserverName: '$C131$D568',
+      reservationReserverNamePlaceholder: '$C608$C57D$C790 $C131$D568',
+      reservationReserverPhone: '$C804$D654$BC88$D638',
+      reservationReserverPhoneHint: '※ $B808$C2A4$D1A0$B791$C5D0 $C5F0$B77D$CC98$B85C $C804$B2EC$B429$B2C8$B2E4',
+      reservationCancel: '$CDE8$C18C',
+      reservationSubmit: '$C608$C57D $C2E0$CCAD $C2DC$C791',
+      reservationSelectionRemaining: (n: number) => `${n}$ACF3 $B354 $C120$D0DD $AC00$B2A5`,
+      reservationSelectionComplete: '$C120$D0DD $C644$B8CC ($BCC0$ACBD$D558$B824$BA74 $D074$B9AD)',
+      reservationSelectShopsFirst: '$BA3C$C800 $B808$C2A4$D1A0$B791$C744 $C120$D0DD$D558$C138$C694',
+      reservationPhoneLabel: '$C804$D654$BC88$D638',
+      reservationPhoneHint: '※ Places API$C5D0$C11C $AC00$C838$C634. $C218$C815 $AC00$B2A5',
+      reservationPerShopPlaceholder: '$C774 $B808$C2A4$D1A0$B791$C5D0 $B300$D55C $D2B9$BCC4 $C694$CCAD',
+      reservationAlertTitle: '$C608$C57D $C2E0$CCAD$C744 $C811$C218$D588$C2B5$B2C8$B2E4.',
+      reservationAlertReserver: '$C608$C57D$C790',
+      reservationAlertContact: '$C5F0$B77D$CC98',
+      reservationAlertShops: '$C120$D0DD$D55C $B808$C2A4$D1A0$B791',
+      reservationAlertNoPhone: '$C804$D654$BC88$D638 $C5C6$C74C',
+      reservationAlertDevNote: '($C774 $AE30$B2A5$C740 $D604$C7AC $AC1C$BC1C $C911$C785$B2C8$B2E4)',
+      reservationVoiceRecording: '$B179$C74C $C911...',
+      reservationVoiceWaiting: '$C778$C2DD $B300$AE30 $C911...',
+      reservationVoiceSpeaking: '$B9D0$C500$D574 $C8FC$C138$C694...',
+      reservationVoiceError: '$B9C8$C774$D06C $C561$C138$C2A4 $C624$B958',
+      reservationVoiceRecognizing: '$C74C$C131 $C778$C2DD $C911...',
+      reservationVoiceComplete: '$C785$B825 $C644$B8CC',
+      reservationVoiceNotRecognized: '$C74C$C131$C774 $C778$C2DD$B418$C9C0 $C54A$C558$C2B5$B2C8$B2E4'
+    }
+  };
+
+  // TTS/STT言語コードマッピング
+  const LANGUAGE_CODE_MAP = {
+    ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
+    en: { tts: 'en-US', stt: 'en-US', voice: 'en-US-Studio-O' },
+    zh: { tts: 'cmn-CN', stt: 'cmn-CN', voice: 'cmn-CN-Wavenet-A' },
+    ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
+  };
+
   // グルメチャット機能
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
     if (!container) return;
 
     const apiBase = container.dataset.apiBase || '';
-    
+
     // DOM要素
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
@@ -408,8 +820,10 @@ const { apiBaseUrl = '' } = Astro.props;
     const speakerBtn = document.getElementById('speakerBtn') as HTMLButtonElement;
     const reservationBtn = document.getElementById('reservationBtn') as HTMLButtonElement;
     const voiceStatus = document.getElementById('voiceStatus')!;
+    const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
 
     // 状態
+    let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja'; // デフォルト言語
     let sessionId: string | null = null;
     let isProcessing = false;
     let currentStage = 'conversation';
@@ -423,6 +837,68 @@ const { apiBaseUrl = '' } = Astro.props;
     let isUserInteracted = false;
     let currentShops: any[] = []; // 現在表示中のショップリスト
     let isFromVoiceInput = false; // 音声入力からの送信かどうかを追跡
+
+    // 翻訳ヘルパー関数
+    function t(key: string, ...args: any[]): string {
+      const translation = i18n[currentLanguage][key];
+      if (typeof translation === 'function') {
+        return translation(...args);
+      }
+      return translation || key;
+    }
+
+    // i18nとtranslation関数をグローバルに公開（ReservationModal用）
+    (window as any).gourmetI18n = {
+      i18n: i18n,
+      getCurrentLanguage: () => currentLanguage,
+      t: (key: string, ...args: any[]) => t(key, ...args)
+    };
+
+    // UI言語を更新
+    function updateUILanguage() {
+      // チャットコンポーネント内の要素
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      userInput.placeholder = t('inputPlaceholder');
+      micBtn.title = t('btnVoiceInput');
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      sendBtn.textContent = t('btnSend');
+      reservationBtn.innerHTML = t('btnReservation');
+
+      // ページ全体の要素（index.astro内）
+      const pageTitle = document.getElementById('pageTitle');
+      const pageSubtitle = document.getElementById('pageSubtitle');
+      const shopListTitle = document.getElementById('shopListTitle');
+      const shopListEmpty = document.getElementById('shopListEmpty');
+      const pageFooter = document.getElementById('pageFooter');
+
+      if (pageTitle) pageTitle.innerHTML = `&#127869; ${t('pageTitle')}`;
+      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
+      if (shopListTitle) shopListTitle.innerHTML = `&#127869; ${t('shopListTitle')}`;
+      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
+      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} &#10024;`;
+
+      // チャットの最初の挨拶メッセージを更新
+      const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
+      if (initialMessage) {
+        const messageText = initialMessage.querySelector('.message-text');
+        if (messageText) {
+          messageText.textContent = t('initialGreeting');
+        }
+      }
+
+      // ReservationModalに言語変更を通知
+      const languageChangeEvent = new CustomEvent('languageChange', {
+        detail: { language: currentLanguage }
+      });
+      document.dispatchEvent(languageChangeEvent);
+    }
+
+    // 言語選択イベント
+    languageSelect.addEventListener('change', () => {
+      currentLanguage = languageSelect.value as 'ja' | 'en' | 'zh' | 'ko';
+      updateUILanguage();
+      console.log(`[Language] 言語切替: ${currentLanguage}`);
+    });
 
     // 事前生成音声（案1: 高速応答用）
     let preGeneratedAcks: Map<string, string> = new Map(); // key: テキスト, value: base64 MP3
@@ -459,7 +935,7 @@ const { apiBaseUrl = '' } = Astro.props;
       prompt.className = 'click-prompt';
       prompt.innerHTML = `
         <p>&#128266;</p>
-        <p>音声を再生するには、画面をクリックしてください</p>
+        <p>${t('clickPrompt')}</p>
         <p>&#128266;</p>
       `;
       prompt.addEventListener('click', enableAudioPlayback);
@@ -510,38 +986,39 @@ const { apiBaseUrl = '' } = Astro.props;
 
       // マークダウン記号を除去
       const cleanText = stripMarkdown(text);
-      
+
       console.log('[TTS] cleanText:', cleanText.substring(0, 50) + '...', '文字数:', cleanText.length);
 
       try {
-        voiceStatus.innerHTML = '&#128266; 音声合成中...';
+        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
         voiceStatus.className = 'voice-status speaking';
 
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
         const response = await fetch(`${apiBase}/api/tts/synthesize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: cleanText,
-            language_code: 'ja-JP',
-            voice_name: 'ja-JP-Chirp3-HD-Leda'
+            language_code: langConfig.tts,
+            voice_name: langConfig.voice
           })
         });
 
         const data = await response.json();
-        
+
         console.log('[TTS] API レスポンス受信:', data.success);
 
         if (data.success && data.audio) {
           const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
           currentAudio = audio;
-          
+
           console.log('[TTS] 音声再生開始');
 
           // 音声再生完了を待つPromiseを作成
           const playPromise = new Promise<void>((resolve) => {
             audio.onended = () => {
               console.log('[TTS] 音声再生完了');
-              voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+              voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
               currentAudio = null;
               resolve();
@@ -549,7 +1026,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
             audio.onerror = () => {
               console.log('[TTS] 音声再生エラー');
-              voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+              voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
               resolve();
             };
@@ -560,13 +1037,13 @@ const { apiBaseUrl = '' } = Astro.props;
             await playPromise; // 再生完了を待つ
           } else {
             showClickPrompt();
-            voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+            voiceStatus.innerHTML = t('voiceStatusStopped');
             voiceStatus.className = 'voice-status stopped';
           }
         }
       } catch (error) {
         console.error('[TTS] Error:', error);
-        voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
       }
     }
@@ -700,9 +1177,9 @@ const { apiBaseUrl = '' } = Astro.props;
               clearTimeout(silenceTimer);
               silenceTimer = null;
             }
-            voiceStatus.innerHTML = '&#127908; 録音中...';
+            voiceStatus.innerHTML = t('voiceStatusRecording');
           } else if (hasSpoken && !silenceTimer) {
-            voiceStatus.innerHTML = '&#127908; 認識待機中...';
+            voiceStatus.innerHTML = t('voiceStatusWaiting');
             silenceTimer = window.setTimeout(() => {
               console.log('[VAD] 無音検出 - 自動停止');
               stopStreamingSTT();
@@ -711,12 +1188,13 @@ const { apiBaseUrl = '' } = Astro.props;
         }, 100);
 
         // WebSocketストリーム開始通知
-        socket.emit('start_stream', { language_code: 'ja-JP' });
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+        socket.emit('start_stream', { language_code: langConfig.stt });
 
         isRecording = true;
         micBtn.classList.add('recording');
         micBtn.innerHTML = '&#9209;';
-        voiceStatus.innerHTML = '&#127908; 話してください...';
+        voiceStatus.innerHTML = t('voiceStatusListening');
         voiceStatus.className = 'voice-status listening';
 
         console.log('[WebSocket STT] ストリーミング録音開始');
@@ -726,13 +1204,13 @@ const { apiBaseUrl = '' } = Astro.props;
           if (isRecording) {
             console.log('[Recording] 最大録音時間に達したため自動停止');
             stopStreamingSTT();
-            addMessage('system', '録音時間が上限（55秒）に達したため自動停止しました');
+            addMessage('system', t('recordingTimeLimit'));
           }
         }, MAX_RECORDING_TIME);
 
       } catch (error) {
         console.error('[WebSocket STT] 録音開始エラー:', error);
-        addMessage('system', `マイクアクセスエラー: ${(error as Error).message}`);
+        addMessage('system', `${t('micAccessError')} ${(error as Error).message}`);
       }
     }
 
@@ -808,9 +1286,9 @@ const { apiBaseUrl = '' } = Astro.props;
               clearTimeout(silenceTimer);
               silenceTimer = null;
             }
-            voiceStatus.innerHTML = '&#127908; 録音中...';
+            voiceStatus.innerHTML = t('voiceStatusRecording');
           } else if (hasSpoken && !silenceTimer) {
-            voiceStatus.innerHTML = '&#127908; 認識待機中...';
+            voiceStatus.innerHTML = t('voiceStatusWaiting');
             silenceTimer = window.setTimeout(() => {
               autoStopRecording();
             }, SILENCE_DURATION);
@@ -842,7 +1320,7 @@ const { apiBaseUrl = '' } = Astro.props;
         isRecording = true;
         micBtn.classList.add('recording');
         micBtn.innerHTML = '&#9209;';
-        voiceStatus.innerHTML = '&#127908; 話してください...';
+        voiceStatus.innerHTML = t('voiceStatusListening');
         voiceStatus.className = 'voice-status listening';
 
         recordingTimer = window.setTimeout(() => {
@@ -853,20 +1331,20 @@ const { apiBaseUrl = '' } = Astro.props;
             isRecording = false;
             micBtn.classList.remove('recording');
             micBtn.innerHTML = '&#127908;';
-            addMessage('system', '録音時間が上限（55秒）に達したため自動停止しました');
+            addMessage('system', t('recordingTimeLimit'));
           }
         }, MAX_RECORDING_TIME);
 
       } catch (error) {
         console.error('[Recording] Error:', error);
-        addMessage('system', `マイクアクセスエラー: ${(error as Error).message}`);
+        addMessage('system', `${t('micAccessError')} ${(error as Error).message}`);
       }
     }
 
     // 音声認識
     async function transcribeAudio(audioBlob: Blob) {
       try {
-        voiceStatus.innerHTML = '&#128260; 音声認識中...';
+        voiceStatus.innerHTML = t('voiceStatusRecognizing');
         voiceStatus.className = 'voice-status';
 
         const reader = new FileReader();
@@ -876,12 +1354,13 @@ const { apiBaseUrl = '' } = Astro.props;
           const base64Audio = (reader.result as string).split(',')[1];
 
           // 一時的にバッチSTTに戻す（動作確認用）
+          const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
           const response = await fetch(`${apiBase}/api/stt/transcribe`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               audio: base64Audio,
-              language_code: 'ja-JP'
+              language_code: langConfig.stt
             })
           });
 
@@ -889,7 +1368,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
           if (data.success && data.transcript) {
             userInput.value = data.transcript;
-            voiceStatus.innerHTML = '&#9989; 認識完了';
+            voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
 
             // ユーザーメッセージを追加
@@ -932,7 +1411,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
             // 3秒後に追加の応答を再生
             setTimeout(async () => {
-              const additionalResponse = "只今、お店の情報を確認中です。もう少々お待ちください。";
+              const additionalResponse = t('additionalResponse');
               if (isTTSEnabled && isUserInteracted) {
                 await speakTextGCP(additionalResponse, false);
               }
@@ -945,17 +1424,17 @@ const { apiBaseUrl = '' } = Astro.props;
               sendMessage(); // awaitしない = 並列実行
             }
 
-            voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+            voiceStatus.innerHTML = t('voiceStatusStopped');
             voiceStatus.className = 'voice-status stopped';
           } else {
-            voiceStatus.innerHTML = '音声が認識されませんでした';
+            voiceStatus.innerHTML = t('voiceNotRecognized');
           }
         };
 
       } catch (error) {
         console.error('[STT] Error:', error);
-        addMessage('system', `音声認識エラー: ${(error as Error).message}`);
-        voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+        addMessage('system', `${t('sttError')} ${(error as Error).message}`);
+        voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
       }
     }
@@ -964,34 +1443,34 @@ const { apiBaseUrl = '' } = Astro.props;
     function selectSmartAcknowledgment(userMessage: string): { text: string, logText: string } {
       const messageLower = userMessage.trim();
 
-      // 質問形式（明確な疑問文）
-      if (/ございますか|でしょうか|いかがですか|ありますか/.test(messageLower)) {
+      // 質問形式（明確な疑問文）- 日本語のみパターンマッチ、他言語はデフォルト
+      if (currentLanguage === 'ja' && /ございますか|でしょうか|いかがですか|ありますか/.test(messageLower)) {
         return {
-          text: "確認しますので、少々お待ちください。",
-          logText: "質問形式 → 「確認しますので、少々お待ちください。」"
+          text: t('ackConfirm'),
+          logText: `質問形式 → 「${t('ackConfirm')}」`
         };
       }
 
       // 場所・エリアの質問
-      if (/どこ|場所|エリア|地域|駅/.test(messageLower)) {
+      if (currentLanguage === 'ja' && /どこ|場所|エリア|地域|駅/.test(messageLower)) {
         return {
-          text: "お調べします。",
-          logText: "場所の質問 → 「お調べします。」"
+          text: t('ackSearch'),
+          logText: `場所の質問 → 「${t('ackSearch')}」`
         };
       }
 
       // 検索・探す
-      if (/探して|探し|教えて|おすすめ|紹介/.test(messageLower)) {
+      if (currentLanguage === 'ja' && /探して|探し|教えて|おすすめ|紹介/.test(messageLower)) {
         return {
-          text: "かしこまりました。",
-          logText: "検索依頼 → 「かしこまりました。」"
+          text: t('ackUnderstood'),
+          logText: `検索依頼 → 「${t('ackUnderstood')}」`
         };
       }
 
       // デフォルト: シンプルな確認
       return {
-        text: "はい、承知しました。",
-        logText: "デフォルト → 「はい、承知しました。」"
+        text: t('ackYes'),
+        logText: `デフォルト → 「${t('ackYes')}」`
       };
     }
 
@@ -1005,7 +1484,7 @@ const { apiBaseUrl = '' } = Astro.props;
       enableAudioPlayback();
       isTTSEnabled = !isTTSEnabled;
       speakerBtn.innerHTML = isTTSEnabled ? '&#128266;' : '&#128263;';
-      speakerBtn.title = isTTSEnabled ? '音声読み上げON' : '音声読み上げOFF';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
 
       if (!isTTSEnabled) {
@@ -1015,7 +1494,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // シンプルなオウム返し応答
     function generateFallbackResponse(text: string): string {
-      return `"${text}"とのこと。お調べしますので、少々お待ちください。`;
+      return t('fallbackResponse', text);
     }
 
     // 初期化
@@ -1024,26 +1503,29 @@ const { apiBaseUrl = '' } = Astro.props;
         const response = await fetch(`${apiBase}/api/session/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_info: {} })
+          body: JSON.stringify({
+            user_info: {},
+            language: currentLanguage
+          })
         });
 
         const data = await response.json();
         sessionId = data.session_id;
 
-        addMessage('assistant', data.initial_message);
+        // ローカルi18nから初期挨拶メッセージを表示（言語切り替え対応）
+        addMessage('assistant', t('initialGreeting'), null, true);
 
         // 案1: 即答用音声を事前生成（並列実行）
         console.log('[初期化] 即答用音声を事前生成中...');
         const ackTexts = [
-          "確認しますので、少々お待ちください。",
-          "お調べします。",
-          "かしこまりました。",
-          "はい、承知しました。",
-          "ご希望に合うお店を5件ご紹介します。",
-          "ご希望に合うお店を3件ご紹介します。",
-          "ご希望に合うお店をご紹介します。"
+          t('ackConfirm'),
+          t('ackSearch'),
+          t('ackUnderstood'),
+          t('ackYes'),
+          t('ttsIntro')
         ];
 
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
         const ackPromises = ackTexts.map(async (text) => {
           try {
             const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, {
@@ -1051,14 +1533,14 @@ const { apiBaseUrl = '' } = Astro.props;
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 text: text,
-                language_code: 'ja-JP',
-                voice_name: 'ja-JP-Chirp3-HD-Leda'
+                language_code: langConfig.tts,
+                voice_name: langConfig.voice
               })
             });
             const ackData = await ackResponse.json();
             if (ackData.success && ackData.audio) {
               preGeneratedAcks.set(text, ackData.audio);
-              console.log(`[初期化] ? 事前生成完了: "${text}"`);
+              console.log(`[初期化] $2705 事前生成完了: "${text}"`);
             }
           } catch (error) {
             console.error(`[初期化] 事前生成失敗: "${text}"`, error);
@@ -1067,7 +1549,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
         // 初期メッセージのTTSと並列実行
         await Promise.all([
-          speakTextGCP(data.initial_message),
+          speakTextGCP(t('initialGreeting')),
           ...ackPromises
         ]);
 
@@ -1082,9 +1564,12 @@ const { apiBaseUrl = '' } = Astro.props;
         // 案2: WebSocket Streaming STT接続を初期化
         initializeWebSocketSTT();
 
+        // UI言語を初期化
+        updateUILanguage();
+
       } catch (error) {
         console.error('初期化エラー:', error);
-        showError('初期化に失敗しました。ページを再読み込みしてください。');
+        showError(t('initError'));
       }
     }
 
@@ -1137,7 +1622,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
         socket.on('error', (data: any) => {
           console.error('[WebSocket STT] エラー:', data.message);
-          addMessage('system', `音声認識エラー: ${data.message}`);
+          addMessage('system', `${t('sttError')} ${data.message}`);
         });
 
       } catch (error) {
@@ -1150,8 +1635,8 @@ const { apiBaseUrl = '' } = Astro.props;
     function handleStreamingSTTComplete(transcript: string) {
       // まずストリーミングを完全停止
       stopStreamingSTT();
-      
-      voiceStatus.innerHTML = '? 認識完了';
+
+      voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
       // 入力欄に認識結果を設定
@@ -1168,7 +1653,7 @@ const { apiBaseUrl = '' } = Astro.props;
       let firstAckPromise: Promise<void> | null = null;
 
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
-        // 事前生成音声を即座に再生(TTSリクエスト不要!)
+        // 事前生成音声を即座に再生（TTSリクエスト不要！）
         firstAckPromise = new Promise<void>((resolve) => {
           const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
           currentAudio = audio;
@@ -1215,7 +1700,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
           // 5秒後に追加の応答を再生
           setTimeout(async () => {
-            const additionalResponse = "只今、お店の情報を確認中です。もう少々お待ちください。";
+            const additionalResponse = t('additionalResponse');
             if (isTTSEnabled && isUserInteracted) {
               await speakTextGCP(additionalResponse, false);
             }
@@ -1244,14 +1729,14 @@ const { apiBaseUrl = '' } = Astro.props;
         }
       })();
 
-      voiceStatus.innerHTML = '?? 音声認識: 停止中';
+      voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
     }
 
     // レスポンステキストからショップ情報を抽出
     function extractShopsFromResponse(text: string): any[] {
       const shops: any[] = [];
-      
+
       // パターン: 番号. **店名（読み）**: 説明
       // または: 番号. **店名**: 説明
       const pattern = /(\d+)\.\s*\*\*([^*]+)\*\*[：:]\s*([^\n]+)/g;
@@ -1262,11 +1747,11 @@ const { apiBaseUrl = '' } = Astro.props;
       while ((match = pattern.exec(text)) !== null) {
         const fullName = match[2].trim();
         const description = match[3].trim();
-        
+
         // 店名から読み仮名を分離
         let name = fullName;
         let reading = '';
-        
+
         const nameMatch = fullName.match(/^([^（(]+)[（(]([^）)]+)[）)]/);
         if (nameMatch) {
           name = nameMatch[1].trim();
@@ -1294,8 +1779,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // メッセージ送信
     async function sendMessage() {
-      let firstAckPromise: Promise<void> | null = null; // ?? 即答待機用Promise
-      
+      let firstAckPromise: Promise<void> | null = null; // $2728 即答待機用Promise
+
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
 
@@ -1325,10 +1810,10 @@ const { apiBaseUrl = '' } = Astro.props;
         if (isTTSEnabled) {
           try {
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
-            
+
             if (preGeneratedAudio && isUserInteracted) {
               console.log(`[DEBUG] 事前生成音声を再生します`);
-              // ?? 音声再生完了を待てるようにPromise化
+              // $2728 音声再生完了を待てるようにPromise化
               firstAckPromise = new Promise<void>((resolve) => {
                 const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
                 currentAudio = audio;
@@ -1367,7 +1852,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
         // 3秒後に追加の応答を再生
         setTimeout(async () => {
-          const additionalResponse = "只今、お店の情報を確認中です。もう少々お待ちください。";
+          const additionalResponse = t('additionalResponse');
           console.log(`[DEBUG] 追加応答: "${additionalResponse}"`);
           if (isTTSEnabled && isUserInteracted) {
             await speakTextGCP(additionalResponse, false);
@@ -1389,7 +1874,8 @@ const { apiBaseUrl = '' } = Astro.props;
           body: JSON.stringify({
             session_id: sessionId,
             message: message,
-            stage: currentStage
+            stage: currentStage,
+            language: currentLanguage
           })
         });
 
@@ -1414,9 +1900,9 @@ if (data.shops && data.shops.length > 0) {
   currentShops = data.shops;
   reservationBtn.disabled = false;
 
-  // $2705 まずショップカード表示を最優先(TTS前に即座に実行)
+  // $2705 まずショップカード表示を最優先（TTS前に即座に実行）
   const event = new CustomEvent('displayShops', {
-    detail: { shops: data.shops }
+    detail: { shops: data.shops, language: currentLanguage }
   });
   document.dispatchEvent(event);
 
@@ -1426,11 +1912,11 @@ if (data.shops && data.shops.length > 0) {
     section.classList.add('has-shops');
   }
 
-// ✅ TTSは非同期で並列実行(await しない = カード表示をブロックしない)
+// $2705 TTSは非同期で並列実行（await しない = カード表示をブロックしない）
 (async () => {
   try {
     // パート1：定型文を即座に再生
-    await speakTextGCP(`お待たせしました。`);
+    await speakTextGCP(t('ttsIntro'));
 
     // LLMの応答を解析して定型文と店舗情報を分離
     const lines = data.response.split('\n\n');
@@ -1470,7 +1956,8 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
   const firstShop = shopLines[0];
   const restShops = shopLines.slice(1).join('\n\n');
 
-  // ⭐ 1軒目の音声合成を即座に開始（並行処理）
+  // $23E9 1軒目の音声合成を即座に開始（並行処理）
+  const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
   firstShopAudioPromise = (async () => {
     const cleanText = stripMarkdown(firstShop);
     const response = await fetch(`${apiBase}/api/tts/synthesize`, {
@@ -1478,15 +1965,15 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: cleanText,
-        language_code: 'ja-JP',
-        voice_name: 'ja-JP-Chirp3-HD-Leda'
+        language_code: shopLangConfig.tts,
+        voice_name: shopLangConfig.voice
       })
     });
     const result = await response.json();
     return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
   })();
 
-  // ⭐ 2軒目以降も同時に音声合成開始（並行処理）
+  // $23E9 2軒目以降も同時に音声合成開始（並行処理）
   if (restShops) {
     remainingAudioPromise = (async () => {
       const cleanText = stripMarkdown(restShops);
@@ -1495,8 +1982,8 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: cleanText,
-          language_code: 'ja-JP',
-          voice_name: 'ja-JP-Chirp3-HD-Leda'
+          language_code: shopLangConfig.tts,
+          voice_name: shopLangConfig.voice
         })
       });
       const result = await response.json();
@@ -1517,19 +2004,19 @@ if (firstShopAudioPromise) {
     stopCurrentAudio();
     const audio = new Audio(firstShopAudio);
     currentAudio = audio;
-    
+
     // 1軒目の再生完了を待つ
     await new Promise<void>((resolve) => {
       audio.onended = () => {
         currentAudio = null;
-        voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
         resolve();
       };
-      
-      voiceStatus.innerHTML = '&#128266; 音声再生中...';
+
+      voiceStatus.innerHTML = t('voiceStatusSpeaking');
       voiceStatus.className = 'voice-status speaking';
-      
+
       audio.play();
     });
 
@@ -1538,11 +2025,11 @@ if (firstShopAudioPromise) {
       const remainingAudio = await remainingAudioPromise;
       if (remainingAudio) {
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         stopCurrentAudio();
         const audioElement = new Audio(remainingAudio);
         currentAudio = audioElement;
-        
+
         await new Promise<void>((resolve) => {
           audioElement.onended = () => {
             currentAudio = null;
@@ -1550,10 +2037,10 @@ if (firstShopAudioPromise) {
             voiceStatus.className = 'voice-status stopped';
             resolve();
           };
-          
+
           voiceStatus.innerHTML = '&#128266; 音声再生中...';
           voiceStatus.className = 'voice-status speaking';
-          
+
           audioElement.play();
         });
       }
@@ -1563,7 +2050,7 @@ if (firstShopAudioPromise) {
   } catch (error) {
     console.error('[TTS] ショップ情報読み上げエラー:', error);
   }
-})(); // ✅ 即座に実行するが、完了を待たない
+})(); // $2705 即座に実行するが、完了を待たない
 
 } else {
   // ショップデータがない場合の処理
@@ -1575,9 +2062,9 @@ if (firstShopAudioPromise) {
       currentShops = extractedShops;
       reservationBtn.disabled = false;
 
-      // $2705 まずショップカード表示を最優先(TTS前に即座に実行)
+      // $2705 まずショップカード表示を最優先（TTS前に即座に実行）
       const event = new CustomEvent('displayShops', {
-        detail: { shops: extractedShops }
+        detail: { shops: extractedShops, language: currentLanguage }
       });
       document.dispatchEvent(event);
 
@@ -1585,11 +2072,11 @@ if (firstShopAudioPromise) {
       if (section) {
         section.classList.add('has-shops');
       }
-// ✅ TTSは非同期で並列実行(await しない)
+// $2705 TTSは非同期で並列実行（await しない）
 (async () => {
   try {
     // パート1：定型文を即座に再生
-    await speakTextGCP(`お待たせしました。`);
+    await speakTextGCP(t('ttsIntro'));
 
     // LLMの応答を解析して定型文と店舗情報を分離
     const lines = data.response.split('\n\n');
@@ -1629,7 +2116,8 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
   const firstShop = shopLines[0];
   const restShops = shopLines.slice(1).join('\n\n');
 
-  // ⭐ 1軒目の音声合成を即座に開始（並行処理）
+  // $23E9 1軒目の音声合成を即座に開始（並行処理）
+  const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
   firstShopAudioPromise = (async () => {
     const cleanText = stripMarkdown(firstShop);
     const response = await fetch(`${apiBase}/api/tts/synthesize`, {
@@ -1637,15 +2125,15 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: cleanText,
-        language_code: 'ja-JP',
-        voice_name: 'ja-JP-Chirp3-HD-Leda'
+        language_code: shopLangConfig.tts,
+        voice_name: shopLangConfig.voice
       })
     });
     const result = await response.json();
     return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
   })();
 
-  // ⭐ 2軒目以降も同時に音声合成開始（並行処理）
+  // $23E9 2軒目以降も同時に音声合成開始（並行処理）
   if (restShops) {
     remainingAudioPromise = (async () => {
       const cleanText = stripMarkdown(restShops);
@@ -1654,8 +2142,8 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: cleanText,
-          language_code: 'ja-JP',
-          voice_name: 'ja-JP-Chirp3-HD-Leda'
+          language_code: shopLangConfig.tts,
+          voice_name: shopLangConfig.voice
         })
       });
       const result = await response.json();
@@ -1676,19 +2164,19 @@ if (firstShopAudioPromise) {
     stopCurrentAudio();
     const audio = new Audio(firstShopAudio);
     currentAudio = audio;
-    
+
     // 1軒目の再生完了を待つ
     await new Promise<void>((resolve) => {
       audio.onended = () => {
         currentAudio = null;
-        voiceStatus.innerHTML = '&#127908; 音声認識: 停止中';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
         resolve();
       };
-      
-      voiceStatus.innerHTML = '&#128266; 音声再生中...';
+
+      voiceStatus.innerHTML = t('voiceStatusSpeaking');
       voiceStatus.className = 'voice-status speaking';
-      
+
       audio.play();
     });
 
@@ -1697,11 +2185,11 @@ if (firstShopAudioPromise) {
       const remainingAudio = await remainingAudioPromise;
       if (remainingAudio) {
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         stopCurrentAudio();
         const audioElement = new Audio(remainingAudio);
         currentAudio = audioElement;
-        
+
         await new Promise<void>((resolve) => {
           audioElement.onended = () => {
             currentAudio = null;
@@ -1709,10 +2197,10 @@ if (firstShopAudioPromise) {
             voiceStatus.className = 'voice-status stopped';
             resolve();
           };
-          
+
           voiceStatus.innerHTML = '&#128266; 音声再生中...';
           voiceStatus.className = 'voice-status speaking';
-          
+
           audioElement.play();
         });
       }
@@ -1722,7 +2210,7 @@ if (firstShopAudioPromise) {
   } catch (error) {
     console.error('[TTS] ショップ情報読み上げエラー:', error);
   }
-})(); // ✅ 即座に実行するが、完了を待たない
+})(); // $2705 即座に実行するが、完了を待たない
     } else {
       // ショップなしの通常会話は全文読み上げ
       speakTextGCP(data.response);
@@ -1737,7 +2225,7 @@ if (firstShopAudioPromise) {
         sendBtn.disabled = false;
         micBtn.disabled = false;
         userInput.disabled = false;
-        
+
         // ショップカードが表示される場合はフォーカスしない
         if (currentShops.length === 0) {
           userInput.focus();
@@ -1750,7 +2238,7 @@ if (firstShopAudioPromise) {
     // 予約依頼モーダルを開く
     function openReservationModal() {
       if (currentShops.length === 0) {
-        showError('お店を検索してからご利用ください。');
+        showError(t('searchError'));
         return;
       }
 
@@ -1762,9 +2250,14 @@ if (firstShopAudioPromise) {
     }
 
     // メッセージ追加
-    function addMessage(role: string, content: string, summary: string | null = null) {
+    function addMessage(role: string, content: string, summary: string | null = null, isInitial: boolean = false) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${role}`;
+
+      // 初期メッセージの場合、data-initial属性を追加
+      if (isInitial) {
+        messageDiv.setAttribute('data-initial', 'true');
+      }
 
       const avatar = document.createElement('div');
       avatar.className = 'message-avatar';
@@ -1772,7 +2265,12 @@ if (firstShopAudioPromise) {
 
       const contentDiv = document.createElement('div');
       contentDiv.className = 'message-content';
-      contentDiv.textContent = content;
+
+      // メッセージテキスト用のspan要素を作成
+      const messageText = document.createElement('span');
+      messageText.className = 'message-text';
+      messageText.textContent = content;
+      contentDiv.appendChild(messageText);
 
       messageDiv.appendChild(avatar);
 
@@ -1807,7 +2305,7 @@ if (firstShopAudioPromise) {
       contentDiv.innerHTML = `
         <div class="loading"></div>
         <p style="margin-top: 8px; font-size: 13px; color: #6b7280;">
-          提案するお店の情報を探しています。少々お待ちください...
+          ${t('loadingMessage')}
         </p>
       `;
 
@@ -1829,10 +2327,10 @@ if (firstShopAudioPromise) {
       const summaryDiv = document.createElement('div');
       summaryDiv.className = 'final-summary';
       summaryDiv.innerHTML = `
-        <h3>&#128203; 質問要約書</h3>
+        <h3>${t('summaryTitle')}</h3>
         <div class="final-summary-content">${summary}</div>
         <p style="margin-top: 12px; font-size: 12px; color: #6b7280;">
-          担当スタッフが内容を確認し、追ってご連絡いたします。
+          ${t('summaryFooter')}
         </p>
       `;
       chatArea.appendChild(summaryDiv);
