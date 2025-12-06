@@ -14,7 +14,7 @@ const { apiBaseUrl = '' } = Astro.props;
       <option value="ja">日本語 (Japanese)</option>
       <option value="en">English</option>
       <option value="zh">中文 (Chinese)</option>
-      <option value="ko">$D55C$AD6D$C5B4 (Korean)</option>
+      <option value="ko">한국어 (Korean)</option>
     </select>
   </div>
 
@@ -46,7 +46,7 @@ const { apiBaseUrl = '' } = Astro.props;
     </div>
     <div class="input-actions">
       <button class="btn btn-reservation" id="reservationBtn" disabled>
-        $D83D$DCDE 予約依頼する
+        📞 予約依頼する
       </button>
     </div>
   </div>
@@ -442,20 +442,20 @@ const { apiBaseUrl = '' } = Astro.props;
       shopListEmpty: 'チャットで検索すると、ここにお店が表示されます',
       footerMessage: '素敵なグルメ体験をお楽しみください',
       initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
-      voiceStatusStopped: '$D83C$DFA4 音声認識: 停止中',
-      voiceStatusListening: '$D83C$DFA4 話してください...',
-      voiceStatusRecording: '$D83C$DFA4 録音中...',
-      voiceStatusWaiting: '$D83C$DFA4 認識待機中...',
-      voiceStatusRecognizing: '$D83D$DD0A 音声認識中...',
-      voiceStatusSynthesizing: '$D83D$DD0A 音声合成中...',
-      voiceStatusSpeaking: '$D83D$DD0A 音声再生中...',
-      voiceStatusComplete: '$2705 認識完了',
+      voiceStatusStopped: '🎤 音声認識: 停止中',
+      voiceStatusListening: '🎤 話してください...',
+      voiceStatusRecording: '🎤 録音中...',
+      voiceStatusWaiting: '🎤 認識待機中...',
+      voiceStatusRecognizing: '🔊 音声認識中...',
+      voiceStatusSynthesizing: '🔊 音声合成中...',
+      voiceStatusSpeaking: '🔊 音声再生中...',
+      voiceStatusComplete: '✅ 認識完了',
       inputPlaceholder: 'メッセージを入力...',
       btnVoiceInput: '音声入力',
       btnTTSOn: '音声読み上げON',
       btnTTSOff: '音声読み上げOFF',
       btnSend: '送信',
-      btnReservation: '$D83D$DCDE 予約依頼する',
+      btnReservation: '📞 予約依頼する',
       clickPrompt: '音声を再生するには、画面をクリックしてください',
       recordingTimeLimit: '録音時間が上限（55秒）に達したため自動停止しました',
       micAccessError: 'マイクアクセスエラー:',
@@ -464,7 +464,7 @@ const { apiBaseUrl = '' } = Astro.props;
       initError: '初期化に失敗しました。ページを再読み込みしてください。',
       searchError: 'お店を検索してからご利用ください。',
       loadingMessage: '提案するお店の情報を探しています。少々お待ちください...',
-      summaryTitle: '$D83D$DCCB 質問要約書',
+      summaryTitle: '📋 質問要約書',
       summaryFooter: '担当スタッフが内容を確認し、追ってご連絡いたします。',
       ackConfirm: '確認しますので、少々お待ちください。',
       ackSearch: 'お調べします。',
@@ -532,20 +532,20 @@ const { apiBaseUrl = '' } = Astro.props;
       shopListEmpty: 'Search in the chat to see restaurants here',
       footerMessage: 'Enjoy your wonderful dining experience',
       initialGreeting: 'Hello! I\'m the Gourmet Support AI.\n\nWhat kind of restaurant are you looking for today? I can help you find restaurants anywhere in the world.',
-      voiceStatusStopped: '$D83C$DFA4 Voice Recognition: Stopped',
-      voiceStatusListening: '$D83C$DFA4 Please speak...',
-      voiceStatusRecording: '$D83C$DFA4 Recording...',
-      voiceStatusWaiting: '$D83C$DFA4 Waiting for recognition...',
-      voiceStatusRecognizing: '$D83D$DD0A Recognizing voice...',
-      voiceStatusSynthesizing: '$D83D$DD0A Synthesizing voice...',
-      voiceStatusSpeaking: '$D83D$DD0A Playing audio...',
-      voiceStatusComplete: '$2705 Recognition complete',
+      voiceStatusStopped: '🎤 Voice Recognition: Stopped',
+      voiceStatusListening: '🎤 Please speak...',
+      voiceStatusRecording: '🎤 Recording...',
+      voiceStatusWaiting: '🎤 Waiting for recognition...',
+      voiceStatusRecognizing: '🔊 Recognizing voice...',
+      voiceStatusSynthesizing: '🔊 Synthesizing voice...',
+      voiceStatusSpeaking: '🔊 Playing audio...',
+      voiceStatusComplete: '✅ Recognition complete',
       inputPlaceholder: 'Enter message...',
       btnVoiceInput: 'Voice input',
       btnTTSOn: 'Voice reading ON',
       btnTTSOff: 'Voice reading OFF',
       btnSend: 'Send',
-      btnReservation: '$D83D$DCDE Request reservation',
+      btnReservation: '📞 Request reservation',
       clickPrompt: 'Click the screen to play audio',
       recordingTimeLimit: 'Recording stopped automatically (55s limit reached)',
       micAccessError: 'Microphone access error:',
@@ -554,7 +554,7 @@ const { apiBaseUrl = '' } = Astro.props;
       initError: 'Initialization failed. Please reload the page.',
       searchError: 'Please search for restaurants first.',
       loadingMessage: 'Searching for restaurant recommendations. Please wait...',
-      summaryTitle: '$D83D$DCCB Inquiry Summary',
+      summaryTitle: '📋 Inquiry Summary',
       summaryFooter: 'Our staff will review your inquiry and contact you shortly.',
       ackConfirm: 'Let me check. Please wait a moment.',
       ackSearch: 'Let me look that up.',
@@ -617,183 +617,183 @@ const { apiBaseUrl = '' } = Astro.props;
     },
     zh: {
       pageTitle: '美食支持AI',
-      pageSubtitle: 'AI$4E3A$60A8推荐完美的餐$5385',
-      shopListTitle: '推荐餐$5385',
-      shopListEmpty: '在聊天中搜索后，餐$5385将$663E示在$8FD9里',
-      footerMessage: '祝$60A8享受美好的美食体$9A8C',
-      initialGreeting: '$60A8好！我是美食支持AI。\n\n今天$60A8想找什$4E48$6837的餐$5385$5462？我可以$5E2E$60A8搜索全球各地的餐$5385。',
-      voiceStatusStopped: '$D83C$DFA4 $8BED音$8BC6$522B: 已停止',
-      voiceStatusListening: '$D83C$DFA4 $8BF7$8BF4$8BDD...',
-      voiceStatusRecording: '$D83C$DFA4 $5F55音中...',
-      voiceStatusWaiting: '$D83C$DFA4 等待$8BC6$522B...',
-      voiceStatusRecognizing: '$D83D$DD0A $8BC6$522B$8BED音中...',
-      voiceStatusSynthesizing: '$D83D$DD0A $8BED音合成中...',
-      voiceStatusSpeaking: '$D83D$DD0A 播放音$9891中...',
-      voiceStatusComplete: '$2705 $8BC6$522B完成',
-      inputPlaceholder: '$8F93入消息...',
-      btnVoiceInput: '$8BED音$8F93入',
-      btnTTSOn: '$8BED音朗$8BFB$5F00$542F',
-      btnTTSOff: '$8BED音朗$8BFB$5173$95ED',
-      btnSend: '$53D1送',
-      btnReservation: '$D83D$DCDE 申$8BF7$9884$7EA6',
-      clickPrompt: '点$51FB屏幕播放音$9891',
-      recordingTimeLimit: '$5F55音已自$52A8停止（$8FBE到55秒上限）',
-      micAccessError: '麦克$98CE$8BBF$95EE$9519$8BEF:',
-      voiceNotRecognized: '未$8BC6$522B到$8BED音',
-      sttError: '$8BED音$8BC6$522B$9519$8BEF:',
-      initError: '初始化失$8D25。$8BF7重新加$8F7D$9875面。',
-      searchError: '$8BF7先搜索餐$5385。',
-      loadingMessage: '正在搜索推荐餐$5385。$8BF7稍候...',
-      summaryTitle: '$D83D$DCCB 咨$8BE2摘要',
-      summaryFooter: '我$4EEC的工作人$5458将$5BA1核$60A8的咨$8BE2并尽快$8054系$60A8。',
-      ackConfirm: '我$786E$8BA4一下。$8BF7稍等。',
-      ackSearch: '我$67E5一下。',
+      pageSubtitle: 'AI为您推荐完美的餐厅',
+      shopListTitle: '推荐餐厅',
+      shopListEmpty: '在聊天中搜索后，餐厅将显示在这里',
+      footerMessage: '祝您享受美好的美食体验',
+      initialGreeting: '您好！我是美食支持AI。\n\n今天您想找什么样的餐厅呢？我可以帮您搜索全球各地的餐厅。',
+      voiceStatusStopped: '🎤 语音识别: 已停止',
+      voiceStatusListening: '🎤 请说话...',
+      voiceStatusRecording: '🎤 录音中...',
+      voiceStatusWaiting: '🎤 等待识别...',
+      voiceStatusRecognizing: '🔊 识别语音中...',
+      voiceStatusSynthesizing: '🔊 语音合成中...',
+      voiceStatusSpeaking: '🔊 播放音频中...',
+      voiceStatusComplete: '✅ 识别完成',
+      inputPlaceholder: '输入消息...',
+      btnVoiceInput: '语音输入',
+      btnTTSOn: '语音朗读开启',
+      btnTTSOff: '语音朗读关闭',
+      btnSend: '发送',
+      btnReservation: '📞 申请预约',
+      clickPrompt: '点击屏幕播放音频',
+      recordingTimeLimit: '录音已自动停止（达到55秒上限）',
+      micAccessError: '麦克风访问错误:',
+      voiceNotRecognized: '未识别到语音',
+      sttError: '语音识别错误:',
+      initError: '初始化失败。请重新加载页面。',
+      searchError: '请先搜索餐厅。',
+      loadingMessage: '正在搜索推荐餐厅。请稍候...',
+      summaryTitle: '📋 咨询摘要',
+      summaryFooter: '我们的工作人员将审核您的咨询并尽快联系您。',
+      ackConfirm: '我确认一下。请稍等。',
+      ackSearch: '我查一下。',
       ackUnderstood: '明白了。',
       ackYes: '好的，我知道了。',
-      fallbackResponse: (text: string) => `$60A8$8BF4"${text}"。我搜索一下。$8BF7稍等。`,
-      additionalResponse: '正在$786E$8BA4餐$5385信息。$8BF7稍候。',
-      ttsIntro: '$8BA9$60A8久等了。',
-      // $9884$7EA6模$6001框
-      reservationModalTitle: '$9884$7EA6申$8BF7',
-      reservationShopSelect: '$9009$62E9餐$5385',
-      reservationSelectionGuide: '按$4F18先$987A序点$51FB（最多3家）',
+      fallbackResponse: (text: string) => `您说"${text}"。我搜索一下。请稍等。`,
+      additionalResponse: '正在确认餐厅信息。请稍候。',
+      ttsIntro: '让您久等了。',
+      // 预约模态框
+      reservationModalTitle: '预约申请',
+      reservationShopSelect: '选择餐厅',
+      reservationSelectionGuide: '按优先顺序点击（最多3家）',
       reservationResetBtn: '重置',
-      reservationPriorityNote: '将按①→②→③的$987A序致$7535。$9884$7EA6成功后$7ED3束。',
-      reservationContentTitle: '$9884$7EA6$8BE6情',
+      reservationPriorityNote: '将按①→②→③的顺序致电。预约成功后结束。',
+      reservationContentTitle: '预约详情',
       reservationGuestCount: '人数',
       reservationGuestOption: (n: number) => n === 10 ? '10人以上' : `${n}人`,
       reservationDate: '希望日期',
-      reservationTime: '$5F00始$65F6$95F4',
-      reservationSelectPlaceholder: '$8BF7$9009$62E9',
-      reservationTimeFlexibility: '$65F6$95F4$5F39性',
-      reservationTimeExact: '$4F18先$5F00始$65F6$95F4',
-      reservationTimePlus30: '最多+30分$949F',
-      reservationTimePlus60: '最多+60分$949F',
-      reservationTimePlus90: '最多+90分$949F',
+      reservationTime: '开始时间',
+      reservationSelectPlaceholder: '请选择',
+      reservationTimeFlexibility: '时间弹性',
+      reservationTimeExact: '优先开始时间',
+      reservationTimePlus30: '最多+30分钟',
+      reservationTimePlus60: '最多+60分钟',
+      reservationTimePlus90: '最多+90分钟',
       reservationSeatPreference: '座位偏好',
-      reservationSeatTable: '$684C席',
-      reservationSeatCounter: '$5427台席',
-      reservationSeatPrivate: '包$95F4',
+      reservationSeatTable: '桌席',
+      reservationSeatCounter: '吧台席',
+      reservationSeatPrivate: '包间',
       reservationOtherRequests: '其他要求',
-      reservationOtherRequestsPlaceholder: '生日蛋$7CD5、$8FC7敏$5BF9$5E94、禁烟座位等',
-      reservationPerShopBtn: '$4E3A$6BCF家餐$5385$8BBE置不同$8BE6情',
-      reservationBackToCommon: '返回通用$8BBE置',
-      reservationReserverInfo: '$9884$7EA6人信息',
+      reservationOtherRequestsPlaceholder: '生日蛋糕、过敏对应、禁烟座位等',
+      reservationPerShopBtn: '为每家餐厅设置不同详情',
+      reservationBackToCommon: '返回通用设置',
+      reservationReserverInfo: '预约人信息',
       reservationReserverName: '姓名',
-      reservationReserverNamePlaceholder: '$9884$7EA6人姓名',
-      reservationReserverPhone: '手机号$7801',
-      reservationReserverPhoneHint: '※ 将告知餐$5385作$4E3A$8054系方式',
+      reservationReserverNamePlaceholder: '预约人姓名',
+      reservationReserverPhone: '手机号码',
+      reservationReserverPhoneHint: '※ 将告知餐厅作为联系方式',
       reservationCancel: '取消',
-      reservationSubmit: '提交$9884$7EA6申$8BF7',
-      reservationSelectionRemaining: (n: number) => `$8FD8可$9009$62E9${n}家`,
-      reservationSelectionComplete: '$9009$62E9完成（点$51FB可更改）',
-      reservationSelectShopsFirst: '$8BF7先$9009$62E9餐$5385',
-      reservationPhoneLabel: '$7535$8BDD号$7801',
-      reservationPhoneHint: '※ 从Places API$83B7取。可$7F16$8F91',
-      reservationPerShopPlaceholder: '$5BF9此餐$5385的特殊要求',
-      reservationAlertTitle: '已接受$9884$7EA6申$8BF7。',
-      reservationAlertReserver: '$9884$7EA6人',
-      reservationAlertContact: '$8054系方式',
-      reservationAlertShops: '$9009$62E9的餐$5385',
-      reservationAlertNoPhone: '无$7535$8BDD',
-      reservationAlertDevNote: '（此功能目前正在$5F00$53D1中）',
-      reservationVoiceRecording: '$5F55音中...',
-      reservationVoiceWaiting: '等待$8BC6$522B...',
-      reservationVoiceSpeaking: '$8BF7$8BF4$8BDD...',
-      reservationVoiceError: '麦克$98CE$8BBF$95EE$9519$8BEF',
-      reservationVoiceRecognizing: '$8BC6$522B$8BED音中...',
-      reservationVoiceComplete: '$8F93入完成',
-      reservationVoiceNotRecognized: '未$8BC6$522B到$8BED音'
+      reservationSubmit: '提交预约申请',
+      reservationSelectionRemaining: (n: number) => `还可选择${n}家`,
+      reservationSelectionComplete: '选择完成（点击可更改）',
+      reservationSelectShopsFirst: '请先选择餐厅',
+      reservationPhoneLabel: '电话号码',
+      reservationPhoneHint: '※ 从Places API获取。可编辑',
+      reservationPerShopPlaceholder: '对此餐厅的特殊要求',
+      reservationAlertTitle: '已接受预约申请。',
+      reservationAlertReserver: '预约人',
+      reservationAlertContact: '联系方式',
+      reservationAlertShops: '选择的餐厅',
+      reservationAlertNoPhone: '无电话',
+      reservationAlertDevNote: '（此功能目前正在开发中）',
+      reservationVoiceRecording: '录音中...',
+      reservationVoiceWaiting: '等待识别...',
+      reservationVoiceSpeaking: '请说话...',
+      reservationVoiceError: '麦克风访问错误',
+      reservationVoiceRecognizing: '识别语音中...',
+      reservationVoiceComplete: '输入完成',
+      reservationVoiceNotRecognized: '未识别到语音'
     },
     ko: {
-      pageTitle: '$BBF8$C2DD $C9C0$C6D0 AI',
-      pageSubtitle: 'AI$AC00 $C644$BCBD$D55C $B808$C2A4$D1A0$B791$C744 $CD94$CC9C$D574 $B4DC$B9BD$B2C8$B2E4',
-      shopListTitle: '$CD94$CC9C $B808$C2A4$D1A0$B791',
-      shopListEmpty: '$CC44$D305$C5D0$C11C $AC80$C0C9$D558$BA74 $C5EC$AE30$C5D0 $B808$C2A4$D1A0$B791$C774 $D45C$C2DC$B429$B2C8$B2E4',
-      footerMessage: '$BA4B$C9C4 $BBF8$C2DD $ACBD$D5D8$C744 $C990$AE30$C138$C694',
-      initialGreeting: '$C548$B155$D558$C138$C694! $BBF8$C2DD $C9C0$C6D0 AI$C785$B2C8$B2E4.\n\n$C624$B298$C740 $C5B4$B5A4 $C74C$C2DD$C810$C744 $CC3E$C73C$C2DC$B098$C694? $C804 $C138$ACC4 $C5B4$B514$B4E0 $C74C$C2DD$C810$C744 $AC80$C0C9$D574 $B4DC$B9B4 $C218 $C788$C2B5$B2C8$B2E4.',
-      voiceStatusStopped: '$D83C$DFA4 $C74C$C131 $C778$C2DD: $C815$C9C0$B428',
-      voiceStatusListening: '$D83C$DFA4 $B9D0$C500$D574 $C8FC$C138$C694...',
-      voiceStatusRecording: '$D83C$DFA4 $B179$C74C $C911...',
-      voiceStatusWaiting: '$D83C$DFA4 $C778$C2DD $B300$AE30 $C911...',
-      voiceStatusRecognizing: '$D83D$DD0A $C74C$C131 $C778$C2DD $C911...',
-      voiceStatusSynthesizing: '$D83D$DD0A $C74C$C131 $D569$C131 $C911...',
-      voiceStatusSpeaking: '$D83D$DD0A $C624$B514$C624 $C7AC$C0DD $C911...',
-      voiceStatusComplete: '$2705 $C778$C2DD $C644$B8CC',
-      inputPlaceholder: '$BA54$C2DC$C9C0 $C785$B825...',
-      btnVoiceInput: '$C74C$C131 $C785$B825',
-      btnTTSOn: '$C74C$C131 $C77D$AE30 $CF1C$C9D0',
-      btnTTSOff: '$C74C$C131 $C77D$AE30 $AEBC$C9D0',
-      btnSend: '$C804$C1A1',
-      btnReservation: '$D83D$DCDE $C608$C57D $C2E0$CCAD',
-      clickPrompt: '$C624$B514$C624$B97C $C7AC$C0DD$D558$B824$BA74 $D654$BA74$C744 $D074$B9AD$D558$C138$C694',
-      recordingTimeLimit: '$B179$C74C$C774 $C790$B3D9$C73C$B85C $C911$C9C0$B418$C5C8$C2B5$B2C8$B2E4 (55$CD08 $C81C$D55C $B3C4$B2EC)',
-      micAccessError: '$B9C8$C774$D06C $C561$C138$C2A4 $C624$B958:',
-      voiceNotRecognized: '$C74C$C131$C774 $C778$C2DD$B418$C9C0 $C54A$C558$C2B5$B2C8$B2E4',
-      sttError: '$C74C$C131 $C778$C2DD $C624$B958:',
-      initError: '$CD08$AE30$D654 $C2E4$D328. $D398$C774$C9C0$B97C $C0C8$B85C$ACE0$CE68$D558$C138$C694.',
-      searchError: '$BA3C$C800 $B808$C2A4$D1A0$B791$C744 $AC80$C0C9$D558$C138$C694.',
-      loadingMessage: '$CD94$CC9C $B808$C2A4$D1A0$B791$C744 $AC80$C0C9 $C911$C785$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694...',
-      summaryTitle: '$D83D$DCCB $BB38$C758 $C694$C57D',
-      summaryFooter: '$B2F4$B2F9$C790$AC00 $BB38$C758 $B0B4$C6A9$C744 $AC80$D1A0$D558$ACE0 $ACE7 $C5F0$B77D$B4DC$B9AC$ACA0$C2B5$B2C8$B2E4.',
-      ackConfirm: '$D655$C778$D558$ACA0$C2B5$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.',
-      ackSearch: '$CC3E$C544$BCF4$ACA0$C2B5$B2C8$B2E4.',
-      ackUnderstood: '$C54C$ACA0$C2B5$B2C8$B2E4.',
-      ackYes: '$B124, $C54C$ACA0$C2B5$B2C8$B2E4.',
-      fallbackResponse: (text: string) => `"${text}"$B77C$ACE0 $B9D0$C500$D558$C168$B124$C694. $AC80$C0C9$D574 $BCF4$ACA0$C2B5$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.`,
-      additionalResponse: '$C9C0$AE08 $B808$C2A4$D1A0$B791 $C815$BCF4$B97C $D655$C778 $C911$C785$B2C8$B2E4. $C7A0$C2DC$B9CC $AE30$B2E4$B824$C8FC$C138$C694.',
-      ttsIntro: '$AE30$B2E4$B824 $C8FC$C154$C11C $AC10$C0AC$D569$B2C8$B2E4.',
-      // $C608$C57D $BAA8$B2EC
-      reservationModalTitle: '$C608$C57D $C2E0$CCAD',
-      reservationShopSelect: '$B808$C2A4$D1A0$B791 $C120$D0DD',
-      reservationSelectionGuide: '$C6B0$C120$C21C$C704$B300$B85C $D074$B9AD$D558$C138$C694 ($CD5C$B300 3$ACF3)',
-      reservationResetBtn: '$B2E4$C2DC $D558$AE30',
-      reservationPriorityNote: '①→②→③ $C21C$C11C$B85C $C804$D654$D569$B2C8$B2E4. $C608$C57D $C131$B9BD $C2DC $C885$B8CC$D569$B2C8$B2E4.',
-      reservationContentTitle: '$C608$C57D $B0B4$C6A9',
-      reservationGuestCount: '$C778$C6D0',
-      reservationGuestOption: (n: number) => n === 10 ? '10$BA85 $C774$C0C1' : `${n}$BA85`,
-      reservationDate: '$D76C$B9DD $B0A0$C9DC',
-      reservationTime: '$C2DC$C791 $C2DC$AC04',
-      reservationSelectPlaceholder: '$C120$D0DD$D558$C138$C694',
-      reservationTimeFlexibility: '$C2DC$AC04 $D5C8$C6A9 $BC94$C704',
-      reservationTimeExact: '$C2DC$C791 $C2DC$AC04 $C6B0$C120',
-      reservationTimePlus30: '+30$BD84$AE4C$C9C0',
-      reservationTimePlus60: '+60$BD84$AE4C$C9C0',
-      reservationTimePlus90: '+90$BD84$AE4C$C9C0',
-      reservationSeatPreference: '$C88C$C11D $D76C$B9DD',
-      reservationSeatTable: '$D14C$C774$BE14$C11D',
-      reservationSeatCounter: '$CE74$C6B4$D130$C11D',
-      reservationSeatPrivate: '$B8F8',
-      reservationOtherRequests: '$AE30$D0C0 $C694$CCAD',
-      reservationOtherRequestsPlaceholder: '$C0DD$C77C $CF00$C774$D06C, $C54C$B808$B974$AE30 $B300$C751, $AE08$C5F0$C11D $B4F1',
-      reservationPerShopBtn: '$B808$C2A4$D1A0$B791$BCC4$B85C $C608$C57D $B0B4$C6A9 $B2E4$B974$AC8C $C124$C815',
-      reservationBackToCommon: '$ACF5$D1B5 $C124$C815$C73C$B85C $B3CC$C544$AC00$AE30',
-      reservationReserverInfo: '$C608$C57D$C790 $C815$BCF4',
-      reservationReserverName: '$C131$D568',
-      reservationReserverNamePlaceholder: '$C608$C57D$C790 $C131$D568',
-      reservationReserverPhone: '$C804$D654$BC88$D638',
-      reservationReserverPhoneHint: '※ $B808$C2A4$D1A0$B791$C5D0 $C5F0$B77D$CC98$B85C $C804$B2EC$B429$B2C8$B2E4',
-      reservationCancel: '$CDE8$C18C',
-      reservationSubmit: '$C608$C57D $C2E0$CCAD $C2DC$C791',
-      reservationSelectionRemaining: (n: number) => `${n}$ACF3 $B354 $C120$D0DD $AC00$B2A5`,
-      reservationSelectionComplete: '$C120$D0DD $C644$B8CC ($BCC0$ACBD$D558$B824$BA74 $D074$B9AD)',
-      reservationSelectShopsFirst: '$BA3C$C800 $B808$C2A4$D1A0$B791$C744 $C120$D0DD$D558$C138$C694',
-      reservationPhoneLabel: '$C804$D654$BC88$D638',
-      reservationPhoneHint: '※ Places API$C5D0$C11C $AC00$C838$C634. $C218$C815 $AC00$B2A5',
-      reservationPerShopPlaceholder: '$C774 $B808$C2A4$D1A0$B791$C5D0 $B300$D55C $D2B9$BCC4 $C694$CCAD',
-      reservationAlertTitle: '$C608$C57D $C2E0$CCAD$C744 $C811$C218$D588$C2B5$B2C8$B2E4.',
-      reservationAlertReserver: '$C608$C57D$C790',
-      reservationAlertContact: '$C5F0$B77D$CC98',
-      reservationAlertShops: '$C120$D0DD$D55C $B808$C2A4$D1A0$B791',
-      reservationAlertNoPhone: '$C804$D654$BC88$D638 $C5C6$C74C',
-      reservationAlertDevNote: '($C774 $AE30$B2A5$C740 $D604$C7AC $AC1C$BC1C $C911$C785$B2C8$B2E4)',
-      reservationVoiceRecording: '$B179$C74C $C911...',
-      reservationVoiceWaiting: '$C778$C2DD $B300$AE30 $C911...',
-      reservationVoiceSpeaking: '$B9D0$C500$D574 $C8FC$C138$C694...',
-      reservationVoiceError: '$B9C8$C774$D06C $C561$C138$C2A4 $C624$B958',
-      reservationVoiceRecognizing: '$C74C$C131 $C778$C2DD $C911...',
-      reservationVoiceComplete: '$C785$B825 $C644$B8CC',
-      reservationVoiceNotRecognized: '$C74C$C131$C774 $C778$C2DD$B418$C9C0 $C54A$C558$C2B5$B2C8$B2E4'
+      pageTitle: '미식 지원 AI',
+      pageSubtitle: 'AI가 완벽한 레스토랑을 추천해 드립니다',
+      shopListTitle: '추천 레스토랑',
+      shopListEmpty: '채팅에서 검색하면 여기에 레스토랑이 표시됩니다',
+      footerMessage: '멋진 미식 경험을 즐기세요',
+      initialGreeting: '안녕하세요! 미식 지원 AI입니다.\n\n오늘은 어떤 음식점을 찾으시나요? 전 세계 어디든 음식점을 검색해 드릴 수 있습니다.',
+      voiceStatusStopped: '🎤 음성 인식: 정지됨',
+      voiceStatusListening: '🎤 말씀해 주세요...',
+      voiceStatusRecording: '🎤 녹음 중...',
+      voiceStatusWaiting: '🎤 인식 대기 중...',
+      voiceStatusRecognizing: '🔊 음성 인식 중...',
+      voiceStatusSynthesizing: '🔊 음성 합성 중...',
+      voiceStatusSpeaking: '🔊 오디오 재생 중...',
+      voiceStatusComplete: '✅ 인식 완료',
+      inputPlaceholder: '메시지 입력...',
+      btnVoiceInput: '음성 입력',
+      btnTTSOn: '음성 읽기 켜짐',
+      btnTTSOff: '음성 읽기 꺼짐',
+      btnSend: '전송',
+      btnReservation: '📞 예약 신청',
+      clickPrompt: '오디오를 재생하려면 화면을 클릭하세요',
+      recordingTimeLimit: '녹음이 자동으로 중지되었습니다 (55초 제한 도달)',
+      micAccessError: '마이크 액세스 오류:',
+      voiceNotRecognized: '음성이 인식되지 않았습니다',
+      sttError: '음성 인식 오류:',
+      initError: '초기화 실패. 페이지를 새로고침하세요.',
+      searchError: '먼저 레스토랑을 검색하세요.',
+      loadingMessage: '추천 레스토랑을 검색 중입니다. 잠시만 기다려주세요...',
+      summaryTitle: '📋 문의 요약',
+      summaryFooter: '담당자가 문의 내용을 검토하고 곧 연락드리겠습니다.',
+      ackConfirm: '확인하겠습니다. 잠시만 기다려주세요.',
+      ackSearch: '찾아보겠습니다.',
+      ackUnderstood: '알겠습니다.',
+      ackYes: '네, 알겠습니다.',
+      fallbackResponse: (text: string) => `"${text}"라고 말씀하셨네요. 검색해 보겠습니다. 잠시만 기다려주세요.`,
+      additionalResponse: '지금 레스토랑 정보를 확인 중입니다. 잠시만 기다려주세요.',
+      ttsIntro: '기다려 주셔서 감사합니다.',
+      // 예약 모달
+      reservationModalTitle: '예약 신청',
+      reservationShopSelect: '레스토랑 선택',
+      reservationSelectionGuide: '우선순위대로 클릭하세요 (최대 3곳)',
+      reservationResetBtn: '다시 하기',
+      reservationPriorityNote: '①→②→③ 순서로 전화합니다. 예약 성립 시 종료합니다.',
+      reservationContentTitle: '예약 내용',
+      reservationGuestCount: '인원',
+      reservationGuestOption: (n: number) => n === 10 ? '10명 이상' : `${n}명`,
+      reservationDate: '희망 날짜',
+      reservationTime: '시작 시간',
+      reservationSelectPlaceholder: '선택하세요',
+      reservationTimeFlexibility: '시간 허용 범위',
+      reservationTimeExact: '시작 시간 우선',
+      reservationTimePlus30: '+30분까지',
+      reservationTimePlus60: '+60분까지',
+      reservationTimePlus90: '+90분까지',
+      reservationSeatPreference: '좌석 희망',
+      reservationSeatTable: '테이블석',
+      reservationSeatCounter: '카운터석',
+      reservationSeatPrivate: '룸',
+      reservationOtherRequests: '기타 요청',
+      reservationOtherRequestsPlaceholder: '생일 케이크, 알레르기 대응, 금연석 등',
+      reservationPerShopBtn: '레스토랑별로 예약 내용 다르게 설정',
+      reservationBackToCommon: '공통 설정으로 돌아가기',
+      reservationReserverInfo: '예약자 정보',
+      reservationReserverName: '성함',
+      reservationReserverNamePlaceholder: '예약자 성함',
+      reservationReserverPhone: '전화번호',
+      reservationReserverPhoneHint: '※ 레스토랑에 연락처로 전달됩니다',
+      reservationCancel: '취소',
+      reservationSubmit: '예약 신청 시작',
+      reservationSelectionRemaining: (n: number) => `${n}곳 더 선택 가능`,
+      reservationSelectionComplete: '선택 완료 (변경하려면 클릭)',
+      reservationSelectShopsFirst: '먼저 레스토랑을 선택하세요',
+      reservationPhoneLabel: '전화번호',
+      reservationPhoneHint: '※ Places API에서 가져옴. 수정 가능',
+      reservationPerShopPlaceholder: '이 레스토랑에 대한 특별 요청',
+      reservationAlertTitle: '예약 신청을 접수했습니다.',
+      reservationAlertReserver: '예약자',
+      reservationAlertContact: '연락처',
+      reservationAlertShops: '선택한 레스토랑',
+      reservationAlertNoPhone: '전화번호 없음',
+      reservationAlertDevNote: '(이 기능은 현재 개발 중입니다)',
+      reservationVoiceRecording: '녹음 중...',
+      reservationVoiceWaiting: '인식 대기 중...',
+      reservationVoiceSpeaking: '말씀해 주세요...',
+      reservationVoiceError: '마이크 액세스 오류',
+      reservationVoiceRecognizing: '음성 인식 중...',
+      reservationVoiceComplete: '입력 완료',
+      reservationVoiceNotRecognized: '음성이 인식되지 않았습니다'
     }
   };
 
@@ -1540,7 +1540,7 @@ const { apiBaseUrl = '' } = Astro.props;
             const ackData = await ackResponse.json();
             if (ackData.success && ackData.audio) {
               preGeneratedAcks.set(text, ackData.audio);
-              console.log(`[初期化] $2705 事前生成完了: "${text}"`);
+              console.log(`[初期化] ✅ 事前生成完了: "${text}"`);
             }
           } catch (error) {
             console.error(`[初期化] 事前生成失敗: "${text}"`, error);
@@ -1779,7 +1779,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // メッセージ送信
     async function sendMessage() {
-      let firstAckPromise: Promise<void> | null = null; // $2728 即答待機用Promise
+      let firstAckPromise: Promise<void> | null = null; // ✨ 即答待機用Promise
 
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
@@ -1813,7 +1813,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
             if (preGeneratedAudio && isUserInteracted) {
               console.log(`[DEBUG] 事前生成音声を再生します`);
-              // $2728 音声再生完了を待てるようにPromise化
+              // ✨ 音声再生完了を待てるようにPromise化
               firstAckPromise = new Promise<void>((resolve) => {
                 const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
                 currentAudio = audio;
@@ -1900,7 +1900,7 @@ if (data.shops && data.shops.length > 0) {
   currentShops = data.shops;
   reservationBtn.disabled = false;
 
-  // $2705 まずショップカード表示を最優先（TTS前に即座に実行）
+  // ✅ まずショップカード表示を最優先（TTS前に即座に実行）
   const event = new CustomEvent('displayShops', {
     detail: { shops: data.shops, language: currentLanguage }
   });
@@ -1912,7 +1912,7 @@ if (data.shops && data.shops.length > 0) {
     section.classList.add('has-shops');
   }
 
-// $2705 TTSは非同期で並列実行（await しない = カード表示をブロックしない）
+// ✅ TTSは非同期で並列実行（await しない = カード表示をブロックしない）
 (async () => {
   try {
     // パート1：定型文を即座に再生
@@ -1956,7 +1956,7 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
   const firstShop = shopLines[0];
   const restShops = shopLines.slice(1).join('\n\n');
 
-  // $23E9 1軒目の音声合成を即座に開始（並行処理）
+  // ⏩ 1軒目の音声合成を即座に開始（並行処理）
   const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
   firstShopAudioPromise = (async () => {
     const cleanText = stripMarkdown(firstShop);
@@ -1973,7 +1973,7 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
     return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
   })();
 
-  // $23E9 2軒目以降も同時に音声合成開始（並行処理）
+  // ⏩ 2軒目以降も同時に音声合成開始（並行処理）
   if (restShops) {
     remainingAudioPromise = (async () => {
       const cleanText = stripMarkdown(restShops);
@@ -2050,7 +2050,7 @@ if (firstShopAudioPromise) {
   } catch (error) {
     console.error('[TTS] ショップ情報読み上げエラー:', error);
   }
-})(); // $2705 即座に実行するが、完了を待たない
+})(); // ✅ 即座に実行するが、完了を待たない
 
 } else {
   // ショップデータがない場合の処理
@@ -2062,7 +2062,7 @@ if (firstShopAudioPromise) {
       currentShops = extractedShops;
       reservationBtn.disabled = false;
 
-      // $2705 まずショップカード表示を最優先（TTS前に即座に実行）
+      // ✅ まずショップカード表示を最優先（TTS前に即座に実行）
       const event = new CustomEvent('displayShops', {
         detail: { shops: extractedShops, language: currentLanguage }
       });
@@ -2072,7 +2072,7 @@ if (firstShopAudioPromise) {
       if (section) {
         section.classList.add('has-shops');
       }
-// $2705 TTSは非同期で並列実行（await しない）
+// ✅ TTSは非同期で並列実行（await しない）
 (async () => {
   try {
     // パート1：定型文を即座に再生
@@ -2116,7 +2116,7 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
   const firstShop = shopLines[0];
   const restShops = shopLines.slice(1).join('\n\n');
 
-  // $23E9 1軒目の音声合成を即座に開始（並行処理）
+  // ⏩ 1軒目の音声合成を即座に開始（並行処理）
   const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
   firstShopAudioPromise = (async () => {
     const cleanText = stripMarkdown(firstShop);
@@ -2133,7 +2133,7 @@ if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
     return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
   })();
 
-  // $23E9 2軒目以降も同時に音声合成開始（並行処理）
+  // ⏩ 2軒目以降も同時に音声合成開始（並行処理）
   if (restShops) {
     remainingAudioPromise = (async () => {
       const cleanText = stripMarkdown(restShops);
@@ -2210,7 +2210,7 @@ if (firstShopAudioPromise) {
   } catch (error) {
     console.error('[TTS] ショップ情報読み上げエラー:', error);
   }
-})(); // $2705 即座に実行するが、完了を待たない
+})(); // ✅ 即座に実行するが、完了を待たない
     } else {
       // ショップなしの通常会話は全文読み上げ
       speakTextGCP(data.response);
