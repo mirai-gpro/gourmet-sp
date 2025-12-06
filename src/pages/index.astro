@@ -3,8 +3,6 @@
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
-// ▼▼▼ 追加: インストールボタンコンポーネントの読み込み ▼▼▼
-import InstallPrompt from '../components/InstallPrompt.astro';
 
 // APIベースURL（Cloud Runのエンドポイント）
 // 本番環境では環境変数から取得
@@ -16,10 +14,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><h1>&#127869; グルメサポートAI (更新テスト中)</h1></title>
-  
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#ffffff" />
+  <title>グルメサポートAI - お店探しをお手伝い</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -146,8 +141,8 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 <body>
   <div class="page-container">
     <header class="page-header">
-      <h1>&#127869; グルメサポートAI</h1>
-      <p>AIがあなたにぴったりのお店をご提案します</p>
+      <h1 id="pageTitle">&#127869; グルメサポートAI</h1>
+      <p id="pageSubtitle">AIがあなたにぴったりのお店をご提案します</p>
     </header>
 
     <main class="main-content">
@@ -157,25 +152,19 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 
       <section class="shop-list-section" id="shopListSection">
         <div class="shop-list-header">
-          <h2>&#127869; おすすめのお店</h2>
-          <p>チャットで検索すると、ここにお店が表示されます</p>
+          <h2 id="shopListTitle">&#127869; おすすめのお店</h2>
+          <p id="shopListEmpty">チャットで検索すると、ここにお店が表示されます</p>
         </div>
         <ShopCardList apiBaseUrl={apiBaseUrl} />
       </section>
     </main>
 
-    <footer class="page-footer">
+    <footer class="page-footer" id="pageFooter">
       素敵なグルメ体験をお楽しみください &#10024;
     </footer>
   </div>
 
+  <!-- 予約依頼モーダル -->
   <ReservationModal apiBaseUrl={apiBaseUrl} />
-
-  <InstallPrompt />
-
-  <script>
-    import { registerSW } from 'virtual:pwa-register';
-    registerSW({ immediate: true });
-  </script>
 </body>
 </html>
