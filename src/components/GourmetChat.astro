@@ -8,6 +8,24 @@ const { apiBaseUrl = '' } = Astro.props;
 ---
 
 <div class="gourmet-chat-container" data-api-base={apiBaseUrl}>
+  <!-- ★★★ スプラッシュオーバーレイ（チャット画面内のみ） ★★★ -->
+  <div class="splash-overlay" id="splashOverlay">
+    <video
+      id="splashVideo"
+      class="splash-video"
+      autoplay
+      muted
+      playsinline
+      loop
+    >
+      <source src="/splash.mp4" type="video/mp4">
+    </video>
+    <div class="splash-loading">
+      <div class="spinner"></div>
+      <p>準備中...</p>
+    </div>
+  </div>
+
   <!-- 言語選択UI -->
   <div class="language-selector">
     <select id="languageSelect" class="language-dropdown">
@@ -64,6 +82,7 @@ const { apiBaseUrl = '' } = Astro.props;
     flex-direction: column;
     overflow: hidden;
     margin: 0 auto;
+    position: relative; /* ★★★ オーバーレイの基準位置 ★★★ */
   }
 
   .language-selector {
@@ -407,6 +426,71 @@ const { apiBaseUrl = '' } = Astro.props;
     margin: 10px 0;
     font-size: 13px;
     text-align: center;
+  }
+
+  /* ★★★ スプラッシュオーバーレイ（チャット画面内のみ） ★★★ */
+  .splash-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    border-radius: 16px;
+    overflow: hidden;
+    transition: opacity 0.8s ease-out;
+    pointer-events: all;
+  }
+
+  .splash-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .splash-overlay.hidden {
+    display: none;
+  }
+
+  .splash-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform: scale(0.5); /* ★★★ 30%縮小（70%サイズ） ★★★ */
+    /* 半透明の動画 → 背景のグラデーションが透けて見える */
+  }
+
+  .splash-loading {
+    position: absolute;
+    bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 1;
+  }
+
+  .splash-loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(102, 126, 234, 0.3);
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .splash-loading p {
+    color: #667eea;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
   }
 
   /* クリックプロンプト */
@@ -811,6 +895,25 @@ const { apiBaseUrl = '' } = Astro.props;
     if (!container) return;
 
     const apiBase = container.dataset.apiBase || '';
+
+    // ★★★ スプラッシュスクリーン制御 ★★★
+    const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
+    const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
+
+    function hideSplash() {
+      console.log('[Splash] スプラッシュ終了');
+      splashVideo.loop = false; // ループ停止
+      splashOverlay.classList.add('fade-out');
+      setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+    }
+
+    // タイムアウト: 10秒で強制終了
+    setTimeout(() => {
+      console.log('[Splash] タイムアウト - 強制終了');
+      hideSplash();
+    }, 10000);
+
+    // ★★★ ここまでスプラッシュスクリーン制御 ★★★
 
     // DOM要素
     const chatArea = document.getElementById('chatArea')!;
@@ -1566,6 +1669,11 @@ if (shopListTitle) shopListTitle.innerHTML = `🍽 ${t('shopListTitle')}`;
         userInput.focus();
 
         console.log(`[初期化] 完了 (事前生成音声: ${preGeneratedAcks.size}件)`);
+
+        // ★★★ スプラッシュスクリーン終了 ★★★
+        if (splashOverlay && !splashOverlay.classList.contains('hidden')) {
+          hideSplash();
+        }
 
         // 案2: WebSocket Streaming STT接続を初期化
         initializeWebSocketSTT();
