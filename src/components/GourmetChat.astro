@@ -519,7 +519,7 @@ const { apiBaseUrl = '' } = Astro.props;
     margin: 5px 0;
   }
 
-  /* ★★★ 追加: 待機オーバーレイのスタイル ★★★ */
+  /* ★★★ 待機オーバーレイのスタイル ★★★ */
   .wait-overlay {
     position: absolute;
     top: 0;
@@ -1013,7 +1013,19 @@ const { apiBaseUrl = '' } = Astro.props;
     let recordingTimer: number | null = null;
     const MAX_RECORDING_TIME = 55000; // 55秒（APIの60秒制限より短く設定）
     let isTTSEnabled = true;
-    let currentAudio: HTMLAudioElement | null = null;
+
+    // ★★★ 変更: グローバルプレイヤー（iOS Audio Unlock対策） ★★★
+    const ttsPlayer = new Audio();
+    // iOS対策: ユーザー操作時に再生権限を確保する儀式用関数
+    function unlockAudioParams() {
+      ttsPlayer.play().then(() => {
+        ttsPlayer.pause();
+        ttsPlayer.currentTime = 0;
+      }).catch(e => {
+        // 自動再生ブロックなどで失敗しても、ここでは無視してよい
+      });
+    }
+
     let isUserInteracted = false;
     let currentShops: any[] = []; // 現在表示中のショップリスト
     let isFromVoiceInput = false; // 音声入力からの送信かどうかを追跡
@@ -1055,9 +1067,7 @@ const { apiBaseUrl = '' } = Astro.props;
       const shopListEmpty = document.getElementById('shopListEmpty');
       const pageFooter = document.getElementById('pageFooter');
 
-      // [変更前] 絵文字「🍽」で上書きされていた
-      // if (pageTitle) pageTitle.innerHTML = `🍽 ${t('pageTitle')}`;
-      // [変更後] 画像タグを使って更新するように修正
+      // 画像タグを使って更新
       if (pageTitle) {
         pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
       }
@@ -1100,8 +1110,15 @@ const { apiBaseUrl = '' } = Astro.props;
     let vadCheckInterval: number | null = null;
     let hasSpoken = false; // 音声が検出されたかどうか
     let recordingStartTime = 0; // 録音開始時刻
-    const SILENCE_THRESHOLD = 35; // 無音判定の閾値（0-255）※環境ノイズを無視
-    const SILENCE_DURATION = 2000; // 無音が続いたら停止するミリ秒（2秒）
+
+    // ★★★ 修正: OS判定を行い、iPhoneの場合は閾値を厳しくする ★★★
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    // iOSは感度が高すぎるため閾値を上げ(50)、判定時間を短く(1500)して誤検知を防ぐ
+    // Android/PCは閾値を低く(35)して小声を拾い、判定時間をゆったり(2000)とる
+    const SILENCE_THRESHOLD = isIOS ? 50 : 35; 
+    const SILENCE_DURATION = isIOS ? 1500 : 2000;
+    
     const MIN_RECORDING_TIME = 3000; // 最小録音時間（3秒）- マイク初期化音を無視
 
     // WebSocket Streaming STT用（案2: 完全実装）
@@ -1116,6 +1133,9 @@ const { apiBaseUrl = '' } = Astro.props;
         isUserInteracted = true;
         const clickPrompt = container.querySelector('.click-prompt');
         if (clickPrompt) clickPrompt.remove();
+        
+        // インタラクション時に一度Unlockしておく
+        unlockAudioParams();
       }
     }
 
@@ -1135,11 +1155,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // 音声停止
     function stopCurrentAudio() {
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.src = '';
-        currentAudio = null;
-      }
+      // ★変更: グローバルプレイヤーを停止
+      ttsPlayer.pause();
+      ttsPlayer.currentTime = 0;
     }
 
     // マークダウン記号を除去（TTS用）
@@ -1170,7 +1188,7 @@ const { apiBaseUrl = '' } = Astro.props;
       if (!isTTSEnabled || !text) return;
 
       if (stopPrevious) {
-        stopCurrentAudio();
+        ttsPlayer.pause(); // ★変更: ttsPlayer停止
       }
 
       // マークダウン記号を除去
@@ -1196,22 +1214,21 @@ const { apiBaseUrl = '' } = Astro.props;
 
         console.log('[TTS] API レスポンス受信:', data.success);
         if (data.success && data.audio) {
-          const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
-          currentAudio = audio;
+          // ★変更: グローバルプレイヤーにソースをセット
+          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
 
           console.log('[TTS] 音声再生開始');
 
           // 音声再生完了を待つPromiseを作成
           const playPromise = new Promise<void>((resolve) => {
-            audio.onended = () => {
+            ttsPlayer.onended = () => {
               console.log('[TTS] 音声再生完了');
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              currentAudio = null;
               resolve();
             };
 
-            audio.onerror = () => {
+            ttsPlayer.onerror = () => {
               console.log('[TTS] 音声再生エラー');
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
@@ -1220,7 +1237,7 @@ const { apiBaseUrl = '' } = Astro.props;
           });
 
           if (isUserInteracted) {
-            await audio.play();
+            await ttsPlayer.play(); // ★変更: ttsPlayer再生
             await playPromise; // 再生完了を待つ
           } else {
             showClickPrompt();
@@ -1564,14 +1581,14 @@ const { apiBaseUrl = '' } = Astro.props;
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
               // 事前生成音声を即座に再生（TTSリクエスト不要！）
-              const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
-              currentAudio = audio;
-
-              audio.onended = () => {
-                currentAudio = null;
+              // ★変更: グローバルプレイヤーを使用
+              ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+              
+              ttsPlayer.onended = () => {
+                // 再生完了後の処理があればここに
               };
 
-              audio.play().catch(err => {
+              ttsPlayer.play().catch(err => {
                 console.error('[即答] 音声再生エラー:', err);
               });
               console.log(`[即答] 事前生成音声を再生: "${ack.text}"`);
@@ -1838,15 +1855,14 @@ const { apiBaseUrl = '' } = Astro.props;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
         // 事前生成音声を即座に再生（TTSリクエスト不要！）
         firstAckPromise = new Promise<void>((resolve) => {
-          const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
-          currentAudio = audio;
-
-          audio.onended = () => {
-            currentAudio = null;
+          // ★変更: グローバルプレイヤーを使用
+          ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+          
+          ttsPlayer.onended = () => {
             resolve();
           };
 
-          audio.play().catch(err => {
+          ttsPlayer.play().catch(err => {
             console.error('[即答] 音声再生エラー:', err);
             resolve();
           });
@@ -1960,6 +1976,9 @@ const { apiBaseUrl = '' } = Astro.props;
     async function sendMessage() {
       let firstAckPromise: Promise<void> | null = null; // ✨ 即答待機用Promise
 
+      // ★★★ 追加: iOS対策。処理開始直後(クリックイベント内)に再生権限を確保する ★★★
+      unlockAudioParams();
+
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
       isProcessing = true;
@@ -1992,14 +2011,14 @@ const { apiBaseUrl = '' } = Astro.props;
               console.log(`[DEBUG] 事前生成音声を再生します`);
               // ✨ 音声再生完了を待てるようにPromise化
               firstAckPromise = new Promise<void>((resolve) => {
-                const audio = new Audio(`data:audio/mp3;base64,${preGeneratedAudio}`);
-                currentAudio = audio;
-                audio.onended = () => {
+                // ★変更: グローバルプレイヤーを使用
+                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+                
+                ttsPlayer.onended = () => {
                   console.log(`[DEBUG] 事前生成音声の再生が完了しました`);
-                  currentAudio = null;
                   resolve();  // 再生完了を通知
                 };
-                audio.play().catch(err => {
+                ttsPlayer.play().catch(err => {
                   console.error('[即答] 音声再生エラー:', err);
                   resolve();  // エラー時も続行
                 });
@@ -2047,7 +2066,7 @@ const { apiBaseUrl = '' } = Astro.props;
       if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
       waitOverlayTimer = window.setTimeout(() => {
         showWaitOverlay();
-      }, 6000);
+      }, 4000);
 
       try {
         // const loadingId = addLoadingMessage(); // ★動画を使うのでローディング吹き出しはOFF推奨
@@ -2122,13 +2141,13 @@ const { apiBaseUrl = '' } = Astro.props;
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
-                    const audio = new Audio(`data:audio/mp3;base64,${preGeneratedIntro}`);
-                    currentAudio = audio;
-                    audio.onended = () => {
-                      currentAudio = null;
+                    // ★変更: グローバルプレイヤーを使用
+                    ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+                    
+                    ttsPlayer.onended = () => {
                       resolve();
                     };
-                    audio.play();
+                    ttsPlayer.play();
                   });
                 } else {
                   introPart2Promise = speakTextGCP(introText, false);
@@ -2188,13 +2207,14 @@ const { apiBaseUrl = '' } = Astro.props;
               if (firstShopAudioPromise) {
                 const firstShopAudio = await firstShopAudioPromise;
                 if (firstShopAudio) {
-                  stopCurrentAudio();
-                  const audio = new Audio(firstShopAudio);
-                  currentAudio = audio;
+                  stopCurrentAudio(); // ★変更: ttsPlayer停止
+                  
+                  // ★変更: グローバルプレイヤーを使用
+                  ttsPlayer.src = firstShopAudio;
+                  
                   // 1軒目の再生完了を待つ
                   await new Promise<void>((resolve) => {
-                    audio.onended = () => {
-                      currentAudio = null;
+                    ttsPlayer.onended = () => {
                       voiceStatus.innerHTML = t('voiceStatusStopped');
                       voiceStatus.className = 'voice-status stopped';
                       resolve();
@@ -2203,7 +2223,7 @@ const { apiBaseUrl = '' } = Astro.props;
                     voiceStatus.innerHTML = t('voiceStatusSpeaking');
                     voiceStatus.className = 'voice-status speaking';
 
-                    audio.play();
+                    ttsPlayer.play();
                   });
 
                   // 2軒目以降の音声合成完了を待って再生
@@ -2212,13 +2232,13 @@ const { apiBaseUrl = '' } = Astro.props;
                     if (remainingAudio) {
                       await new Promise(resolve => setTimeout(resolve, 500));
 
-                      stopCurrentAudio();
-                      const audioElement = new Audio(remainingAudio);
-                      currentAudio = audioElement;
+                      stopCurrentAudio(); // ★変更: ttsPlayer停止
+                      
+                      // ★変更: グローバルプレイヤーを使用
+                      ttsPlayer.src = remainingAudio;
 
                       await new Promise<void>((resolve) => {
-                        audioElement.onended = () => {
-                          currentAudio = null;
+                        ttsPlayer.onended = () => {
                           voiceStatus.innerHTML = '🎤 音声認識: 停止中';
                           voiceStatus.className = 'voice-status stopped';
                           resolve();
@@ -2227,7 +2247,7 @@ const { apiBaseUrl = '' } = Astro.props;
                         voiceStatus.innerHTML = '🔊 音声再生中...';
                         voiceStatus.className = 'voice-status speaking';
 
-                        audioElement.play();
+                        ttsPlayer.play();
                       });
                     }
                   }
@@ -2282,13 +2302,13 @@ const { apiBaseUrl = '' } = Astro.props;
                     const preGeneratedIntro = preGeneratedAcks.get(introText);
                     if (preGeneratedIntro) {
                       introPart2Promise = new Promise<void>((resolve) => {
-                        const audio = new Audio(`data:audio/mp3;base64,${preGeneratedIntro}`);
-                        currentAudio = audio;
-                        audio.onended = () => {
-                          currentAudio = null;
+                        // ★変更: グローバルプレイヤーを使用
+                        ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+                        
+                        ttsPlayer.onended = () => {
                           resolve();
                         };
-                        audio.play();
+                        ttsPlayer.play();
                       });
                     } else {
                       introPart2Promise = speakTextGCP(introText, false);
@@ -2348,13 +2368,14 @@ const { apiBaseUrl = '' } = Astro.props;
                   if (firstShopAudioPromise) {
                     const firstShopAudio = await firstShopAudioPromise;
                     if (firstShopAudio) {
-                      stopCurrentAudio();
-                      const audio = new Audio(firstShopAudio);
-                      currentAudio = audio;
+                      stopCurrentAudio(); // ★変更: ttsPlayer停止
+                      
+                      // ★変更: グローバルプレイヤーを使用
+                      ttsPlayer.src = firstShopAudio;
+
                       // 1軒目の再生完了を待つ
                       await new Promise<void>((resolve) => {
-                        audio.onended = () => {
-                          currentAudio = null;
+                        ttsPlayer.onended = () => {
                           voiceStatus.innerHTML = t('voiceStatusStopped');
                           voiceStatus.className = 'voice-status stopped';
                           resolve();
@@ -2363,7 +2384,7 @@ const { apiBaseUrl = '' } = Astro.props;
                         voiceStatus.innerHTML = t('voiceStatusSpeaking');
                         voiceStatus.className = 'voice-status speaking';
 
-                        audio.play();
+                        ttsPlayer.play();
                       });
 
                       // 2軒目以降の音声合成完了を待って再生
@@ -2372,13 +2393,13 @@ const { apiBaseUrl = '' } = Astro.props;
                         if (remainingAudio) {
                           await new Promise(resolve => setTimeout(resolve, 500));
 
-                          stopCurrentAudio();
-                          const audioElement = new Audio(remainingAudio);
-                          currentAudio = audioElement;
+                          stopCurrentAudio(); // ★変更: ttsPlayer停止
+                          
+                          // ★変更: グローバルプレイヤーを使用
+                          ttsPlayer.src = remainingAudio;
 
                           await new Promise<void>((resolve) => {
-                            audioElement.onended = () => {
-                              currentAudio = null;
+                            ttsPlayer.onended = () => {
                               voiceStatus.innerHTML = '🎤 音声認識: 停止中';
                               voiceStatus.className = 'voice-status stopped';
                               resolve();
@@ -2387,7 +2408,7 @@ const { apiBaseUrl = '' } = Astro.props;
                             voiceStatus.innerHTML = '🔊 音声再生中...';
                             voiceStatus.className = 'voice-status speaking';
 
-                            audioElement.play();
+                            ttsPlayer.play();
                           });
                         }
                       }
