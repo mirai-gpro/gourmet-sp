@@ -615,6 +615,13 @@ const { apiBaseUrl = '' } = Astro.props;
             userInput.value = transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
+            
+            // ★★★ エコーチェック ★★★
+            const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
+            if (echoCheck.some(kw => transcript.includes(kw))) {
+              return; // エコーなので何もしない
+            }
+            
             addMessage('user', transcript);
 
             // 1. 日時チェック
@@ -755,6 +762,7 @@ const { apiBaseUrl = '' } = Astro.props;
       // ★★★ デバッグ：受信したtranscriptを画面表示 ★★★
 
       // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
+      alert('STT認識: ' + transcript); // ★ デバッグ用
       console.log('[エコー判定WS] 受信transcript:', transcript);
       
       // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
@@ -769,6 +777,7 @@ const { apiBaseUrl = '' } = Astro.props;
       // いずれかのキーワードを含んでいたら即削除
       for (const keyword of echoKeywords) {
         if (transcript.includes(keyword)) {
+          alert('エコー検知！キーワード: ' + keyword); // ★ デバッグ用
           console.log('[固定文言エコー検知WS!!!] キーワード一致:', keyword);
           console.log('[固定文言エコー検知WS!!!] 削除transcript:', transcript);
           voiceStatus.innerHTML = t('voiceStatusStopped');
@@ -799,30 +808,35 @@ const { apiBaseUrl = '' } = Astro.props;
       // ★★★ 日時チェック ★★★
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
-        addMessage('user', transcript);
+        // ★ 音声認識を強制停止
+        stopStreamingSTT();
+        
         const msg = t('dateWarningMsg');
         addMessage('assistant', msg);
         
-        // ① AI音声再生前にSTT送信停止
-        isSendingAudio = false;
-        
-        // ② 音声再生（完了まで待つ）
+        // 音声再生
         if (isTTSEnabled && isUserInteracted) {
           await speakTextGCP(msg, true);
         } else {
           await new Promise(r => setTimeout(r, 2000));
         }
         
-        // ③ 音声再生完了後、即座にSTT送信再開
-        isSendingAudio = true;
-        
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
+        
+        // ★ 音声再生後に録音再開
+        setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
         return;
       }
 
       // 通常フロー
+      // ★★★ エコーチェック ★★★
+      const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
+      if (echoCheck.some(kw => transcript.includes(kw))) {
+        return; // エコーなので何もしない
+      }
+      
       addMessage('user', transcript);
 
       const textLength = transcript.trim().replace(/\s+/g, '').length;
