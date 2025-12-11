@@ -527,15 +527,32 @@ const { apiBaseUrl = '' } = Astro.props;
           const data = await response.json();
 
           if (data.success && data.transcript) {
-            // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
-            const normTranscript = normalizeText(data.transcript);
-            console.log('[デバッグ] STT認識:', data.transcript);
+            // ★★★ 固定文言の狙い撃ちエコー判定 ★★★
+            const transcript = data.transcript;
+            const dateWarningMsg = t('dateWarningMsg');
+            const shortWarningMsg = t('shortMsgWarning');
+            
+            // 固定文言に完全一致または高い類似度があれば即削除
+            if (transcript.includes('お店の空席状況は') || 
+                transcript.includes('後ほど私がお店に直接電話して確認') ||
+                transcript.includes('まずはお店のご希望をお聞かせ') ||
+                normalizeText(transcript) === normalizeText(dateWarningMsg) ||
+                normalizeText(transcript) === normalizeText(shortWarningMsg)) {
+                console.log('[固定文言エコー検知] 削除:', transcript);
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                return; // ★ ここで完全に処理終了。addMessageされない
+            }
+
+            // ★★★ 通常のエコー判定（完全一致: core_logic.py方式） ★★★
+            const normTranscript = normalizeText(transcript);
+            console.log('[デバッグ] STT認識:', transcript);
             console.log('[デバッグ] 正規化後:', normTranscript);
             console.log('[デバッグ] lastAISpeech:', lastAISpeech);
             console.log('[デバッグ] 一致判定:', normTranscript === lastAISpeech);
             
             if (lastAISpeech && normTranscript === lastAISpeech) {
-                console.log('[エコー検知] 無視:', data.transcript, '| 直前AI:', lastAISpeech);
+                console.log('[エコー検知] 無視:', transcript, '| 直前AI:', lastAISpeech);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
                 // エコー検知後は lastAISpeech をクリア（連続エコー防止）
@@ -543,10 +560,10 @@ const { apiBaseUrl = '' } = Astro.props;
                 return;
             }
 
-            userInput.value = data.transcript;
+            userInput.value = transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
-            addMessage('user', data.transcript);
+            addMessage('user', transcript);
 
             // 1. 日時チェック
             // @ts-ignore
@@ -640,6 +657,22 @@ const { apiBaseUrl = '' } = Astro.props;
       stopStreamingSTT();
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
+
+      // ★★★ 固定文言の狙い撃ちエコー判定 ★★★
+      const dateWarningMsg = t('dateWarningMsg');
+      const shortWarningMsg = t('shortMsgWarning');
+      
+      // 固定文言に完全一致または高い類似度があれば即削除
+      if (transcript.includes('お店の空席状況は') || 
+          transcript.includes('後ほど私がお店に直接電話して確認') ||
+          transcript.includes('まずはお店のご希望をお聞かせ') ||
+          normalizeText(transcript) === normalizeText(dateWarningMsg) ||
+          normalizeText(transcript) === normalizeText(shortWarningMsg)) {
+          console.log('[固定文言エコー検知WS] 削除:', transcript);
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          return; // ★ ここで完全に処理終了。addMessageされない
+      }
 
       // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
       const normTranscript = normalizeText(transcript);
