@@ -123,98 +123,7 @@ const { apiBaseUrl = '' } = Astro.props;
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-  // UIテキスト＆ルール定義（ページタイトル等もここに定義）
-  const i18n = {
-    ja: {
-      // 画面表示用
-      pageTitle: 'グルメサポートAI',
-      pageSubtitle: 'AIがあなたにぴったりのお店をご提案します',
-      shopListTitle: 'おすすめのお店',
-      shopListEmpty: 'チャットで検索すると、ここにお店が表示されます',
-      footerMessage: '素敵なグルメ体験をお楽しみください',
-      initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
-      
-      // ステータス・ボタン
-      voiceStatusStopped: '🎤 音声認識: 停止中',
-      voiceStatusListening: '🎤 話してください...',
-      voiceStatusRecording: '🎤 録音中...',
-      voiceStatusWaiting: '🎤 認識待機中...',
-      voiceStatusRecognizing: '🔊 音声認識中...',
-      voiceStatusSynthesizing: '🔊 音声合成中...',
-      voiceStatusSpeaking: '🔊 音声再生中...',
-      voiceStatusComplete: '✅ 認識完了',
-      inputPlaceholder: 'メッセージを入力...',
-      btnVoiceInput: '音声入力',
-      btnTTSOn: '音声読み上げON',
-      btnTTSOff: '音声読み上げOFF',
-      btnSend: '送信',
-      btnReservation: '📞 予約依頼する',
-      clickPrompt: '音声を再生するには、画面をクリックしてください',
-      
-      // メッセージ・警告
-      recordingTimeLimit: '録音時間が上限（55秒）に達したため自動停止しました',
-      micAccessError: 'マイクアクセスエラー:',
-      voiceNotRecognized: '音声が認識されませんでした',
-      sttError: '音声認識エラー:',
-      initError: '初期化に失敗しました。ページを再読み込みしてください。',
-      searchError: 'お店を検索してからご利用ください。',
-      loadingMessage: '提案するお店の情報を探しています。少々お待ちください...',
-      summaryTitle: '📋 質問要約書',
-      summaryFooter: '担当スタッフが内容を確認し、追ってご連絡いたします。',
-      ackConfirm: '確認しますので、少々お待ちください。',
-      ackSearch: 'お調べします。',
-      ackUnderstood: 'かしこまりました。',
-      ackYes: 'はい、承知しました。',
-      fallbackResponse: (text) => `"${text}"とのこと。お調べしますので、少々お待ちください。`,
-      additionalResponse: '只今、お店の情報を確認中です。もう少々お待ちください。',
-      ttsIntro: 'お待たせしました。',
-      waitMessage: 'AIがお店を検索しています...',
-      
-      // ★日時指定・文字数警告用
-      dateWarningMsg: 'お店の空席状況は、後ほど私がお店に直接電話して確認しますので、まずはお店のご希望をお聞かせ下さい。',
-      shortMsgWarning: 'すみません、もう少し詳しくご希望を教えていただけますか？',
-      
-      // ルール（正規表現）
-      patterns: {
-        dateCheck: /(明日|明後日|来週|来月|今夜|今日|(\d+)月|(\d+)日|(\d+)時|(\d+):(\d+)|スケジュール|空いてる|空き)/,
-        fillers: /^(えーと|あの|んー|うーん|えっと|まあ|ていうか|なんか|じゃあ|それじゃあ|そしたら|そうしたら|では|なら|だったら|とりあえず|まずは)[、,.\s]*/,
-        ackQuestions: /ございますか|でしょうか|いかがですか|ありますか/,
-        ackLocation: /どこ|場所|エリア|地域|駅/,
-        ackSearch: /探して|探し|教えて|おすすめ|紹介/
-      }
-    },
-    en: {
-      pageTitle: 'Gourmet Support AI',
-      pageSubtitle: 'AI will suggest the perfect restaurant for you',
-      shopListTitle: 'Recommended Restaurants',
-      shopListEmpty: 'Search in the chat to see restaurants here',
-      footerMessage: 'Enjoy your wonderful dining experience',
-      initialGreeting: 'Hello! I\'m the Gourmet Support AI.',
-      voiceStatusStopped: '🎤 Voice Recognition: Stopped',
-      inputPlaceholder: 'Enter message...',
-      btnVoiceInput: 'Voice input',
-      btnTTSOn: 'Voice ON', btnTTSOff: 'Voice OFF', btnSend: 'Send', btnReservation: 'Reserve',
-      clickPrompt: 'Click to play', recordingTimeLimit: 'Limit reached', micAccessError: 'Mic Error', voiceNotRecognized: 'Not recognized',
-      sttError: 'STT Error', initError: 'Init Failed', searchError: 'Search First', loadingMessage: 'Searching...',
-      summaryTitle: 'Summary', summaryFooter: 'Staff will contact you.',
-      ackConfirm: 'Let me check.', ackSearch: 'Searching.', ackUnderstood: 'Understood.', ackYes: 'Yes.',
-      fallbackResponse: (text) => `You said "${text}". Checking.`,
-      additionalResponse: 'Searching...', ttsIntro: 'Here is the info.', waitMessage: 'AI Searching...',
-      dateWarningMsg: 'I will check availability later. Please tell me your preferences.',
-      shortMsgWarning: 'Please provide more details.',
-      patterns: {
-        dateCheck: /(tomorrow|today|tonight)/i,
-        fillers: /^(um|uh|well)[,.\s]*/i,
-        ackQuestions: /\?/, ackLocation: /where/i, ackSearch: /find/i
-      }
-    },
-    zh: {
-        patterns: { dateCheck: /明天/, fillers: /^嗯/, ackQuestions: /吗/, ackLocation: /哪里/, ackSearch: /找/ }
-    },
-    ko: {
-        patterns: { dateCheck: /내일/, fillers: /^음/, ackQuestions: /가요/, ackLocation: /어디/, ackSearch: /찾아/ }
-    }
-  };
+  import { i18n } from '../constants/i18n';
 
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
@@ -288,7 +197,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const SILENCE_DURATION = isIOS ? 1500 : 2000;
     const MIN_RECORDING_TIME = 3000;
 
-    // --- 便利関数群 (t, updateUILanguage など) ---
+    // --- 便利関数群 ---
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -433,7 +342,6 @@ const { apiBaseUrl = '' } = Astro.props;
       const waitText = document.querySelector('.wait-text');
       if (waitText) waitText.textContent = t('waitMessage');
 
-      // ★★★ 修正: 正しい定義からタイトル等を取得 ★★★
       const pageTitle = document.getElementById('pageTitle');
       if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
       const pageSubtitle = document.getElementById('pageSubtitle');
@@ -461,7 +369,6 @@ const { apiBaseUrl = '' } = Astro.props;
       const cleanText = stripMarkdown(text);
       
       // ★★★ 履歴に追加（エコー対策） ★★★
-      lastAiSpeech = cleanText;
       aiSpeechHistory.push(normalizeText(cleanText));
       if (aiSpeechHistory.length > 5) aiSpeechHistory.shift();
 
@@ -633,7 +540,6 @@ const { apiBaseUrl = '' } = Astro.props;
                 console.log("エコー検知(履歴): 無視します", data.transcript);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                // マイク自動再開はせず、ここで終了
                 return;
             }
 
