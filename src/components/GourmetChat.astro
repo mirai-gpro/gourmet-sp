@@ -2061,12 +2061,12 @@ const { apiBaseUrl = '' } = Astro.props;
       const wasVoiceInput = isFromVoiceInput;
       isFromVoiceInput = false;
 
-      // ★★★ 追加: 4秒後に動画を表示するタイマーをセット ★★★
+      // ★★★ 追加: 6秒後に動画を表示するタイマーをセット ★★★
       // ※「お店の情報を確認中です...」の音声開始(約5秒後)に合わせて表示
       if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
       waitOverlayTimer = window.setTimeout(() => {
         showWaitOverlay();
-      }, 4000);
+      }, 6000);
 
       try {
         // const loadingId = addLoadingMessage(); // ★動画を使うのでローディング吹き出しはOFF推奨
