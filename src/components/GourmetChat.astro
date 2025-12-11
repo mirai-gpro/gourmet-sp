@@ -175,7 +175,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // ★★★ エコー対策用の変数 ★★★
+    // エコー対策用
     let lastAiSpeech = '';
 
     let preGeneratedAcks: Map<string, string> = new Map();
@@ -196,7 +196,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const SILENCE_DURATION = isIOS ? 1500 : 2000;
     const MIN_RECORDING_TIME = 3000;
 
-    // --- 便利関数 ---
+    // --- 関数定義 ---
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -289,7 +289,6 @@ const { apiBaseUrl = '' } = Astro.props;
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
-    // テキスト正規化（エコー判定用）
     function normalizeText(text: string): string {
       return text.replace(/[!?,.、。\s　]/g, '');
     }
@@ -532,7 +531,6 @@ const { apiBaseUrl = '' } = Astro.props;
                 console.log("エコー検知: 自分の声を無視します", data.transcript);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                // マイク再開はせず、ここで終了
                 return;
             }
 
@@ -546,7 +544,7 @@ const { apiBaseUrl = '' } = Astro.props;
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              toggleRecording().catch(e => {});
+              setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
               return;
             }
 
@@ -560,7 +558,7 @@ const { apiBaseUrl = '' } = Astro.props;
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                toggleRecording().catch(e => {});
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
                 return;
             }
 
@@ -619,7 +617,7 @@ const { apiBaseUrl = '' } = Astro.props;
       userInput.value = transcript;
       addMessage('user', transcript);
 
-      // ★★★ エコー判定（自己発言フィルター） ★★★
+      // ★★★ エコー判定（WS版） ★★★
       const normTranscript = normalizeText(transcript);
       const normLastAi = normalizeText(lastAiSpeech);
       if (normLastAi.length > 0 && normLastAi.includes(normTranscript) && normTranscript.length > 2) {
@@ -637,7 +635,7 @@ const { apiBaseUrl = '' } = Astro.props;
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
-        toggleRecording().catch(e => {});
+        setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
         return;
       }
 
@@ -649,7 +647,7 @@ const { apiBaseUrl = '' } = Astro.props;
           userInput.value = '';
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          toggleRecording().catch(e => {});
+          setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
           return;
       }
 
@@ -836,6 +834,30 @@ const { apiBaseUrl = '' } = Astro.props;
       document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
     }
 
+    // 初期化関数
+    async function initialize() {
+        try {
+            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
+            const data = await response.json(); sessionId = data.session_id;
+            addMessage('assistant', t('initialGreeting'), null, true);
+            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+            const ackPromises = ackTexts.map(async (text) => {
+              try {
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackData = await ackResponse.json();
+                if (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+              } catch (e) {}
+            });
+            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
+            userInput.disabled = false; sendBtn.disabled = false; micBtn.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            if (splashOverlay) hideSplash();
+            initializeWebSocketSTT();
+            updateUILanguage();
+        } catch(e) { console.error(e); }
+    }
+
+    // イベントリスナー登録
     languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
     micBtn.addEventListener('click', toggleRecording);
