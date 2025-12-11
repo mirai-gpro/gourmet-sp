@@ -3,7 +3,6 @@
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
-
 // APIベースURL（Cloud Runのエンドポイント）
 // 本番環境では環境変数から取得
 const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
@@ -15,9 +14,11 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>グルメサポートAI - お店探しをお手伝い</title>
+  
   <link rel="apple-touch-icon" href="/pwa-192x192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -46,17 +47,18 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       padding: 20px 0 30px;
     }
 
-.page-header h1 {
+    .page-header h1 {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px; /* 画像と文字の間隔 */
+      gap: 12px;
+      /* 画像と文字の間隔 */
       font-size: 28px;
       font-weight: 900;
       margin-bottom: 8px;
     }
 
-/* [修正後] :global() を付けることで、JSで追加された .app-logo にも確実に適用させる */
+    /* :global() を付けることで、JSで追加された .app-logo にも確実に適用させる */
     :global(.app-logo) {
       width: 40px;
       height: 40px;
@@ -143,18 +145,20 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 
     /* モバイルでのスタック表示 */
     @media (max-width: 1023px) {
-      .chat-section {
+      /* ★修正: スマホではショップリスト(カード)を先に表示 [order: 1] */
+      .shop-list-section {
         order: 1;
       }
       
-      .shop-list-section {
+      /* ★修正: チャット画面はその下に表示 [order: 2] */
+      .chat-section {
         order: 2;
       }
     }
   </style>
 </head>
 <body>
-    <header class="page-header">
+  <div class="page-container"> <header class="page-header">
       <h1 id="pageTitle">
         <img src="/pwa-152x152.png" alt="Logo" class="app-logo" />
         グルメサポートAI
@@ -181,7 +185,11 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     </footer>
   </div>
 
-  <!-- 予約依頼モーダル -->
   <ReservationModal apiBaseUrl={apiBaseUrl} />
+
+  <script>
+    import { registerSW } from 'virtual:pwa-register';
+    registerSW({ immediate: true });
+  </script>
 </body>
 </html>
