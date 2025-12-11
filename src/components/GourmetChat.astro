@@ -875,8 +875,44 @@ const { apiBaseUrl = '' } = Astro.props;
             if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
             addMessage('assistant', additionalResponse);
           }, 3000);
-          if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); }
-        } catch (error) { if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); } }
+          
+          // ★★★ sendMessage前にuserInputをエコーチェック ★★★
+          if (userInput.value.trim()) {
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
+            const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
+            
+            if (!isEcho) {
+              isFromVoiceInput = true; 
+              sendMessage();
+            } else {
+              userInput.value = ''; // エコーなのでクリア
+            }
+          }
+        } catch (error) { 
+          if (userInput.value.trim()) { 
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
+            const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
+            
+            if (!isEcho) {
+              isFromVoiceInput = true; 
+              sendMessage();
+            } else {
+              userInput.value = '';
+            }
+          }
+        }
       })();
       voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
