@@ -529,6 +529,11 @@ const { apiBaseUrl = '' } = Astro.props;
           if (data.success && data.transcript) {
             // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
             const normTranscript = normalizeText(data.transcript);
+            console.log('[デバッグ] STT認識:', data.transcript);
+            console.log('[デバッグ] 正規化後:', normTranscript);
+            console.log('[デバッグ] lastAISpeech:', lastAISpeech);
+            console.log('[デバッグ] 一致判定:', normTranscript === lastAISpeech);
+            
             if (lastAISpeech && normTranscript === lastAISpeech) {
                 console.log('[エコー検知] 無視:', data.transcript, '| 直前AI:', lastAISpeech);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
@@ -548,12 +553,17 @@ const { apiBaseUrl = '' } = Astro.props;
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
               const msg = t('dateWarningMsg');
               addMessage('assistant', msg);
-              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
-              else await new Promise(r => setTimeout(r, 2000));
+              if (isTTSEnabled && isUserInteracted) {
+                await speakTextGCP(msg, true); // 音声再生完了を待つ
+                await new Promise(r => setTimeout(r, 500)); // 追加の待機
+              } else {
+                await new Promise(r => setTimeout(r, 2000));
+              }
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
+              // ★ 音声再生完了後に録音再開
+              setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
               return;
             }
 
@@ -562,12 +572,16 @@ const { apiBaseUrl = '' } = Astro.props;
             if (textLength < 4) {
                 const msg = t('shortMsgWarning');
                 addMessage('assistant', msg);
-                if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
-                else await new Promise(r => setTimeout(r, 2000));
+                if (isTTSEnabled && isUserInteracted) {
+                  await speakTextGCP(msg, true);
+                  await new Promise(r => setTimeout(r, 500));
+                } else {
+                  await new Promise(r => setTimeout(r, 2000));
+                }
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
                 return;
             }
 
@@ -629,6 +643,11 @@ const { apiBaseUrl = '' } = Astro.props;
 
       // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
       const normTranscript = normalizeText(transcript);
+      console.log('[デバッグWS] STT認識:', transcript);
+      console.log('[デバッグWS] 正規化後:', normTranscript);
+      console.log('[デバッグWS] lastAISpeech:', lastAISpeech);
+      console.log('[デバッグWS] 一致判定:', normTranscript === lastAISpeech);
+      
       if (lastAISpeech && normTranscript === lastAISpeech) {
           console.log('[エコー検知WS] 無視:', transcript, '| 直前AI:', lastAISpeech);
           voiceStatus.innerHTML = t('voiceStatusStopped');
@@ -645,11 +664,16 @@ const { apiBaseUrl = '' } = Astro.props;
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
         const msg = t('dateWarningMsg');
         addMessage('assistant', msg);
-        if (isTTSEnabled && isUserInteracted) speakTextGCP(msg, true).catch(e => {});
+        if (isTTSEnabled && isUserInteracted) {
+          await speakTextGCP(msg, true);
+          await new Promise(r => setTimeout(r, 500));
+        } else {
+          await new Promise(r => setTimeout(r, 2000));
+        }
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
-        setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
+        setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
         return;
       }
 
@@ -657,11 +681,16 @@ const { apiBaseUrl = '' } = Astro.props;
       if (textLength < 4) {
           const msg = t('shortMsgWarning');
           addMessage('assistant', msg);
-          if (isTTSEnabled && isUserInteracted) speakTextGCP(msg, true).catch(e => {});
+          if (isTTSEnabled && isUserInteracted) {
+            await speakTextGCP(msg, true);
+            await new Promise(r => setTimeout(r, 500));
+          } else {
+            await new Promise(r => setTimeout(r, 2000));
+          }
           userInput.value = '';
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
+          setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
           return;
       }
 
