@@ -527,21 +527,29 @@ const { apiBaseUrl = '' } = Astro.props;
           const data = await response.json();
 
           if (data.success && data.transcript) {
-            // ★★★ 固定文言の狙い撃ちエコー判定 ★★★
+            // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
             const transcript = data.transcript;
-            const dateWarningMsg = t('dateWarningMsg');
-            const shortWarningMsg = t('shortMsgWarning');
             
-            // 固定文言に完全一致または高い類似度があれば即削除
-            if (transcript.includes('お店の空席状況は') || 
-                transcript.includes('後ほど私がお店に直接電話して確認') ||
-                transcript.includes('まずはお店のご希望をお聞かせ') ||
-                normalizeText(transcript) === normalizeText(dateWarningMsg) ||
-                normalizeText(transcript) === normalizeText(shortWarningMsg)) {
-                console.log('[固定文言エコー検知] 削除:', transcript);
+            console.log('[エコー判定] 受信transcript:', transcript);
+            
+            // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
+            
+            // いずれかのキーワードを含んでいたら即削除
+            for (const keyword of echoKeywords) {
+              if (transcript.includes(keyword)) {
+                console.log('[固定文言エコー検知!!!] キーワード一致:', keyword);
+                console.log('[固定文言エコー検知!!!] 削除transcript:', transcript);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                return; // ★ ここで完全に処理終了。addMessageされない
+                return; // ★ ここで完全終了
+              }
             }
 
             // ★★★ 通常のエコー判定（完全一致: core_logic.py方式） ★★★
@@ -570,17 +578,38 @@ const { apiBaseUrl = '' } = Astro.props;
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
               const msg = t('dateWarningMsg');
               addMessage('assistant', msg);
+              
+              // ★★★ AI音声再生中は録音完全停止 ★★★
+              const wasRecording = isRecording;
+              if (wasRecording) {
+                console.log('[録音制御] AI音声再生のため一時停止');
+                // Legacy録音の停止
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                  mediaRecorder.stop();
+                }
+                // WebSocket録音の停止
+                stopStreamingSTT();
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.innerHTML = '🎤';
+              }
+              
               if (isTTSEnabled && isUserInteracted) {
                 await speakTextGCP(msg, true); // 音声再生完了を待つ
-                await new Promise(r => setTimeout(r, 500)); // 追加の待機
+                await new Promise(r => setTimeout(r, 1000)); // 1秒待機（音声の余韻）
               } else {
                 await new Promise(r => setTimeout(r, 2000));
               }
+              
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              // ★ 音声再生完了後に録音再開
-              setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+              
+              // ★★★ AI音声再生完了後に録音再開 ★★★
+              if (wasRecording) {
+                console.log('[録音制御] 録音再開');
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+              }
               return;
             }
 
@@ -658,20 +687,27 @@ const { apiBaseUrl = '' } = Astro.props;
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
-      // ★★★ 固定文言の狙い撃ちエコー判定 ★★★
-      const dateWarningMsg = t('dateWarningMsg');
-      const shortWarningMsg = t('shortMsgWarning');
+      // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
+      console.log('[エコー判定WS] 受信transcript:', transcript);
       
-      // 固定文言に完全一致または高い類似度があれば即削除
-      if (transcript.includes('お店の空席状況は') || 
-          transcript.includes('後ほど私がお店に直接電話して確認') ||
-          transcript.includes('まずはお店のご希望をお聞かせ') ||
-          normalizeText(transcript) === normalizeText(dateWarningMsg) ||
-          normalizeText(transcript) === normalizeText(shortWarningMsg)) {
-          console.log('[固定文言エコー検知WS] 削除:', transcript);
+      // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
+      const echoKeywords = [
+        'お店の空席状況',
+        '後ほど私がお店に',
+        '直接電話して確認',
+        'まずはお店のご希望',
+        'もう少し詳しくご希望'
+      ];
+      
+      // いずれかのキーワードを含んでいたら即削除
+      for (const keyword of echoKeywords) {
+        if (transcript.includes(keyword)) {
+          console.log('[固定文言エコー検知WS!!!] キーワード一致:', keyword);
+          console.log('[固定文言エコー検知WS!!!] 削除transcript:', transcript);
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          return; // ★ ここで完全に処理終了。addMessageされない
+          return; // ★ ここで完全終了
+        }
       }
 
       // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
@@ -697,15 +733,27 @@ const { apiBaseUrl = '' } = Astro.props;
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
         const msg = t('dateWarningMsg');
         addMessage('assistant', msg);
+        
+        // ★★★ AI音声再生中は録音完全停止 ★★★
+        console.log('[録音制御WS] AI音声再生のため一時停止');
+        stopStreamingSTT();
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        micBtn.innerHTML = '🎤';
+        
         if (isTTSEnabled && isUserInteracted) {
           await speakTextGCP(msg, true);
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 1000)); // 1秒待機
         } else {
           await new Promise(r => setTimeout(r, 2000));
         }
+        
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
+        
+        // ★★★ AI音声再生完了後に録音再開 ★★★
+        console.log('[録音制御WS] 録音再開');
         setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
         return;
       }
