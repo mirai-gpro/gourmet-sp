@@ -497,29 +497,17 @@ const { apiBaseUrl = '' } = Astro.props;
       console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
       
-      // ★★★ MediaStreamのトラックを確実に停止 ★★★
-      if (mediaStream) {
-        console.log('[録音停止] MediaStreamのトラックを停止');
-        mediaStream.getTracks().forEach(track => {
-          track.stop();
-          console.log('[録音停止] トラック停止:', track.kind, track.label);
-        });
-        mediaStream = null;
-      }
-      
-      if (audioWorkletNode) { 
-        console.log('[録音停止] audioWorkletNode切断');
-        audioWorkletNode.disconnect(); 
-        audioWorkletNode = null; 
-      }
-      if (audioContext) { 
-        console.log('[録音停止] audioContext閉じる');
-        audioContext.close(); 
-        audioContext = null; 
-      }
+      // ★★★ マイクは止めない！WebSocketだけ停止 ★★★
       if (socket && socket.connected) {
         console.log('[録音停止] WebSocketにstop_stream送信');
         socket.emit('stop_stream');
+      }
+      
+      isRecording = false; 
+      micBtn.classList.remove('recording'); 
+      micBtn.innerHTML = '🎤';
+      console.log('[録音停止] 完了');
+    }
       }
       if (recordingTimer) clearTimeout(recordingTimer);
       isRecording = false; 
@@ -808,11 +796,11 @@ const { apiBaseUrl = '' } = Astro.props;
       // ★★★ 日時チェック ★★★
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
-        // ★ 音声認識を強制停止
-        stopStreamingSTT();
-        
         const msg = t('dateWarningMsg');
         addMessage('assistant', msg);
+        
+        // ★ 音声送信を停止（マイクは動き続ける）
+        isSendingAudio = false;
         
         // 音声再生
         if (isTTSEnabled && isUserInteracted) {
@@ -821,12 +809,12 @@ const { apiBaseUrl = '' } = Astro.props;
           await new Promise(r => setTimeout(r, 2000));
         }
         
+        // ★ 音声送信を再開
+        isSendingAudio = true;
+        
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
-        
-        // ★ 音声再生後に録音再開
-        setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
         return;
       }
 
