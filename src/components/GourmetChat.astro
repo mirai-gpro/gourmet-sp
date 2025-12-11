@@ -497,6 +497,9 @@ const { apiBaseUrl = '' } = Astro.props;
       console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
       
+      // ★★★ 音声送信を停止 ★★★
+      isSendingAudio = false;
+      
       // ★★★ マイクは止めない！WebSocketだけ停止 ★★★
       if (socket && socket.connected) {
         console.log('[録音停止] WebSocketにstop_stream送信');
@@ -743,15 +746,11 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     function handleStreamingSTTComplete(transcript: string) {
-      stopStreamingSTT();
+      // ★ stopStreamingSTT()を削除（マイクは動き続ける）
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
-      // ★★★ デバッグ：受信したtranscriptを画面表示 ★★★
-
       // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
-      alert('STT認識: ' + transcript); // ★ デバッグ用
-      console.log('[エコー判定WS] 受信transcript:', transcript);
       
       // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
       const echoKeywords = [
@@ -765,9 +764,6 @@ const { apiBaseUrl = '' } = Astro.props;
       // いずれかのキーワードを含んでいたら即削除
       for (const keyword of echoKeywords) {
         if (transcript.includes(keyword)) {
-          alert('エコー検知！キーワード: ' + keyword); // ★ デバッグ用
-          console.log('[固定文言エコー検知WS!!!] キーワード一致:', keyword);
-          console.log('[固定文言エコー検知WS!!!] 削除transcript:', transcript);
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
           return; // ★ ここで完全終了
