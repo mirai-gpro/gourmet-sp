@@ -122,7 +122,81 @@ const { apiBaseUrl = '' } = Astro.props;
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-  import { i18n } from '../constants/i18n';
+  // 辞書データをローカル定義に戻しました（エラー回避・シンプル化）
+  const i18n = {
+    ja: {
+      initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
+      voiceStatusStopped: '🎤 音声認識: 停止中',
+      voiceStatusListening: '🎤 話してください...',
+      voiceStatusRecording: '🎤 録音中...',
+      voiceStatusWaiting: '🎤 認識待機中...',
+      voiceStatusRecognizing: '🔊 音声認識中...',
+      voiceStatusSynthesizing: '🔊 音声合成中...',
+      voiceStatusSpeaking: '🔊 音声再生中...',
+      voiceStatusComplete: '✅ 認識完了',
+      inputPlaceholder: 'メッセージを入力...',
+      btnVoiceInput: '音声入力',
+      btnTTSOn: '音声読み上げON',
+      btnTTSOff: '音声読み上げOFF',
+      btnSend: '送信',
+      btnReservation: '📞 予約依頼する',
+      clickPrompt: '音声を再生するには、画面をクリックしてください',
+      recordingTimeLimit: '録音時間が上限（55秒）に達したため自動停止しました',
+      micAccessError: 'マイクアクセスエラー:',
+      voiceNotRecognized: '音声が認識されませんでした',
+      sttError: '音声認識エラー:',
+      initError: '初期化に失敗しました。ページを再読み込みしてください。',
+      searchError: 'お店を検索してからご利用ください。',
+      loadingMessage: '提案するお店の情報を探しています。少々お待ちください...',
+      summaryTitle: '📋 質問要約書',
+      summaryFooter: '担当スタッフが内容を確認し、追ってご連絡いたします。',
+      ackConfirm: '確認しますので、少々お待ちください。',
+      ackSearch: 'お調べします。',
+      ackUnderstood: 'かしこまりました。',
+      ackYes: 'はい、承知しました。',
+      fallbackResponse: (text) => `"${text}"とのこと。お調べしますので、少々お待ちください。`,
+      additionalResponse: '只今、お店の情報を確認中です。もう少々お待ちください。',
+      ttsIntro: 'お待たせしました。',
+      waitMessage: 'AIがお店を検索しています...',
+      dateWarningMsg: 'お店の空席状況は、後ほど私がお店に直接電話して確認しますので、まずはお店のご希望をお聞かせ下さい。',
+      shortMsgWarning: 'すみません、もう少し詳しくご希望を教えていただけますか？',
+      patterns: {
+        dateCheck: /(明日|明後日|来週|来月|今夜|今日|(\d+)月|(\d+)日|(\d+)時|(\d+):(\d+)|スケジュール|空いてる|空き)/,
+        fillers: /^(えーと|あの|んー|うーん|えっと|まあ|ていうか|なんか|じゃあ|それじゃあ|そしたら|そうしたら|では|なら|だったら|とりあえず|まずは)[、,.\s]*/,
+        ackQuestions: /ございますか|でしょうか|いかがですか|ありますか/,
+        ackLocation: /どこ|場所|エリア|地域|駅/,
+        ackSearch: /探して|探し|教えて|おすすめ|紹介/
+      }
+    },
+    en: {
+      initialGreeting: 'Hello! I\'m the Gourmet Support AI.',
+      voiceStatusStopped: '🎤 Voice Recognition: Stopped',
+      inputPlaceholder: 'Enter message...',
+      btnVoiceInput: 'Voice input',
+      btnTTSOn: 'Voice ON', btnTTSOff: 'Voice OFF', btnSend: 'Send', btnReservation: 'Reserve',
+      clickPrompt: 'Click to play', recordingTimeLimit: 'Limit reached', micAccessError: 'Mic Error', voiceNotRecognized: 'Not recognized',
+      sttError: 'STT Error', initError: 'Init Failed', searchError: 'Search First', loadingMessage: 'Searching...',
+      summaryTitle: 'Summary', summaryFooter: 'Staff will contact you.',
+      ackConfirm: 'Let me check.', ackSearch: 'Searching.', ackUnderstood: 'Understood.', ackYes: 'Yes.',
+      fallbackResponse: (text) => `You said "${text}". Checking.`,
+      additionalResponse: 'Searching...', ttsIntro: 'Here is the info.', waitMessage: 'AI Searching...',
+      dateWarningMsg: 'I will check availability later. Please tell me your preferences.',
+      shortMsgWarning: 'Please provide more details.',
+      patterns: {
+        dateCheck: /(tomorrow|today|tonight)/i,
+        fillers: /^(um|uh|well)[,.\s]*/i,
+        ackQuestions: /\?/, ackLocation: /where/i, ackSearch: /find/i
+      }
+    },
+    zh: {
+        // 必要に応じて記述（今回はjaメインで実装）
+        patterns: { dateCheck: /明天/, fillers: /^嗯/, ackQuestions: /吗/, ackLocation: /哪里/, ackSearch: /找/ }
+    },
+    ko: {
+        // 必要に応じて記述
+        patterns: { dateCheck: /내일/, fillers: /^음/, ackQuestions: /가요/, ackLocation: /어디/, ackSearch: /찾아/ }
+    }
+  };
 
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
@@ -160,7 +234,18 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     let waitOverlayTimer: number | null = null;
 
-    // 状態変数
+    function showWaitOverlay() {
+      waitOverlay.classList.remove('hidden');
+      waitVideo.currentTime = 0;
+      waitVideo.play().catch(e => console.log('Video err', e));
+    }
+    function hideWaitOverlay() {
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      waitOverlay.classList.add('hidden');
+      setTimeout(() => waitVideo.pause(), 500);
+    }
+
+    // 状態
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
     let isProcessing = false;
@@ -175,7 +260,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // エコー対策用
+    // ★★★ シンプルなエコー対策: 直前のAI発言を記憶 ★★★
     let lastAiSpeech = '';
 
     let preGeneratedAcks: Map<string, string> = new Map();
@@ -196,7 +281,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const SILENCE_DURATION = isIOS ? 1500 : 2000;
     const MIN_RECORDING_TIME = 3000;
 
-    // --- 関数定義 ---
+    // --- 便利関数群 ---
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -205,6 +290,7 @@ const { apiBaseUrl = '' } = Astro.props;
       return translation || key;
     }
 
+    // 予約モーダル用グローバル関数
     (window as any).gourmetI18n = {
       i18n: i18n,
       getCurrentLanguage: () => currentLanguage,
@@ -246,18 +332,6 @@ const { apiBaseUrl = '' } = Astro.props;
       chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    function showWaitOverlay() {
-      waitOverlay.classList.remove('hidden');
-      waitVideo.currentTime = 0;
-      waitVideo.play().catch(e => console.log('Video err', e));
-    }
-
-    function hideWaitOverlay() {
-      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
-      waitOverlay.classList.add('hidden');
-      setTimeout(() => waitVideo.pause(), 500);
-    }
-
     function unlockAudioParams() {
       ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
     }
@@ -289,6 +363,7 @@ const { apiBaseUrl = '' } = Astro.props;
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
+    // 正規化（エコー判定用）: 句読点やスペースを削除
     function normalizeText(text: string): string {
       return text.replace(/[!?,.、。\s　]/g, '');
     }
@@ -336,8 +411,10 @@ const { apiBaseUrl = '' } = Astro.props;
       speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       sendBtn.textContent = t('btnSend');
       reservationBtn.innerHTML = t('btnReservation');
+      
       const waitText = document.querySelector('.wait-text');
       if (waitText) waitText.textContent = t('waitMessage');
+
       const pageTitle = document.getElementById('pageTitle');
       if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
       const pageSubtitle = document.getElementById('pageSubtitle');
@@ -348,11 +425,13 @@ const { apiBaseUrl = '' } = Astro.props;
       if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
       const pageFooter = document.getElementById('pageFooter');
       if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} ✨`;
+
       const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
       if (initialMessage) {
         const messageText = initialMessage.querySelector('.message-text');
         if (messageText) messageText.textContent = t('initialGreeting');
       }
+
       document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
@@ -524,13 +603,16 @@ const { apiBaseUrl = '' } = Astro.props;
             voiceStatus.className = 'voice-status';
             addMessage('user', data.transcript);
 
-            // ★★★ エコー判定（自己発言フィルター） ★★★
+            // ★★★ エコー判定（シンプル版） ★★★
+            // 音声認識結果が直前のAI発言に含まれていたら、エコーとみなして無視する
             const normTranscript = normalizeText(data.transcript);
             const normLastAi = normalizeText(lastAiSpeech);
+            
             if (normLastAi.length > 0 && normLastAi.includes(normTranscript) && normTranscript.length > 2) {
                 console.log("エコー検知: 自分の声を無視します", data.transcript);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
+                // マイク自動再開はせず、ここで静かに終了
                 return;
             }
 
@@ -544,6 +626,8 @@ const { apiBaseUrl = '' } = Astro.props;
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
+              
+              // マイク自動再開（800ms遅延）
               setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
               return;
             }
@@ -558,6 +642,8 @@ const { apiBaseUrl = '' } = Astro.props;
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
+                
+                // マイク自動再開
                 setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
                 return;
             }
@@ -621,7 +707,7 @@ const { apiBaseUrl = '' } = Astro.props;
       const normTranscript = normalizeText(transcript);
       const normLastAi = normalizeText(lastAiSpeech);
       if (normLastAi.length > 0 && normLastAi.includes(normTranscript) && normTranscript.length > 2) {
-          console.log("エコー検知(WS): 自分の声を無視します", transcript);
+          console.log("エコー検知(WS): 無視します", transcript);
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
           return;
