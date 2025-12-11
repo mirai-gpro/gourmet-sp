@@ -606,6 +606,7 @@ const { apiBaseUrl = '' } = Astro.props;
       fallbackResponse: (text: string) => `"${text}"とのこと。お調べしますので、少々お待ちください。`,
       additionalResponse: '只今、お店の情報を確認中です。もう少々お待ちください。',
       ttsIntro: 'お待たせしました。',
+      waitMessage: 'AIがお店を検索しています...',
       // 予約モーダル
       reservationModalTitle: '予約依頼',
       reservationShopSelect: 'お店を選択',
@@ -696,6 +697,7 @@ const { apiBaseUrl = '' } = Astro.props;
       fallbackResponse: (text: string) => `You said "${text}". Let me search for that. Please wait.`,
       additionalResponse: 'Currently searching for restaurant information. Please wait a moment.',
       ttsIntro: 'Thank you for waiting.',
+      waitMessage: 'AI is searching for restaurants...',
       // Reservation Modal
       reservationModalTitle: 'Reservation Request',
       reservationShopSelect: 'Select Restaurants',
@@ -786,6 +788,7 @@ const { apiBaseUrl = '' } = Astro.props;
       fallbackResponse: (text: string) => `您说"${text}"。我搜索一下。请稍等。`,
       additionalResponse: '正在确认餐厅信息。请稍候。',
       ttsIntro: '让您久等了。',
+      waitMessage: 'AI正在搜索餐厅...',
       // 预约模态框
       reservationModalTitle: '预约申请',
       reservationShopSelect: '选择餐厅',
@@ -876,6 +879,7 @@ const { apiBaseUrl = '' } = Astro.props;
       fallbackResponse: (text: string) => `"${text}"라고 말씀하셨네요. 검색해 보겠습니다. 잠시만 기다려주세요.`,
       additionalResponse: '지금 레스토랑 정보를 확인 중입니다. 잠시만 기다려주세요.',
       ttsIntro: '기다려 주셔서 감사합니다.',
+      waitMessage: 'AI가 레스토랑을 검색하고 있습니다...',
       // 예약 모달
       reservationModalTitle: '예약 신청',
       reservationShopSelect: '레스토랑 선택',
@@ -1039,6 +1043,10 @@ const { apiBaseUrl = '' } = Astro.props;
       speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       sendBtn.textContent = t('btnSend');
       reservationBtn.innerHTML = t('btnReservation');
+
+      // ★★★ 追加: 待機画面のテキスト更新 ★★★
+      const waitText = document.querySelector('.wait-text');
+      if (waitText) waitText.textContent = t('waitMessage');
 
       // ページ全体の要素（index.astro内）
       const pageTitle = document.getElementById('pageTitle');
