@@ -190,12 +190,25 @@ const { apiBaseUrl = '' } = Astro.props;
     let audioWorkletNode: AudioWorkletNode | null = null;
     let streamingTranscript = '';
     let isStreamingSTT = false;
+    let isSendingAudio = true; // ★ 音声送信制御フラグ
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const SILENCE_THRESHOLD = isIOS ? 50 : 35;
     const SILENCE_DURATION = isIOS ? 1500 : 2000;
     const MIN_RECORDING_TIME = 3000;
+
+    // ★★★ デバッグ用：画面にログ表示 ★★★
+      const debugDiv = document.getElementById('debugLog') || (() => {
+        const div = document.createElement('div');
+        div.id = 'debugLog';
+        div.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: lime; padding: 10px; max-height: 200px; overflow-y: auto; z-index: 99999; font-size: 11px; font-family: monospace;';
+        document.body.appendChild(div);
+        return div;
+      })();
+      const time = new Date().toLocaleTimeString();
+      debugDiv.innerHTML = `[${time}] ${message}<br>` + debugDiv.innerHTML;
+    }
 
     // --- 便利関数群 ---
 
@@ -441,15 +454,20 @@ const { apiBaseUrl = '' } = Astro.props;
       if (!isTTSEnabled) stopCurrentAudio();
     }
 
+    let mediaStream: MediaStream | null = null; // ★ グローバルで保持
+
     async function startStreamingSTT() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
         audioContext = new AudioContext({ sampleRate: 16000 });
-        const source = audioContext.createMediaStreamSource(stream);
+        const source = audioContext.createMediaStreamSource(mediaStream);
         await audioContext.audioWorklet.addModule('/audio-processor.js');
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
         audioWorkletNode.port.onmessage = (event) => {
           const { audioChunk } = event.data;
+          // ★★★ 送信フラグがfalseなら送信しない ★★★
+          if (!isSendingAudio) return;
+          
           const uint8Array = new Uint8Array(audioChunk.buffer);
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
@@ -476,12 +494,38 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     function stopStreamingSTT() {
+      console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
-      if (audioWorkletNode) { audioWorkletNode.disconnect(); audioWorkletNode = null; }
-      if (audioContext) { audioContext.close(); audioContext = null; }
-      if (socket && socket.connected) socket.emit('stop_stream');
+      
+      // ★★★ MediaStreamのトラックを確実に停止 ★★★
+      if (mediaStream) {
+        console.log('[録音停止] MediaStreamのトラックを停止');
+        mediaStream.getTracks().forEach(track => {
+          track.stop();
+          console.log('[録音停止] トラック停止:', track.kind, track.label);
+        });
+        mediaStream = null;
+      }
+      
+      if (audioWorkletNode) { 
+        console.log('[録音停止] audioWorkletNode切断');
+        audioWorkletNode.disconnect(); 
+        audioWorkletNode = null; 
+      }
+      if (audioContext) { 
+        console.log('[録音停止] audioContext閉じる');
+        audioContext.close(); 
+        audioContext = null; 
+      }
+      if (socket && socket.connected) {
+        console.log('[録音停止] WebSocketにstop_stream送信');
+        socket.emit('stop_stream');
+      }
       if (recordingTimer) clearTimeout(recordingTimer);
-      isRecording = false; micBtn.classList.remove('recording'); micBtn.innerHTML = '🎤';
+      isRecording = false; 
+      micBtn.classList.remove('recording'); 
+      micBtn.innerHTML = '🎤';
+      console.log('[録音停止] 完了');
     }
 
     async function startLegacyRecording() {
@@ -675,8 +719,29 @@ const { apiBaseUrl = '' } = Astro.props;
         socket.on('disconnect', () => { isStreamingSTT = false; });
         socket.on('transcript', (data: any) => {
           const { text, is_final } = data;
-          if (is_final) { streamingTranscript = text; handleStreamingSTTComplete(text); }
-          else { userInput.value = text; }
+          
+          // ★★★ 中間結果もエコー判定 ★★★
+          const echoKeywords = [
+            'お店の空席状況',
+            '後ほど私がお店に',
+            '直接電話して確認',
+            'まずはお店のご希望',
+            'もう少し詳しくご希望'
+          ];
+          
+          const isEcho = echoKeywords.some(keyword => text.includes(keyword));
+          
+          if (is_final) { 
+            if (!isEcho) {
+              streamingTranscript = text; 
+              handleStreamingSTTComplete(text);
+            }
+          } else { 
+            // 中間結果：エコーでなければ入力欄に表示
+            if (!isEcho) {
+              userInput.value = text;
+            }
+          }
         });
         socket.on('error', (data: any) => { addMessage('system', `${t('sttError')} ${data.message}`); });
       } catch (error) { isStreamingSTT = false; }
@@ -686,6 +751,8 @@ const { apiBaseUrl = '' } = Astro.props;
       stopStreamingSTT();
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
+
+      // ★★★ デバッグ：受信したtranscriptを画面表示 ★★★
 
       // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
       console.log('[エコー判定WS] 受信transcript:', transcript);
@@ -710,6 +777,7 @@ const { apiBaseUrl = '' } = Astro.props;
         }
       }
 
+
       // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
       const normTranscript = normalizeText(transcript);
       console.log('[デバッグWS] STT認識:', transcript);
@@ -727,51 +795,56 @@ const { apiBaseUrl = '' } = Astro.props;
       }
 
       userInput.value = transcript;
-      addMessage('user', transcript);
 
+      // ★★★ 日時チェック ★★★
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
+        addMessage('user', transcript);
         const msg = t('dateWarningMsg');
         addMessage('assistant', msg);
         
-        // ★★★ AI音声再生中は録音完全停止 ★★★
-        console.log('[録音制御WS] AI音声再生のため一時停止');
-        stopStreamingSTT();
-        isRecording = false;
-        micBtn.classList.remove('recording');
-        micBtn.innerHTML = '🎤';
+        // ① AI音声再生前にSTT送信停止
+        isSendingAudio = false;
         
+        // ② 音声再生（完了まで待つ）
         if (isTTSEnabled && isUserInteracted) {
           await speakTextGCP(msg, true);
-          await new Promise(r => setTimeout(r, 1000)); // 1秒待機
         } else {
           await new Promise(r => setTimeout(r, 2000));
         }
         
+        // ③ 音声再生完了後、即座にSTT送信再開
+        isSendingAudio = true;
+        
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
-        
-        // ★★★ AI音声再生完了後に録音再開 ★★★
-        console.log('[録音制御WS] 録音再開');
-        setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
         return;
       }
+
+      // 通常フロー
+      addMessage('user', transcript);
 
       const textLength = transcript.trim().replace(/\s+/g, '').length;
       if (textLength < 4) {
           const msg = t('shortMsgWarning');
           addMessage('assistant', msg);
+          
+          // AI音声再生前にSTT送信停止
+          isSendingAudio = false;
+          
           if (isTTSEnabled && isUserInteracted) {
             await speakTextGCP(msg, true);
-            await new Promise(r => setTimeout(r, 500));
           } else {
             await new Promise(r => setTimeout(r, 2000));
           }
+          
+          // 音声再生完了後、即座にSTT送信再開
+          isSendingAudio = true;
+          
           userInput.value = '';
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
           return;
       }
 
