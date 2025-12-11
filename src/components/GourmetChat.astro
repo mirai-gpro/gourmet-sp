@@ -176,8 +176,8 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // ★★★ エコー対策：AI発言履歴 ★★★
-    let aiSpeechHistory: string[] = [];
+    // ★★★ エコー対策：直前のAI発話のみ保持（core_logic.py方式） ★★★
+    let lastAISpeech: string = '';
 
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -290,9 +290,10 @@ const { apiBaseUrl = '' } = Astro.props;
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
-    // 正規化（エコー判定用）
+    // 正規化（エコー判定用：core_logic.py方式）
     function normalizeText(text: string): string {
-      return text.replace(/[!?,.、。\s　]/g, '');
+      // 記号・空白を除去し、小文字化
+      return text.replace(/[!?,.、。\s　]/g, '').toLowerCase().trim();
     }
 
     function removeFillers(text: string): string {
@@ -367,10 +368,6 @@ const { apiBaseUrl = '' } = Astro.props;
       if (stopPrevious) ttsPlayer.pause();
       
       const cleanText = stripMarkdown(text);
-      
-      // ★★★ 履歴に追加（エコー対策） ★★★
-      aiSpeechHistory.push(normalizeText(cleanText));
-      if (aiSpeechHistory.length > 5) aiSpeechHistory.shift();
 
       try {
         voiceStatus.innerHTML = t('voiceStatusSynthesizing');
@@ -393,6 +390,9 @@ const { apiBaseUrl = '' } = Astro.props;
             ttsPlayer.onerror = () => { resolve(); };
           });
           if (isUserInteracted) {
+            // ★★★ 音声再生開始時に記録（core_logic.py方式） ★★★
+            lastAISpeech = normalizeText(cleanText);
+            console.log('[エコー対策] AI発話記録:', lastAISpeech);
             await ttsPlayer.play();
             await playPromise;
           } else {
@@ -527,21 +527,21 @@ const { apiBaseUrl = '' } = Astro.props;
           const data = await response.json();
 
           if (data.success && data.transcript) {
+            // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
+            const normTranscript = normalizeText(data.transcript);
+            if (lastAISpeech && normTranscript === lastAISpeech) {
+                console.log('[エコー検知] 無視:', data.transcript, '| 直前AI:', lastAISpeech);
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                // エコー検知後は lastAISpeech をクリア（連続エコー防止）
+                lastAISpeech = '';
+                return;
+            }
+
             userInput.value = data.transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
             addMessage('user', data.transcript);
-
-            // ★★★ エコー判定（履歴ベース） ★★★
-            const normTranscript = normalizeText(data.transcript);
-            // 履歴のどれかに含まれていたらエコーとみなす
-            const isEcho = aiSpeechHistory.some(h => h.length > 0 && (h.includes(normTranscript) || normTranscript.includes(h)));
-            if (isEcho && normTranscript.length > 1) {
-                console.log("エコー検知(履歴): 無視します", data.transcript);
-                voiceStatus.innerHTML = t('voiceStatusStopped');
-                voiceStatus.className = 'voice-status stopped';
-                return;
-            }
 
             // 1. 日時チェック
             // @ts-ignore
@@ -577,6 +577,9 @@ const { apiBaseUrl = '' } = Astro.props;
             let firstAckPromise: Promise<void> | null = null;
             if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
+                // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                lastAISpeech = normalizeText(ack.text);
+                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
                 ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
@@ -623,18 +626,20 @@ const { apiBaseUrl = '' } = Astro.props;
       stopStreamingSTT();
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
-      userInput.value = transcript;
-      addMessage('user', transcript);
 
-      // ★★★ エコー判定（WS版・履歴チェック） ★★★
+      // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
       const normTranscript = normalizeText(transcript);
-      const isEcho = aiSpeechHistory.some(h => h.length > 0 && (h.includes(normTranscript) || normTranscript.includes(h)));
-      if (isEcho && normTranscript.length > 1) {
-          console.log("エコー検知(WS): 無視します", transcript);
+      if (lastAISpeech && normTranscript === lastAISpeech) {
+          console.log('[エコー検知WS] 無視:', transcript, '| 直前AI:', lastAISpeech);
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
+          // エコー検知後は lastAISpeech をクリア
+          lastAISpeech = '';
           return;
       }
+
+      userInput.value = transcript;
+      addMessage('user', transcript);
 
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
@@ -665,6 +670,9 @@ const { apiBaseUrl = '' } = Astro.props;
       let firstAckPromise: Promise<void> | null = null;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
         firstAckPromise = new Promise<void>((resolve) => {
+          // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+          lastAISpeech = normalizeText(ack.text);
+          console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
           ttsPlayer.onended = () => resolve();
           ttsPlayer.play().catch(e => resolve());
@@ -724,6 +732,9 @@ const { apiBaseUrl = '' } = Astro.props;
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             if (preGeneratedAudio && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
+                // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                lastAISpeech = normalizeText(ack.text);
+                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
                 ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
@@ -773,6 +784,9 @@ const { apiBaseUrl = '' } = Astro.props;
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
+                    // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                    lastAISpeech = normalizeText(introText);
+                    console.log('[エコー対策] AI発話記録(preGen-intro):', lastAISpeech);
                     ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
                     ttsPlayer.onended = () => resolve();
                     ttsPlayer.play();
@@ -807,11 +821,21 @@ const { apiBaseUrl = '' } = Astro.props;
               if (firstShopAudioPromise) {
                 const firstShopAudio = await firstShopAudioPromise;
                 if (firstShopAudio) {
+                  // ★★★ ショップ音声再生時もlastAISpeechに記録 ★★★
+                  const firstShopText = stripMarkdown(shopLines[0]);
+                  lastAISpeech = normalizeText(firstShopText);
+                  console.log('[エコー対策] AI発話記録(shop1):', lastAISpeech);
+                  
                   stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
                   await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
+                      // ★★★ 残りのショップ音声再生時もlastAISpeechに記録 ★★★
+                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
+                      lastAISpeech = normalizeText(restShopsText);
+                      console.log('[エコー対策] AI発話記録(shop-rest):', lastAISpeech);
+                      
                       await new Promise(r => setTimeout(r, 500));
                       stopCurrentAudio(); ttsPlayer.src = remainingAudio;
                       await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
