@@ -648,15 +648,16 @@ const { apiBaseUrl = '' } = Astro.props;
         const source = audioContext.createMediaStreamSource(mediaStream);
         await audioContext.audioWorklet.addModule('/audio-processor.js');
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+        
         audioWorkletNode.port.onmessage = (event) => {
           const { audioChunk } = event.data;
-          // ★★★ 送信フラグがfalseなら送信しない ★★★
           if (!isSendingAudio) return;
           
           const uint8Array = new Uint8Array(audioChunk.buffer);
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
         };
+        
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
         analyser = audioContext.createAnalyser();
@@ -672,20 +673,26 @@ const { apiBaseUrl = '' } = Astro.props;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
+        
+        console.log('[startStreamingSTT] start_stream送信前 socket.connected:', socket?.connected);
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
+        console.log('[startStreamingSTT] start_stream送信完了');
+        
+        // ★★★ isSendingAudioをtrueに ★★★
+        isSendingAudio = true;
+        
         isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording) { stopStreamingSTT(); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
-      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
+      } catch (error) { 
+        addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); 
+      }
     }
 
     function stopStreamingSTT() {
-      console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
       
       // ★★★ Android: 完全停止（マイク・WebSocket両方） ★★★
       if (isAndroid) {
-        console.log('[Android] 完全停止モード');
-        
         // AudioWorkletNode停止
         if (audioWorkletNode) {
           audioWorkletNode.port.onmessage = null;
@@ -713,7 +720,6 @@ const { apiBaseUrl = '' } = Astro.props;
         // ★★★ iPhone/PC: WebSocketだけ停止（マイクは継続） ★★★
         isSendingAudio = false;
         if (socket && socket.connected) {
-          console.log('[録音停止] WebSocketにstop_stream送信');
           socket.emit('stop_stream');
         }
       }
@@ -721,7 +727,6 @@ const { apiBaseUrl = '' } = Astro.props;
       isRecording = false; 
       micBtn.classList.remove('recording'); 
       micBtn.innerHTML = '🎤';
-      console.log('[録音停止] 完了');
     }
 
     async function startLegacyRecording() {
