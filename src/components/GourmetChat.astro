@@ -621,7 +621,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     async function startStreamingSTT() {
       try {
-        // ★★★ 古いものを確実にクリーンアップ ★★★
+        // ★★★ AudioWorkletNodeとAudioContextをクリーンアップ ★★★
         if (audioWorkletNode) {
           audioWorkletNode.port.onmessage = null;
           audioWorkletNode.disconnect();
@@ -631,15 +631,54 @@ const { apiBaseUrl = '' } = Astro.props;
           await audioContext.close();
           audioContext = null;
         }
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          mediaStream = null;
-        }
         
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        // ★★★ MediaStream: iPhone/PCは維持、Androidのみ破棄 ★★★
+        if (!mediaStream || isAndroid) {
+          // MediaStreamがない、またはAndroidの場合は新規取得
+          if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+          }
+          
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({ 
+              audio: { 
+                channelCount: 1, 
+                sampleRate: 16000, 
+                echoCancellation: true, 
+                noiseSuppression: true 
+              } 
+            });
+          } catch (micError: any) {
+            // マイクアクセスエラーの詳細な処理
+            let errorMessage = '';
+            
+            if (micError.name === 'NotAllowedError' || micError.name === 'PermissionDeniedError') {
+              errorMessage = 'マイクの使用が許可されていません。\n\n【解決方法】\n1. ブラウザの設定からマイクを許可\n2. iPhoneの「設定」→「Safari」→「マイク」をONに';
+            } else if (micError.name === 'NotFoundError') {
+              errorMessage = 'マイクが見つかりません。デバイスにマイクが接続されているか確認してください。';
+            } else if (micError.name === 'NotReadableError' || micError.name === 'AbortError') {
+              errorMessage = 'マイクが他のアプリで使用中です。\n\n【解決方法】\n1. 他のブラウザタブを閉じる\n2. 他のアプリを終了\n3. iPhoneを再起動';
+            } else {
+              errorMessage = `マイクエラー: ${micError.message}\n\nページを再読み込みしてください。`;
+            }
+            
+            addMessage('system', errorMessage);
+            throw micError;
+          }
+        }
+        // iPhone/PCの場合は既存のMediaStreamを再利用
+        
         audioContext = new AudioContext({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
-        await audioContext.audioWorklet.addModule('/audio-processor.js');
+        
+        try {
+          await audioContext.audioWorklet.addModule('/audio-processor.js');
+        } catch (workletError: any) {
+          addMessage('system', '音声処理の初期化に失敗しました。ページを再読み込みしてください。');
+          throw workletError;
+        }
+        
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
         
         audioWorkletNode.port.onmessage = (event) => {
@@ -669,15 +708,23 @@ const { apiBaseUrl = '' } = Astro.props;
         
         console.log('[startStreamingSTT] start_stream送信前 socket.connected:', socket?.connected);
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
-        console.log('[startStreamingSTT] start_stream送信完了');
         
         // ★★★ isSendingAudioをtrueに ★★★
         isSendingAudio = true;
         
         isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording) { stopStreamingSTT(); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
-      } catch (error) { 
-        addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); 
+      } catch (error: any) {
+        // エラー時はMediaStreamをクリーンアップ（次回は再取得）
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream = null;
+        }
+        
+        // すでにメッセージ表示済みでない場合のみ表示
+        if (!error.message?.includes('マイク')) {
+          addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`);
+        }
       }
     }
 
