@@ -193,22 +193,23 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <ReservationModal apiBaseUrl={apiBaseUrl} />
 
   <script>
-    import { registerSW } from 'virtual:pwa-register';
-    registerSW({ immediate: true });
-  </script>
-
-  <script>
-    // PWAインストール案内
+    // ★★★ PWAインストール案内を最優先で登録 ★★★
     let deferredPrompt: any = null;
     
     window.addEventListener('beforeinstallprompt', (e) => {
-      console.log('beforeinstallprompt イベント発火');
+      console.log('✅ beforeinstallprompt イベント発火');
       e.preventDefault();
       deferredPrompt = e;
       showInstallPrompt();
     });
 
     function showInstallPrompt() {
+      // 既存のバナーを削除
+      const existingBanner = document.getElementById('install-banner');
+      if (existingBanner) {
+        existingBanner.remove();
+      }
+      
       // インストール案内バナーを作成
       const banner = document.createElement('div');
       banner.id = 'install-banner';
@@ -301,6 +302,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       const banner = document.getElementById('install-banner');
       if (banner) banner.remove();
     });
+
+    // Service Worker登録
+    import { registerSW } from 'virtual:pwa-register';
+    registerSW({ immediate: true });
   </script>
 </body>
 </html>
