@@ -112,7 +112,6 @@ const { apiBaseUrl = '' } = Astro.props;
   .splash-loading p { color: #667eea; font-size: 14px; font-weight: 600; margin: 0; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); }
   .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
   .click-prompt p { margin: 5px 0; }
-  /* 待機オーバーレイ */
   .wait-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 500; display: flex; align-items: center; justify-content: center; border-radius: 16px; opacity: 1; transition: opacity 0.5s ease-out, visibility 0.5s; }
   .wait-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
   .wait-content { text-align: center; width: 80%; max-width: 400px; }
@@ -178,9 +177,6 @@ const { apiBaseUrl = '' } = Astro.props;
     
     // ★★★ 論理ミュート用フラグ ★★★
     let isAiSpeaking = false;
-
-    // エコー対策（履歴）は念のため残しておく
-    let aiSpeechHistory: string[] = [];
 
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -287,15 +283,11 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopCurrentAudio() {
       ttsPlayer.pause();
       ttsPlayer.currentTime = 0;
-      isAiSpeaking = false; // 強制停止時はフラグも戻す
+      isAiSpeaking = false; // ★強制停止時は論理ミュートも解除
     }
 
     function stripMarkdown(text: string): string {
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
-    }
-
-    function normalizeText(text: string): string {
-      return text.replace(/[!?,.、。\s　]/g, '');
     }
 
     function removeFillers(text: string): string {
@@ -368,19 +360,19 @@ const { apiBaseUrl = '' } = Astro.props;
     async function speakTextGCP(text: string, stopPrevious: boolean = true) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) {
-        ttsPlayer.pause();
-        isAiSpeaking = false;
+          ttsPlayer.pause();
+          isAiSpeaking = false;
       }
       
       const cleanText = stripMarkdown(text);
-      
-      // 履歴に追加
-      aiSpeechHistory.push(normalizeText(cleanText));
-      if (aiSpeechHistory.length > 5) aiSpeechHistory.shift();
 
       try {
         voiceStatus.innerHTML = t('voiceStatusSynthesizing');
         voiceStatus.className = 'voice-status speaking';
+        
+        // ★★★ AI発言開始：論理ミュートON ★★★
+        isAiSpeaking = true;
+
         const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
         const response = await fetch(`${apiBase}/api/tts/synthesize`, {
           method: 'POST',
@@ -392,8 +384,11 @@ const { apiBaseUrl = '' } = Astro.props;
           ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
           const playPromise = new Promise<void>((resolve) => {
             ttsPlayer.onended = () => {
-              // ★★★ 論理ミュート解除（少し遅延させてエコー対策） ★★★
-              setTimeout(() => { isAiSpeaking = false; }, 800);
+              // ★★★ 発言終了：余韻を持たせてから論理ミュートOFF ★★★
+              setTimeout(() => {
+                isAiSpeaking = false;
+              }, 1200); // 1.2秒待機してエコー回避
+
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
               resolve();
@@ -404,21 +399,20 @@ const { apiBaseUrl = '' } = Astro.props;
             };
           });
           if (isUserInteracted) {
-            // ★★★ 論理ミュート開始 ★★★
-            isAiSpeaking = true;
             await ttsPlayer.play();
             await playPromise;
           } else {
             showClickPrompt();
             voiceStatus.innerHTML = t('voiceStatusStopped');
             voiceStatus.className = 'voice-status stopped';
+            isAiSpeaking = false; // 再生できなかった場合は即OFF
           }
         }
       } catch (error) {
         console.error('TTS Error:', error);
-        isAiSpeaking = false;
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
+        isAiSpeaking = false;
       }
     }
 
@@ -462,12 +456,10 @@ const { apiBaseUrl = '' } = Astro.props;
         const source = audioContext.createMediaStreamSource(stream);
         await audioContext.audioWorklet.addModule('/audio-processor.js');
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
-        
-        // ★★★ 論理ミュートの実装箇所 ★★★
         audioWorkletNode.port.onmessage = (event) => {
           const { audioChunk } = event.data;
           
-          // AIが喋っている間は、WebSocketに送信しない（データを捨てる）
+          // ★★★ 論理ミュート：AIが喋っている間はデータを捨てる ★★★
           if (isAiSpeaking) {
               return;
           }
@@ -476,7 +468,6 @@ const { apiBaseUrl = '' } = Astro.props;
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
         };
-        
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
         analyser = audioContext.createAnalyser();
@@ -484,14 +475,20 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         hasSpoken = false; recordingStartTime = Date.now();
+        
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
+          
+          // ★★★ VAD（無音検出）もAI発言中は無視する ★★★
+          if (isAiSpeaking) return;
+
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
+        
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
         isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording) { stopStreamingSTT(); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
@@ -509,7 +506,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     async function startLegacyRecording() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
         audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
         audioContext = new AudioContext();
@@ -518,14 +515,20 @@ const { apiBaseUrl = '' } = Astro.props;
         analyser.fftSize = 512;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
+          
+          // ★★★ Legacy版も同様にAI発言中は無視 ★★★
+          if (isAiSpeaking) return;
+
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { autoStopRecording(); }, SILENCE_DURATION); }
         }, 100);
+        
         mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
         mediaRecorder.onstop = async () => {
           stopVAD(); stream.getTracks().forEach(track => track.stop());
@@ -555,16 +558,6 @@ const { apiBaseUrl = '' } = Astro.props;
             voiceStatus.className = 'voice-status';
             addMessage('user', data.transcript);
 
-            // エコー判定（一応残す）
-            const normTranscript = normalizeText(data.transcript);
-            const isEcho = aiSpeechHistory.some(h => h.length > 0 && (h.includes(normTranscript) || normTranscript.includes(h)));
-            if (isEcho && normTranscript.length > 1) {
-                console.log("エコー検知(履歴): 無視します", data.transcript);
-                voiceStatus.innerHTML = t('voiceStatusStopped');
-                voiceStatus.className = 'voice-status stopped';
-                return;
-            }
-
             // 1. 日時チェック
             // @ts-ignore
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
@@ -575,7 +568,7 @@ const { apiBaseUrl = '' } = Astro.props;
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              toggleRecording().catch(e => {});
+              setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
               return;
             }
 
@@ -589,7 +582,7 @@ const { apiBaseUrl = '' } = Astro.props;
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                toggleRecording().catch(e => {});
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
                 return;
             }
 
@@ -648,16 +641,6 @@ const { apiBaseUrl = '' } = Astro.props;
       userInput.value = transcript;
       addMessage('user', transcript);
 
-      // エコー判定（履歴チェック）
-      const normTranscript = normalizeText(transcript);
-      const isEcho = aiSpeechHistory.some(h => h.length > 0 && (h.includes(normTranscript) || normTranscript.includes(h)));
-      if (isEcho && normTranscript.length > 1) {
-          console.log("エコー検知(WS): 無視します", transcript);
-          voiceStatus.innerHTML = t('voiceStatusStopped');
-          voiceStatus.className = 'voice-status stopped';
-          return;
-      }
-
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
         const msg = t('dateWarningMsg');
@@ -666,7 +649,7 @@ const { apiBaseUrl = '' } = Astro.props;
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
-        toggleRecording().catch(e => {});
+        setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
         return;
       }
 
@@ -678,7 +661,7 @@ const { apiBaseUrl = '' } = Astro.props;
           userInput.value = '';
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          toggleRecording().catch(e => {});
+          setTimeout(() => { toggleRecording().catch(e => {}); }, 800);
           return;
       }
 
@@ -859,13 +842,11 @@ const { apiBaseUrl = '' } = Astro.props;
       finally { isProcessing = false; sendBtn.disabled = false; micBtn.disabled = false; userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur(); }
     }
 
-    // イベントリスナー
     function openReservationModal() {
       if (currentShops.length === 0) { showError(t('searchError')); return; }
       document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
     }
 
-    // 初期化関数
     async function initialize() {
         try {
             const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
@@ -888,7 +869,6 @@ const { apiBaseUrl = '' } = Astro.props;
         } catch(e) { console.error(e); }
     }
 
-    // イベントリスナー登録
     languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
     micBtn.addEventListener('click', toggleRecording);
