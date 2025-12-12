@@ -377,7 +377,7 @@ const { apiBaseUrl = '' } = Astro.props;
       document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
-    async function speakTextGCP(text: string, stopPrevious: boolean = true) {
+    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
       
@@ -389,7 +389,6 @@ const { apiBaseUrl = '' } = Astro.props;
         
         // ★★★ Android: マイクOFF ★★★
         if (isAndroid && isRecording) {
-          console.log('[Android] AI音声開始 → マイクOFF');
           stopStreamingSTT();
         }
         
@@ -411,25 +410,21 @@ const { apiBaseUrl = '' } = Astro.props;
               // ★ AI音声再生終了
               isAISpeaking = false;
               
-              // ★★★ AI音声終了後：マイク自動ON ★★★
-              if (isAndroid) {
-                console.log('[Android] AI音声終了 → マイク自動ON試行');
-                try {
-                  await startStreamingSTT();
-                  console.log('[Android] マイク自動ON成功');
-                } catch (error) {
-                  console.error('[Android] マイク自動ON失敗:', error);
-                  showMicPrompt();
-                }
-              } else if (!isRecording) {
-                // iPhone: マイク自動ONを試みる
-                console.log('[iPhone] AI音声終了 → マイク自動ON試行');
-                try {
-                  await startStreamingSTT();
-                  console.log('[iPhone] マイク自動ON成功');
-                } catch (error) {
-                  console.error('[iPhone] マイク自動ON失敗:', error);
-                  showMicPrompt();
+              // ★★★ AI音声終了後：マイク自動ON（autoRestartMic=trueの時のみ） ★★★
+              if (autoRestartMic) {
+                if (isAndroid) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                } else if (!isRecording) {
+                  // iPhone: マイク自動ONを試みる
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
                 }
               }
               
@@ -443,7 +438,6 @@ const { apiBaseUrl = '' } = Astro.props;
           });
           if (isUserInteracted) {
             lastAISpeech = normalizeText(cleanText);
-            console.log('[エコー対策] AI発話記録:', lastAISpeech);
             await ttsPlayer.play();
             await playPromise;
           } else {
@@ -458,7 +452,6 @@ const { apiBaseUrl = '' } = Astro.props;
           isAISpeaking = false;
         }
       } catch (error) {
-        console.error('TTS Error:', error);
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
         // ★ エラー時も終了
@@ -997,17 +990,11 @@ const { apiBaseUrl = '' } = Astro.props;
         currentAISpeech = msg;
         addMessage('assistant', msg);
         
-        // ★ AI音声再生開始
-        isAISpeaking = true;
-        
         if (isTTSEnabled && isUserInteracted) {
-          await speakTextGCP(msg, true);
+          await speakTextGCP(msg, true, true); // ★ 第3引数 autoRestartMic = true
         } else {
           await new Promise(r => setTimeout(r, 2000));
         }
-        
-        // ★ AI音声再生終了
-        isAISpeaking = false;
         
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
@@ -1198,6 +1185,17 @@ const { apiBaseUrl = '' } = Astro.props;
           document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: data.shops, language: currentLanguage } }));
           const section = document.getElementById('shopListSection');
           if (section) section.classList.add('has-shops');
+          
+          // ★★★ スマホの場合：ショップカードセクションにスクロール ★★★
+          if (window.innerWidth < 1024) {
+            setTimeout(() => {
+              const shopSection = document.getElementById('shopListSection');
+              if (shopSection) {
+                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 300); // DOMレンダリング待ち
+          }
+          
           (async () => {
             try {
               await speakTextGCP(t('ttsIntro'));
