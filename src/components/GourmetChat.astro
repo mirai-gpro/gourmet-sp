@@ -179,10 +179,12 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // ★★★ エコー対策用変数 ★★★
-    let lastAISpeech: string = '';
+    // エコー対策
     let isAISpeaking = false;
     let isSendingAudio = true; 
+    
+    // ★ スマホ判定
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -195,8 +197,6 @@ const { apiBaseUrl = '' } = Astro.props;
     let audioWorkletNode: AudioWorkletNode | null = null;
     let streamingTranscript = '';
     let isStreamingSTT = false;
-
-    // ★★★ メディアストリームをグローバル保持（マイク制御用）★★★
     let mediaStream: MediaStream | null = null;
 
     const ttsPlayer = new Audio();
@@ -293,16 +293,14 @@ const { apiBaseUrl = '' } = Astro.props;
       ttsPlayer.pause();
       ttsPlayer.currentTime = 0;
       isAISpeaking = false;
-      // 強制停止時はマイク復活
       toggleMicMute(false);
     }
 
-    // ★★★ 最強のマイク制御関数（iPhone対応） ★★★
+    // マイク物理制御 (PC用 & Mobile復帰用)
     function toggleMicMute(shouldMute: boolean) {
       if (mediaStream) {
         const audioTracks = mediaStream.getAudioTracks();
         audioTracks.forEach(track => {
-          // enabled = false はデータだけ止める（Stopではないので再開可能）
           track.enabled = !shouldMute;
         });
         if (shouldMute) {
@@ -311,7 +309,6 @@ const { apiBaseUrl = '' } = Astro.props;
           voiceStatus.className = 'voice-status speaking';
         } else {
           console.log('[MicControl] マイク入力を再開 (enabled=true)');
-          // VADの状態復帰
           voiceStatus.innerHTML = isRecording ? t('voiceStatusListening') : t('voiceStatusStopped');
           voiceStatus.className = isRecording ? 'voice-status' : 'voice-status stopped';
         }
@@ -323,7 +320,6 @@ const { apiBaseUrl = '' } = Astro.props;
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
-    // 正規化（エコー判定用）
     function normalizeText(text: string): string {
       return text.replace(/[!?,.、。\s　]/g, '').toLowerCase().trim();
     }
@@ -399,12 +395,25 @@ const { apiBaseUrl = '' } = Astro.props;
       if (stopPrevious) ttsPlayer.pause();
       
       const cleanText = stripMarkdown(text);
+      const wasRecording = isRecording;
 
       try {
-        // ★★★ マイク物理遮断（enabled=false）開始 ★★★
-        toggleMicMute(true);
-        isAISpeaking = true;
+        // ★★★ デバイス別エコー対策分岐 ★★★
+        if (wasRecording) {
+            if (isMobile) {
+                // スマホ：強制切断 (Android/iOS)
+                console.log('[EchoControl] Mobile: Hard Stop (Streaming Stop)');
+                stopStreamingSTT(); 
+                voiceStatus.innerHTML = '🔇 AI発話中 (マイクOFF)';
+                voiceStatus.className = 'voice-status speaking';
+            } else {
+                // PC：物理ミュート (enabled=false)
+                console.log('[EchoControl] PC: Soft Mute (enabled=false)');
+                toggleMicMute(true);
+            }
+        }
 
+        isAISpeaking = true;
         const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
         const response = await fetch(`${apiBase}/api/tts/synthesize`, {
           method: 'POST',
@@ -417,37 +426,65 @@ const { apiBaseUrl = '' } = Astro.props;
           const playPromise = new Promise<void>((resolve) => {
             ttsPlayer.onended = () => {
               isAISpeaking = false;
-              // ★★★ マイク物理遮断（enabled=true）解除 ★★★
-              // スピーカー残響を考慮して0.8秒待つ
-              setTimeout(() => {
-                toggleMicMute(false);
-              }, 800);
+              
+              // ★★★ 録音復帰ロジック ★★★
+              if (wasRecording) {
+                  setTimeout(() => {
+                      if (isMobile) {
+                          // スマホ：強制再接続 (Start Streaming)
+                          console.log('[EchoControl] Mobile: Hard Restart');
+                          startStreamingSTT().catch(e => {
+                              console.log('Mobile Auto-Restart Failed:', e);
+                              // iOS等で失敗した場合のUI
+                              voiceStatus.innerHTML = '🎤 タップして再開';
+                              voiceStatus.className = 'voice-status stopped';
+                          });
+                      } else {
+                          // PC：物理ミュート解除 (enabled=true)
+                          console.log('[EchoControl] PC: Soft Unmute');
+                          toggleMicMute(false);
+                      }
+                  }, 800);
+              }
               resolve();
             };
             ttsPlayer.onerror = () => { 
               isAISpeaking = false;
-              toggleMicMute(false);
+              // エラー時の復帰
+              if (wasRecording) {
+                  if (isMobile) startStreamingSTT();
+                  else toggleMicMute(false);
+              }
               resolve(); 
             };
           });
 
           if (isUserInteracted) {
-            lastAISpeech = normalizeText(cleanText);
             await ttsPlayer.play();
             await playPromise;
           } else {
             showClickPrompt();
             isAISpeaking = false;
-            toggleMicMute(false);
+            // 再生なしでも復帰
+            if (wasRecording) {
+                if (isMobile) startStreamingSTT();
+                else toggleMicMute(false);
+            }
           }
         } else {
           isAISpeaking = false;
-          toggleMicMute(false);
+          if (wasRecording) {
+              if (isMobile) startStreamingSTT();
+              else toggleMicMute(false);
+          }
         }
       } catch (error) {
         console.error('TTS Error:', error);
         isAISpeaking = false;
-        toggleMicMute(false);
+        if (wasRecording) {
+            if (isMobile) startStreamingSTT();
+            else toggleMicMute(false);
+        }
       }
     }
 
@@ -527,9 +564,9 @@ const { apiBaseUrl = '' } = Astro.props;
         
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
-          // マイクミュート中はVADも無視
+          // マイクミュート中は無視
           if (!isSendingAudio) return;
-          
+
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
@@ -555,12 +592,16 @@ const { apiBaseUrl = '' } = Astro.props;
       isRecording = false; 
       micBtn.classList.remove('recording'); 
       micBtn.innerHTML = '🎤';
+      
+      if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream = null;
+      }
     }
 
     async function startLegacyRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
-        // Legacyモード用にもmediaStreamを保持
         mediaStream = stream;
         
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
@@ -574,7 +615,6 @@ const { apiBaseUrl = '' } = Astro.props;
         
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
-          // マイクミュート中は無視
           if (!isSendingAudio) return;
 
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
@@ -615,11 +655,6 @@ const { apiBaseUrl = '' } = Astro.props;
             const echoKeywords = ['お店の空席状況','後ほど私がお店に','直接電話して確認','まずはお店のご希望','もう少し詳しくご希望'];
             if (echoKeywords.some(kw => transcript.includes(kw))) { return; }
 
-            const normTranscript = normalizeText(transcript);
-            if (lastAISpeech && normTranscript === lastAISpeech) {
-                lastAISpeech = ''; return;
-            }
-
             userInput.value = transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
@@ -656,13 +691,17 @@ const { apiBaseUrl = '' } = Astro.props;
             let firstAckPromise: Promise<void> | null = null;
             if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
-                lastAISpeech = normalizeText(ack.text);
                 
-                // 再生前ミュート
-                toggleMicMute(true);
+                // 再生前ミュート (デバイス別分岐)
+                if (isMobile) stopStreamingSTT();
+                else toggleMicMute(true);
+
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
                 ttsPlayer.onended = () => { 
-                  setTimeout(() => toggleMicMute(false), 800);
+                  setTimeout(() => {
+                      if (isMobile) startStreamingSTT();
+                      else toggleMicMute(false);
+                  }, 800);
                   resolve(); 
                 };
                 ttsPlayer.play().catch(e => resolve());
@@ -722,14 +761,6 @@ const { apiBaseUrl = '' } = Astro.props;
           return;
       }
 
-      const normTranscript = normalizeText(transcript);
-      if (lastAISpeech && normTranscript === lastAISpeech) {
-          voiceStatus.innerHTML = t('voiceStatusStopped');
-          voiceStatus.className = 'voice-status stopped';
-          lastAISpeech = '';
-          return;
-      }
-
       userInput.value = transcript;
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
@@ -764,13 +795,17 @@ const { apiBaseUrl = '' } = Astro.props;
       let firstAckPromise: Promise<void> | null = null;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
         firstAckPromise = new Promise<void>((resolve) => {
-          lastAISpeech = normalizeText(ack.text);
           
-          // 再生前ミュート
-          toggleMicMute(true);
+          // 再生前ミュート (デバイス別)
+          if (isMobile) stopStreamingSTT();
+          else toggleMicMute(true);
+
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
           ttsPlayer.onended = () => {
-             setTimeout(() => toggleMicMute(false), 800); 
+             setTimeout(() => {
+                 if (isMobile) startStreamingSTT();
+                 else toggleMicMute(false);
+             }, 800); 
              resolve();
           };
           ttsPlayer.play().catch(e => resolve());
@@ -837,12 +872,16 @@ const { apiBaseUrl = '' } = Astro.props;
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             if (preGeneratedAudio && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
-                lastAISpeech = normalizeText(ack.text);
                 
-                toggleMicMute(true);
+                if (isMobile) stopStreamingSTT();
+                else toggleMicMute(true);
+
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
                 ttsPlayer.onended = () => {
-                    setTimeout(() => toggleMicMute(false), 800); 
+                    setTimeout(() => {
+                        if (isMobile) startStreamingSTT();
+                        else toggleMicMute(false);
+                    }, 800); 
                     resolve();
                 };
                 ttsPlayer.play().catch(e => resolve());
@@ -891,12 +930,16 @@ const { apiBaseUrl = '' } = Astro.props;
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
-                    lastAISpeech = normalizeText(introText);
                     
-                    toggleMicMute(true);
+                    if (isMobile) stopStreamingSTT();
+                    else toggleMicMute(true);
+
                     ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
                     ttsPlayer.onended = () => {
-                        setTimeout(() => toggleMicMute(false), 800); 
+                        setTimeout(() => {
+                            if (isMobile) startStreamingSTT();
+                            else toggleMicMute(false);
+                        }, 800); 
                         resolve();
                     };
                     ttsPlayer.play();
@@ -930,18 +973,20 @@ const { apiBaseUrl = '' } = Astro.props;
               if (firstShopAudioPromise) {
                 const firstShopAudio = await firstShopAudioPromise;
                 if (firstShopAudio) {
-                  const firstShopText = stripMarkdown(shopLines[0]);
-                  lastAISpeech = normalizeText(firstShopText);
-                  
                   stopCurrentAudio(); 
-                  toggleMicMute(true);
-                  ttsPlayer.src = firstShopAudio;
                   
+                  if (isMobile) stopStreamingSTT();
+                  else toggleMicMute(true);
+
+                  ttsPlayer.src = firstShopAudio;
                   await new Promise<void>((resolve) => { 
                       ttsPlayer.onended = () => { 
                           voiceStatus.innerHTML = t('voiceStatusStopped'); 
                           voiceStatus.className = 'voice-status stopped';
-                          setTimeout(() => toggleMicMute(false), 800); 
+                          setTimeout(() => {
+                              if (isMobile) startStreamingSTT();
+                              else toggleMicMute(false);
+                          }, 800); 
                           resolve(); 
                       }; 
                       voiceStatus.innerHTML = t('voiceStatusSpeaking'); 
@@ -952,18 +997,21 @@ const { apiBaseUrl = '' } = Astro.props;
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
-                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
-                      lastAISpeech = normalizeText(restShopsText);
-                      
                       await new Promise(r => setTimeout(r, 500));
                       stopCurrentAudio();
-                      toggleMicMute(true);
+
+                      if (isMobile) stopStreamingSTT();
+                      else toggleMicMute(true);
+
                       ttsPlayer.src = remainingAudio;
                       await new Promise<void>((resolve) => { 
                           ttsPlayer.onended = () => { 
                               voiceStatus.innerHTML = '🎤 音声認識: 停止中'; 
                               voiceStatus.className = 'voice-status stopped'; 
-                              setTimeout(() => toggleMicMute(false), 800); 
+                              setTimeout(() => {
+                                  if (isMobile) startStreamingSTT();
+                                  else toggleMicMute(false);
+                              }, 800); 
                               resolve(); 
                           }; 
                           voiceStatus.innerHTML = '🔊 音声再生中...'; 
