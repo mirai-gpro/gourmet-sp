@@ -195,6 +195,161 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <script>
     // ★★★ PWAインストール案内を最優先で登録 ★★★
     let deferredPrompt: any = null;
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
+    
+    // iPhone: スタンドアロンモードでない場合、案内を表示
+    if (isIOS && !isInStandaloneMode) {
+      // ページ読み込み後3秒待ってから表示
+      setTimeout(() => {
+        showIOSInstallGuide();
+      }, 3000);
+    }
+    
+    function showIOSInstallGuide() {
+      const modal = document.createElement('div');
+      modal.id = 'ios-install-modal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.3s ease;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: white;
+          border-radius: 16px;
+          padding: 24px;
+          max-width: 90%;
+          width: 350px;
+          text-align: center;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+          position: relative;
+        ">
+          <button id="ios-install-close" style="
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: transparent;
+            border: none;
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            line-height: 1;
+          ">×</button>
+          
+          <img src="/pwa-152x152.png" style="width: 64px; height: 64px; border-radius: 12px; margin-bottom: 16px;">
+          
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">
+            ホーム画面に追加
+          </div>
+          
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">
+            アプリのように快適に使えます
+          </div>
+          
+          <div style="text-align: left; background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+            <div style="font-size: 13px; color: #333; margin-bottom: 12px; font-weight: 600;">
+              📱 インストール手順
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+              <div style="
+                background: #667eea;
+                color: white;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                flex-shrink: 0;
+              ">1</div>
+              <div style="font-size: 13px; color: #555;">
+                画面下部の <span style="font-weight: 600;">共有ボタン</span> をタップ
+              </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+              <div style="
+                background: #667eea;
+                color: white;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                flex-shrink: 0;
+              ">2</div>
+              <div style="font-size: 13px; color: #555;">
+                <span style="font-weight: 600;">「ホーム画面に追加」</span> を選択
+              </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="
+                background: #667eea;
+                color: white;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: 700;
+                flex-shrink: 0;
+              ">3</div>
+              <div style="font-size: 13px; color: #555;">
+                右上の <span style="font-weight: 600;">「追加」</span> をタップ
+              </div>
+            </div>
+          </div>
+          
+          <div style="font-size: 12px; color: #999;">
+            後でホーム画面からアクセスできます
+          </div>
+        </div>
+      `;
+      
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      
+      const closeBtn = document.getElementById('ios-install-close');
+      closeBtn?.addEventListener('click', () => {
+        modal.remove();
+      });
+      
+      // 背景クリックで閉じる
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+    }
     
     window.addEventListener('beforeinstallprompt', (e) => {
       console.log('✅ beforeinstallprompt イベント発火');
