@@ -682,13 +682,40 @@ const { apiBaseUrl = '' } = Astro.props;
       console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
       
-      // ★★★ 音声送信を停止 ★★★
-      isSendingAudio = false;
-      
-      // ★★★ マイクは止めない！WebSocketだけ停止 ★★★
-      if (socket && socket.connected) {
-        console.log('[録音停止] WebSocketにstop_stream送信');
-        socket.emit('stop_stream');
+      // ★★★ Android: 完全停止（マイク・WebSocket両方） ★★★
+      if (isAndroid) {
+        console.log('[Android] 完全停止モード');
+        
+        // AudioWorkletNode停止
+        if (audioWorkletNode) {
+          audioWorkletNode.port.onmessage = null;
+          audioWorkletNode.disconnect();
+          audioWorkletNode = null;
+        }
+        
+        // AudioContext停止
+        if (audioContext && audioContext.state !== 'closed') {
+          audioContext.close();
+          audioContext = null;
+        }
+        
+        // MediaStream停止
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream = null;
+        }
+        
+        // WebSocket停止
+        if (socket && socket.connected) {
+          socket.emit('stop_stream');
+        }
+      } else {
+        // ★★★ iPhone/PC: WebSocketだけ停止（マイクは継続） ★★★
+        isSendingAudio = false;
+        if (socket && socket.connected) {
+          console.log('[録音停止] WebSocketにstop_stream送信');
+          socket.emit('stop_stream');
+        }
       }
       
       isRecording = false; 
