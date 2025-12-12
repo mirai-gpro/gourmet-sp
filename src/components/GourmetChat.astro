@@ -588,13 +588,6 @@ const { apiBaseUrl = '' } = Astro.props;
       micBtn.innerHTML = '🎤';
       console.log('[録音停止] 完了');
     }
-      }
-      if (recordingTimer) clearTimeout(recordingTimer);
-      isRecording = false; 
-      micBtn.classList.remove('recording'); 
-      micBtn.innerHTML = '🎤';
-      console.log('[録音停止] 完了');
-    }
 
     async function startLegacyRecording() {
       try {
