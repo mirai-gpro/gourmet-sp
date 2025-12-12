@@ -1198,6 +1198,12 @@ const { apiBaseUrl = '' } = Astro.props;
           
           (async () => {
             try {
+              // ★ ショップ音声再生開始
+              isAISpeaking = true;
+              if (isAndroid && isRecording) {
+                stopStreamingSTT();
+              }
+              
               await speakTextGCP(t('ttsIntro'));
               const lines = data.response.split('\n\n');
               let introText = ""; let shopLines = lines;
@@ -1208,9 +1214,7 @@ const { apiBaseUrl = '' } = Astro.props;
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
-                    // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
                     lastAISpeech = normalizeText(introText);
-                    console.log('[エコー対策] AI発話記録(preGen-intro):', lastAISpeech);
                     ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
                     ttsPlayer.onended = () => resolve();
                     ttsPlayer.play();
@@ -1245,20 +1249,16 @@ const { apiBaseUrl = '' } = Astro.props;
               if (firstShopAudioPromise) {
                 const firstShopAudio = await firstShopAudioPromise;
                 if (firstShopAudio) {
-                  // ★★★ ショップ音声再生時もlastAISpeechに記録 ★★★
                   const firstShopText = stripMarkdown(shopLines[0]);
                   lastAISpeech = normalizeText(firstShopText);
-                  console.log('[エコー対策] AI発話記録(shop1):', lastAISpeech);
                   
                   stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
                   await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
-                      // ★★★ 残りのショップ音声再生時もlastAISpeechに記録 ★★★
                       const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
                       lastAISpeech = normalizeText(restShopsText);
-                      console.log('[エコー対策] AI発話記録(shop-rest):', lastAISpeech);
                       
                       await new Promise(r => setTimeout(r, 500));
                       stopCurrentAudio(); ttsPlayer.src = remainingAudio;
@@ -1267,7 +1267,12 @@ const { apiBaseUrl = '' } = Astro.props;
                   }
                 }
               }
-            } catch (e) { console.error(e); }
+              
+              // ★ ショップ音声再生終了
+              isAISpeaking = false;
+            } catch (e) { 
+              isAISpeaking = false;
+            }
           })();
         } else {
           if (data.response) {
