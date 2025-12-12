@@ -3,6 +3,7 @@
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
+
 // APIベースURL（Cloud Runのエンドポイント）
 // 本番環境では環境変数から取得
 const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
@@ -15,6 +16,8 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>グルメサポートAI - お店探しをお手伝い</title>
   
+  <link rel="manifest" href="/manifest.webmanifest">
+
   <link rel="apple-touch-icon" href="/pwa-192x192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -159,7 +162,8 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   </style>
 </head>
 <body>
-  <div class="page-container"> <header class="page-header">
+  <div class="page-container">
+    <header class="page-header">
       <h1 id="pageTitle">
         <img src="/pwa-152x152.png" alt="Logo" class="app-logo" />
         グルメサポートAI
