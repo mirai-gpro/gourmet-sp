@@ -122,11 +122,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-<script lang="ts">
+<script>
   import { i18n } from '../constants/i18n';
-  
-  // ソケットIOの型定義回避
-  declare const io: any;
 
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
@@ -179,12 +176,8 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // エコー対策
-    let isAISpeaking = false;
-    let isSendingAudio = true; 
-    
-    // ★ スマホ判定
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    // ★★★ エコー対策：直前のAI発話のみ保持（core_logic.py方式） ★★★
+    let lastAISpeech: string = '';
 
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -197,13 +190,26 @@ const { apiBaseUrl = '' } = Astro.props;
     let audioWorkletNode: AudioWorkletNode | null = null;
     let streamingTranscript = '';
     let isStreamingSTT = false;
-    let mediaStream: MediaStream | null = null;
+    let isSendingAudio = true; // ★ 音声送信制御フラグ
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const SILENCE_THRESHOLD = isIOS ? 50 : 35;
     const SILENCE_DURATION = isIOS ? 1500 : 2000;
     const MIN_RECORDING_TIME = 3000;
+
+    // ★★★ デバッグ用：画面にログ表示 ★★★
+    function debugLog(message: string) {
+      const debugDiv = document.getElementById('debugLog') || (() => {
+        const div = document.createElement('div');
+        div.id = 'debugLog';
+        div.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: lime; padding: 10px; max-height: 200px; overflow-y: auto; z-index: 99999; font-size: 11px; font-family: monospace;';
+        document.body.appendChild(div);
+        return div;
+      })();
+      const time = new Date().toLocaleTimeString();
+      debugDiv.innerHTML = `[${time}] ${message}<br>` + debugDiv.innerHTML;
+    }
 
     // --- 便利関数群 ---
 
@@ -292,35 +298,15 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopCurrentAudio() {
       ttsPlayer.pause();
       ttsPlayer.currentTime = 0;
-      isAISpeaking = false;
-      toggleMicMute(false);
-    }
-
-    // マイク物理制御 (PC用 & Mobile復帰用)
-    function toggleMicMute(shouldMute: boolean) {
-      if (mediaStream) {
-        const audioTracks = mediaStream.getAudioTracks();
-        audioTracks.forEach(track => {
-          track.enabled = !shouldMute;
-        });
-        if (shouldMute) {
-          console.log('[MicControl] マイク入力を遮断 (enabled=false)');
-          voiceStatus.innerHTML = '🔇 AI発話中 (マイク自動OFF)';
-          voiceStatus.className = 'voice-status speaking';
-        } else {
-          console.log('[MicControl] マイク入力を再開 (enabled=true)');
-          voiceStatus.innerHTML = isRecording ? t('voiceStatusListening') : t('voiceStatusStopped');
-          voiceStatus.className = isRecording ? 'voice-status' : 'voice-status stopped';
-        }
-      }
-      isSendingAudio = !shouldMute;
     }
 
     function stripMarkdown(text: string): string {
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
+    // 正規化（エコー判定用：core_logic.py方式）
     function normalizeText(text: string): string {
+      // 記号・空白を除去し、小文字化
       return text.replace(/[!?,.、。\s　]/g, '').toLowerCase().trim();
     }
 
@@ -355,7 +341,7 @@ const { apiBaseUrl = '' } = Astro.props;
         const nameMatch = fullName.match(/^([^（(]+)[（(]([^）)]+)[）)]/);
         if (nameMatch) name = nameMatch[1].trim();
         const encodedName = encodeURIComponent(name);
-        shops.push({ name: name, description: description, category: 'イタリアン', hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, maps_url: `http://googleusercontent.com/maps.google.com/${encodedName}`, tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` });
+        shops.push({ name: name, description: description, category: 'イタリアン', hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, maps_url: `https://www.google.com/maps/search/${encodedName}`, tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` });
       }
       return shops;
     }
@@ -367,6 +353,7 @@ const { apiBaseUrl = '' } = Astro.props;
       speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       sendBtn.textContent = t('btnSend');
       reservationBtn.innerHTML = t('btnReservation');
+      
       const waitText = document.querySelector('.wait-text');
       if (waitText) waitText.textContent = t('waitMessage');
 
@@ -395,25 +382,19 @@ const { apiBaseUrl = '' } = Astro.props;
       if (stopPrevious) ttsPlayer.pause();
       
       const cleanText = stripMarkdown(text);
-      const wasRecording = isRecording;
 
       try {
-        // ★★★ デバイス別エコー対策分岐 ★★★
-        if (wasRecording) {
-            if (isMobile) {
-                // スマホ：強制切断 (Android/iOS)
-                console.log('[EchoControl] Mobile: Hard Stop (Streaming Stop)');
-                stopStreamingSTT(); 
-                voiceStatus.innerHTML = '🔇 AI発話中 (マイクOFF)';
-                voiceStatus.className = 'voice-status speaking';
-            } else {
-                // PC：物理ミュート (enabled=false)
-                console.log('[EchoControl] PC: Soft Mute (enabled=false)');
-                toggleMicMute(true);
-            }
-        }
-
+        // ★ AI音声再生開始
         isAISpeaking = true;
+        
+        // ★★★ Android: マイクOFF ★★★
+        if (isAndroid && isRecording) {
+          console.log('[Android] AI音声開始 → マイクOFF');
+          stopStreamingSTT();
+        }
+        
+        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
+        voiceStatus.className = 'voice-status speaking';
         const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
         const response = await fetch(`${apiBase}/api/tts/synthesize`, {
           method: 'POST',
@@ -424,68 +405,140 @@ const { apiBaseUrl = '' } = Astro.props;
         if (data.success && data.audio) {
           ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
           const playPromise = new Promise<void>((resolve) => {
-            ttsPlayer.onended = () => {
+            ttsPlayer.onended = async () => {
+              voiceStatus.innerHTML = t('voiceStatusStopped');
+              voiceStatus.className = 'voice-status stopped';
+              // ★ AI音声再生終了
               isAISpeaking = false;
               
-              // ★★★ 録音復帰ロジック ★★★
-              if (wasRecording) {
-                  setTimeout(() => {
-                      if (isMobile) {
-                          // スマホ：強制再接続 (Start Streaming)
-                          console.log('[EchoControl] Mobile: Hard Restart');
-                          startStreamingSTT().catch(e => {
-                              console.log('Mobile Auto-Restart Failed:', e);
-                              // iOS等で失敗した場合のUI
-                              voiceStatus.innerHTML = '🎤 タップして再開';
-                              voiceStatus.className = 'voice-status stopped';
-                          });
-                      } else {
-                          // PC：物理ミュート解除 (enabled=true)
-                          console.log('[EchoControl] PC: Soft Unmute');
-                          toggleMicMute(false);
-                      }
-                  }, 800);
+              // ★★★ AI音声終了後：マイク自動ON ★★★
+              if (isAndroid) {
+                console.log('[Android] AI音声終了 → マイク自動ON試行');
+                try {
+                  await startStreamingSTT();
+                  console.log('[Android] マイク自動ON成功');
+                } catch (error) {
+                  console.error('[Android] マイク自動ON失敗:', error);
+                  showMicPrompt();
+                }
+              } else if (!isRecording) {
+                // iPhone: マイク自動ONを試みる
+                console.log('[iPhone] AI音声終了 → マイク自動ON試行');
+                try {
+                  await startStreamingSTT();
+                  console.log('[iPhone] マイク自動ON成功');
+                } catch (error) {
+                  console.error('[iPhone] マイク自動ON失敗:', error);
+                  showMicPrompt();
+                }
               }
+              
               resolve();
             };
             ttsPlayer.onerror = () => { 
+              // ★ エラー時も終了
               isAISpeaking = false;
-              // エラー時の復帰
-              if (wasRecording) {
-                  if (isMobile) startStreamingSTT();
-                  else toggleMicMute(false);
-              }
               resolve(); 
             };
           });
-
           if (isUserInteracted) {
+            lastAISpeech = normalizeText(cleanText);
+            console.log('[エコー対策] AI発話記録:', lastAISpeech);
             await ttsPlayer.play();
             await playPromise;
           } else {
             showClickPrompt();
+            voiceStatus.innerHTML = t('voiceStatusStopped');
+            voiceStatus.className = 'voice-status stopped';
+            // ★ 再生しない場合も終了
             isAISpeaking = false;
-            // 再生なしでも復帰
-            if (wasRecording) {
-                if (isMobile) startStreamingSTT();
-                else toggleMicMute(false);
-            }
           }
         } else {
+          // ★ 失敗時も終了
           isAISpeaking = false;
-          if (wasRecording) {
-              if (isMobile) startStreamingSTT();
-              else toggleMicMute(false);
-          }
         }
       } catch (error) {
         console.error('TTS Error:', error);
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        // ★ エラー時も終了
         isAISpeaking = false;
-        if (wasRecording) {
-            if (isMobile) startStreamingSTT();
-            else toggleMicMute(false);
-        }
       }
+    }
+
+    // ★★★ マイクON促進モーダル ★★★
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.3s ease;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: white;
+          border-radius: 16px;
+          padding: 24px;
+          max-width: 90%;
+          width: 350px;
+          text-align: center;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        ">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">
+            マイクをONにしてください
+          </div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">
+            AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。
+          </div>
+          <button id="mic-prompt-btn" style="
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+          ">
+            🎤 マイクON
+          </button>
+        </div>
+      `;
+      
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      
+      const btn = document.getElementById('mic-prompt-btn');
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      
+      // 3秒後に自動で閉じる
+      setTimeout(() => {
+        if (document.getElementById('mic-prompt-modal')) {
+          modal.remove();
+        }
+      }, 3000);
     }
 
     // --- ロジック関数 ---
@@ -521,8 +574,61 @@ const { apiBaseUrl = '' } = Astro.props;
       if (!isTTSEnabled) stopCurrentAudio();
     }
 
+    let mediaStream: MediaStream | null = null; // ★ グローバルで保持
+
+    // ★★★ Android判定 ★★★
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    console.log('[デバイス判定] isAndroid:', isAndroid);
+
+    // ★★★ AI音声再生中フラグ ★★★
+    let isAISpeaking = false; // AI音声再生中はtrue
+
+    // ★★★ エコー削除ロジック（phone.html main.pyから移植） ★★★
+    let currentAISpeech = ""; // 現在AIが喋っている/喋った内容
+
+    function normalizeText(text: string): string {
+      // テキストの正規化（空白・記号除去）
+      return text.replace(/\s+/g, '').replace(/[、。！？,.!?]/g, '').toLowerCase();
+    }
+
+    function isSemanticEcho(transcript: string, aiText: string): boolean {
+      if (!aiText || !transcript) return false;
+      
+      const normTranscript = normalizeText(transcript);
+      const normAI = normalizeText(aiText);
+      
+      // 1. 完全包含チェック
+      if (normAI.includes(normTranscript) && normTranscript.length > 3) {
+        console.log('[エコー検出] 包含一致:', transcript);
+        return true;
+      }
+      if (normTranscript.includes(normAI) && normAI.length > 3) {
+        console.log('[エコー検出] 包含一致:', transcript);
+        return true;
+      }
+      
+      // 2. 類似度チェック（簡易版：共通部分の長さで判定）
+      const maxLen = Math.max(normTranscript.length, normAI.length);
+      if (maxLen === 0) return false;
+      
+      let matchCount = 0;
+      const minLen = Math.min(normTranscript.length, normAI.length);
+      for (let i = 0; i < minLen; i++) {
+        if (normTranscript[i] === normAI[i]) matchCount++;
+      }
+      
+      const similarity = matchCount / maxLen;
+      if (similarity > 0.5) { // 50%以上一致
+        console.log('[エコー検出] 類似度:', similarity.toFixed(2), transcript);
+        return true;
+      }
+      
+      return false;
+    }
+
     async function startStreamingSTT() {
       try {
+        // ★★★ 古いものを確実にクリーンアップ ★★★
         if (audioWorkletNode) {
           audioWorkletNode.port.onmessage = null;
           audioWorkletNode.disconnect();
@@ -542,18 +648,15 @@ const { apiBaseUrl = '' } = Astro.props;
         const source = audioContext.createMediaStreamSource(mediaStream);
         await audioContext.audioWorklet.addModule('/audio-processor.js');
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
-        
         audioWorkletNode.port.onmessage = (event) => {
-          const data = event.data as any;
-          const { audioChunk } = data;
-          
+          const { audioChunk } = event.data;
+          // ★★★ 送信フラグがfalseなら送信しない ★★★
           if (!isSendingAudio) return;
           
           const uint8Array = new Uint8Array(audioChunk.buffer);
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
         };
-
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
         analyser = audioContext.createAnalyser();
@@ -561,23 +664,16 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         hasSpoken = false; recordingStartTime = Date.now();
-        
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
-          // マイクミュート中は無視
-          if (!isSendingAudio) return;
-
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
-
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
-        isRecording = true; 
-        isSendingAudio = true;
-        micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
+        isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording) { stopStreamingSTT(); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
       } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
@@ -585,25 +681,25 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT() {
       console.log('[録音停止] stopStreamingSTT呼び出し');
       stopVAD();
+      
+      // ★★★ 音声送信を停止 ★★★
       isSendingAudio = false;
+      
+      // ★★★ マイクは止めない！WebSocketだけ停止 ★★★
       if (socket && socket.connected) {
+        console.log('[録音停止] WebSocketにstop_stream送信');
         socket.emit('stop_stream');
       }
+      
       isRecording = false; 
       micBtn.classList.remove('recording'); 
       micBtn.innerHTML = '🎤';
-      
-      if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          mediaStream = null;
-      }
+      console.log('[録音停止] 完了');
     }
 
     async function startLegacyRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
-        mediaStream = stream;
-        
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
         audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
         audioContext = new AudioContext();
@@ -612,18 +708,14 @@ const { apiBaseUrl = '' } = Astro.props;
         analyser.fftSize = 512;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
-          if (!isSendingAudio) return;
-
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { autoStopRecording(); }, SILENCE_DURATION); }
         }, 100);
-
         mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
         mediaRecorder.onstop = async () => {
           stopVAD(); stream.getTracks().forEach(track => track.stop());
@@ -631,8 +723,7 @@ const { apiBaseUrl = '' } = Astro.props;
           if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob); }
         };
         mediaRecorder.start();
-        isRecording = true; isSendingAudio = true;
-        micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
+        isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtn.classList.remove('recording'); micBtn.innerHTML = '🎤'; addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
       } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
@@ -649,36 +740,110 @@ const { apiBaseUrl = '' } = Astro.props;
           const data = await response.json();
 
           if (data.success && data.transcript) {
+            // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
             const transcript = data.transcript;
-            if (isAISpeaking) return; 
+            
+            console.log('[エコー判定] 受信transcript:', transcript);
+            
+            // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
+            
+            // いずれかのキーワードを含んでいたら即削除
+            for (const keyword of echoKeywords) {
+              if (transcript.includes(keyword)) {
+                console.log('[固定文言エコー検知!!!] キーワード一致:', keyword);
+                console.log('[固定文言エコー検知!!!] 削除transcript:', transcript);
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                return; // ★ ここで完全終了
+              }
+            }
 
-            const echoKeywords = ['お店の空席状況','後ほど私がお店に','直接電話して確認','まずはお店のご希望','もう少し詳しくご希望'];
-            if (echoKeywords.some(kw => transcript.includes(kw))) { return; }
+            // ★★★ 通常のエコー判定（完全一致: core_logic.py方式） ★★★
+            const normTranscript = normalizeText(transcript);
+            console.log('[デバッグ] STT認識:', transcript);
+            console.log('[デバッグ] 正規化後:', normTranscript);
+            console.log('[デバッグ] lastAISpeech:', lastAISpeech);
+            console.log('[デバッグ] 一致判定:', normTranscript === lastAISpeech);
+            
+            if (lastAISpeech && normTranscript === lastAISpeech) {
+                console.log('[エコー検知] 無視:', transcript, '| 直前AI:', lastAISpeech);
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                // エコー検知後は lastAISpeech をクリア（連続エコー防止）
+                lastAISpeech = '';
+                return;
+            }
 
             userInput.value = transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
+            
+            // ★★★ エコーチェック ★★★
+            const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
+            if (echoCheck.some(kw => transcript.includes(kw))) {
+              return; // エコーなので何もしない
+            }
+            
             addMessage('user', transcript);
 
+            // 1. 日時チェック
             // @ts-ignore
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
               const msg = t('dateWarningMsg');
               addMessage('assistant', msg);
-              if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true); await new Promise(r => setTimeout(r, 1000)); } 
-              else { await new Promise(r => setTimeout(r, 2000)); }
+              
+              // ★★★ AI音声再生中は録音完全停止 ★★★
+              const wasRecording = isRecording;
+              if (wasRecording) {
+                console.log('[録音制御] AI音声再生のため一時停止');
+                // Legacy録音の停止
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                  mediaRecorder.stop();
+                }
+                // WebSocket録音の停止
+                stopStreamingSTT();
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.innerHTML = '🎤';
+              }
+              
+              if (isTTSEnabled && isUserInteracted) {
+                await speakTextGCP(msg, true); // 音声再生完了を待つ
+                await new Promise(r => setTimeout(r, 1000)); // 1秒待機（音声の余韻）
+              } else {
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              
               userInput.value = '';
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
-              setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+              
+              // ★★★ AI音声再生完了後に録音再開 ★★★
+              if (wasRecording) {
+                console.log('[録音制御] 録音再開');
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+              }
               return;
             }
 
+            // 2. 文字数チェック
             const textLength = data.transcript.trim().replace(/\s+/g, '').length;
             if (textLength < 4) {
                 const msg = t('shortMsgWarning');
                 addMessage('assistant', msg);
-                if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true); await new Promise(r => setTimeout(r, 500)); }
-                else { await new Promise(r => setTimeout(r, 2000)); }
+                if (isTTSEnabled && isUserInteracted) {
+                  await speakTextGCP(msg, true);
+                  await new Promise(r => setTimeout(r, 500));
+                } else {
+                  await new Promise(r => setTimeout(r, 2000));
+                }
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
@@ -686,28 +851,22 @@ const { apiBaseUrl = '' } = Astro.props;
                 return;
             }
 
+            // 3. 通常フロー
             const ack = selectSmartAcknowledgment(data.transcript);
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             let firstAckPromise: Promise<void> | null = null;
             if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
-                
-                // 再生前ミュート (デバイス別分岐)
-                if (isMobile) stopStreamingSTT();
-                else toggleMicMute(true);
-
+                // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                lastAISpeech = normalizeText(ack.text);
+                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-                ttsPlayer.onended = () => { 
-                  setTimeout(() => {
-                      if (isMobile) startStreamingSTT();
-                      else toggleMicMute(false);
-                  }, 800);
-                  resolve(); 
-                };
+                ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
               });
             } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
             addMessage('assistant', ack.text);
+
             (async () => {
                 if (firstAckPromise) await firstAckPromise;
                 const cleanText = removeFillers(data.transcript);
@@ -737,11 +896,16 @@ const { apiBaseUrl = '' } = Astro.props;
         socket.on('transcript', (data: any) => {
           const { text, is_final } = data;
           
-          if (isAISpeaking) return;
-         
+          // ★★★ AI音声再生中は全て無視 ★★★
+          if (isAISpeaking) {
+            console.log('[🔇 AI音声再生中につき無視]', text);
+            return;
+          }
+          
           if (is_final) { 
             streamingTranscript = text; 
             handleStreamingSTTComplete(text);
+            currentAISpeech = "";
           } else { 
             userInput.value = text;
           }
@@ -751,39 +915,100 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     async function handleStreamingSTTComplete(transcript: string) {
+      // ★ stopStreamingSTT()を削除（マイクは動き続ける）
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
-      const echoKeywords = ['お店の空席状況','後ほど私がお店に','直接電話して確認','まずはお店のご希望','もう少し詳しくご希望'];
-      if (echoKeywords.some(kw => transcript.includes(kw))) {
+      // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
+      
+      // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
+      const echoKeywords = [
+        'お店の空席状況',
+        '後ほど私がお店に',
+        '直接電話して確認',
+        'まずはお店のご希望',
+        'もう少し詳しくご希望'
+      ];
+      
+      // いずれかのキーワードを含んでいたら即削除
+      for (const keyword of echoKeywords) {
+        if (transcript.includes(keyword)) {
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
+          return; // ★ ここで完全終了
+        }
+      }
+
+
+      // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
+      const normTranscript = normalizeText(transcript);
+      console.log('[デバッグWS] STT認識:', transcript);
+      console.log('[デバッグWS] 正規化後:', normTranscript);
+      console.log('[デバッグWS] lastAISpeech:', lastAISpeech);
+      console.log('[デバッグWS] 一致判定:', normTranscript === lastAISpeech);
+      
+      if (lastAISpeech && normTranscript === lastAISpeech) {
+          console.log('[エコー検知WS] 無視:', transcript, '| 直前AI:', lastAISpeech);
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          // エコー検知後は lastAISpeech をクリア
+          lastAISpeech = '';
           return;
       }
 
       userInput.value = transcript;
+
+      // ★★★ 日時チェック ★★★
       // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
         const msg = t('dateWarningMsg');
+        currentAISpeech = msg;
         addMessage('assistant', msg);
-        if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true); } 
-        else { await new Promise(r => setTimeout(r, 2000)); }
+        
+        // ★ AI音声再生開始
+        isAISpeaking = true;
+        
+        if (isTTSEnabled && isUserInteracted) {
+          await speakTextGCP(msg, true);
+        } else {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+        
+        // ★ AI音声再生終了
+        isAISpeaking = false;
+        
         userInput.value = '';
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
         return;
       }
 
+      // 通常フロー
+      // ★★★ エコーチェック ★★★
       const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
-      if (echoCheck.some(kw => transcript.includes(kw))) { return; }
+      if (echoCheck.some(kw => transcript.includes(kw))) {
+        return; // エコーなので何もしない
+      }
       
       addMessage('user', transcript);
+
       const textLength = transcript.trim().replace(/\s+/g, '').length;
       if (textLength < 4) {
           const msg = t('shortMsgWarning');
           addMessage('assistant', msg);
-          if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true); } 
-          else { await new Promise(r => setTimeout(r, 2000)); }
+          
+          // AI音声再生前にSTT送信停止
+          isSendingAudio = false;
+          
+          if (isTTSEnabled && isUserInteracted) {
+            await speakTextGCP(msg, true);
+          } else {
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          
+          // 音声再生完了後、即座にSTT送信再開
+          isSendingAudio = true;
+          
           userInput.value = '';
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
@@ -795,19 +1020,11 @@ const { apiBaseUrl = '' } = Astro.props;
       let firstAckPromise: Promise<void> | null = null;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
         firstAckPromise = new Promise<void>((resolve) => {
-          
-          // 再生前ミュート (デバイス別)
-          if (isMobile) stopStreamingSTT();
-          else toggleMicMute(true);
-
+          // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+          lastAISpeech = normalizeText(ack.text);
+          console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-          ttsPlayer.onended = () => {
-             setTimeout(() => {
-                 if (isMobile) startStreamingSTT();
-                 else toggleMicMute(false);
-             }, 800); 
-             resolve();
-          };
+          ttsPlayer.onended = () => resolve();
           ttsPlayer.play().catch(e => resolve());
         });
       } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
@@ -826,13 +1043,42 @@ const { apiBaseUrl = '' } = Astro.props;
             addMessage('assistant', additionalResponse);
           }, 3000);
           
+          // ★★★ sendMessage前にuserInputをエコーチェック ★★★
           if (userInput.value.trim()) {
-            const echoKeywords = ['お店の空席状況','後ほど私がお店に','直接電話して確認','まずはお店のご希望','もう少し詳しくご希望'];
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
             const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
-            if (!isEcho) { isFromVoiceInput = true; sendMessage(); } 
-            else { userInput.value = ''; }
+            
+            if (!isEcho) {
+              isFromVoiceInput = true; 
+              sendMessage();
+            } else {
+              userInput.value = ''; // エコーなのでクリア
+            }
           }
         } catch (error) { 
+          if (userInput.value.trim()) { 
+            const echoKeywords = [
+              'お店の空席状況',
+              '後ほど私がお店に',
+              '直接電話して確認',
+              'まずはお店のご希望',
+              'もう少し詳しくご希望'
+            ];
+            const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
+            
+            if (!isEcho) {
+              isFromVoiceInput = true; 
+              sendMessage();
+            } else {
+              userInput.value = '';
+            }
+          }
         }
       })();
       voiceStatus.innerHTML = t('voiceStatusStopped');
@@ -866,24 +1112,21 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         userInput.value = '';
         const ack = selectSmartAcknowledgment(message);
+        
+        // ★ 相槌を記録（エコー判定用）
+        currentAISpeech = ack.text;
+        
         addMessage('assistant', ack.text);
         if (isTTSEnabled) {
           try {
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             if (preGeneratedAudio && isUserInteracted) {
               firstAckPromise = new Promise<void>((resolve) => {
-                
-                if (isMobile) stopStreamingSTT();
-                else toggleMicMute(true);
-
+                // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                lastAISpeech = normalizeText(ack.text);
+                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-                ttsPlayer.onended = () => {
-                    setTimeout(() => {
-                        if (isMobile) startStreamingSTT();
-                        else toggleMicMute(false);
-                    }, 800); 
-                    resolve();
-                };
+                ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
               });
             } else { firstAckPromise = speakTextGCP(ack.text, false); }
@@ -901,6 +1144,7 @@ const { apiBaseUrl = '' } = Astro.props;
         }, 3000);
       }
 
+      const wasVoiceInput = isFromVoiceInput;
       isFromVoiceInput = false;
       if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
       waitOverlayTimer = window.setTimeout(() => { showWaitOverlay(); }, 4000);
@@ -909,6 +1153,10 @@ const { apiBaseUrl = '' } = Astro.props;
         const response = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, message: message, stage: currentStage, language: currentLanguage }) });
         const data = await response.json();
         hideWaitOverlay();
+        
+        // ★ AI応答を記録（エコー判定用）
+        currentAISpeech = data.response;
+        
         addMessage('assistant', data.response, data.summary);
         stopCurrentAudio();
 
@@ -930,18 +1178,11 @@ const { apiBaseUrl = '' } = Astro.props;
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
-                    
-                    if (isMobile) stopStreamingSTT();
-                    else toggleMicMute(true);
-
+                    // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
+                    lastAISpeech = normalizeText(introText);
+                    console.log('[エコー対策] AI発話記録(preGen-intro):', lastAISpeech);
                     ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
-                    ttsPlayer.onended = () => {
-                        setTimeout(() => {
-                            if (isMobile) startStreamingSTT();
-                            else toggleMicMute(false);
-                        }, 800); 
-                        resolve();
-                    };
+                    ttsPlayer.onended = () => resolve();
                     ttsPlayer.play();
                   });
                 } else { introPart2Promise = speakTextGCP(introText, false); }
@@ -950,6 +1191,7 @@ const { apiBaseUrl = '' } = Astro.props;
               let firstShopAudioPromise: Promise<string | null> | null = null;
               let remainingAudioPromise: Promise<string | null> | null = null;
               const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
+
               if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
                 const firstShop = shopLines[0];
                 const restShops = shopLines.slice(1).join('\n\n');
@@ -973,51 +1215,24 @@ const { apiBaseUrl = '' } = Astro.props;
               if (firstShopAudioPromise) {
                 const firstShopAudio = await firstShopAudioPromise;
                 if (firstShopAudio) {
-                  stopCurrentAudio(); 
+                  // ★★★ ショップ音声再生時もlastAISpeechに記録 ★★★
+                  const firstShopText = stripMarkdown(shopLines[0]);
+                  lastAISpeech = normalizeText(firstShopText);
+                  console.log('[エコー対策] AI発話記録(shop1):', lastAISpeech);
                   
-                  if (isMobile) stopStreamingSTT();
-                  else toggleMicMute(true);
-
-                  ttsPlayer.src = firstShopAudio;
-                  await new Promise<void>((resolve) => { 
-                      ttsPlayer.onended = () => { 
-                          voiceStatus.innerHTML = t('voiceStatusStopped'); 
-                          voiceStatus.className = 'voice-status stopped';
-                          setTimeout(() => {
-                              if (isMobile) startStreamingSTT();
-                              else toggleMicMute(false);
-                          }, 800); 
-                          resolve(); 
-                      }; 
-                      voiceStatus.innerHTML = t('voiceStatusSpeaking'); 
-                      voiceStatus.className = 'voice-status speaking'; 
-                      ttsPlayer.play(); 
-                  });
-
+                  stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
+                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
+                      // ★★★ 残りのショップ音声再生時もlastAISpeechに記録 ★★★
+                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
+                      lastAISpeech = normalizeText(restShopsText);
+                      console.log('[エコー対策] AI発話記録(shop-rest):', lastAISpeech);
+                      
                       await new Promise(r => setTimeout(r, 500));
-                      stopCurrentAudio();
-
-                      if (isMobile) stopStreamingSTT();
-                      else toggleMicMute(true);
-
-                      ttsPlayer.src = remainingAudio;
-                      await new Promise<void>((resolve) => { 
-                          ttsPlayer.onended = () => { 
-                              voiceStatus.innerHTML = '🎤 音声認識: 停止中'; 
-                              voiceStatus.className = 'voice-status stopped'; 
-                              setTimeout(() => {
-                                  if (isMobile) startStreamingSTT();
-                                  else toggleMicMute(false);
-                              }, 800); 
-                              resolve(); 
-                          }; 
-                          voiceStatus.innerHTML = '🔊 音声再生中...'; 
-                          voiceStatus.className = 'voice-status speaking'; 
-                          ttsPlayer.play(); 
-                      });
+                      stopCurrentAudio(); ttsPlayer.src = remainingAudio;
+                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                     }
                   }
                 }
@@ -1028,8 +1243,7 @@ const { apiBaseUrl = '' } = Astro.props;
           if (data.response) {
             const extractedShops = extractShopsFromResponse(data.response);
             if (extractedShops.length > 0) {
-              currentShops = extractedShops;
-              reservationBtn.disabled = false;
+              currentShops = extractedShops; reservationBtn.disabled = false;
               document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: extractedShops, language: currentLanguage } }));
               const section = document.getElementById('shopListSection');
               if (section) section.classList.add('has-shops');
@@ -1077,6 +1291,8 @@ const { apiBaseUrl = '' } = Astro.props;
     speakerBtn.addEventListener('click', toggleTTS);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
+    
+    // 最後に初期化を実行
     initialize();
   });
 </script>
