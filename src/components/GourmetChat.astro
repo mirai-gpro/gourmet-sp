@@ -806,7 +806,7 @@ const { apiBaseUrl = '' } = Astro.props;
       } catch (error) { isStreamingSTT = false; }
     }
 
-    function handleStreamingSTTComplete(transcript: string) {
+    async function handleStreamingSTTComplete(transcript: string) {
       // ★ stopStreamingSTT()を削除（マイクは動き続ける）
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
