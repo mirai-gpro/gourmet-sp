@@ -196,5 +196,111 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     import { registerSW } from 'virtual:pwa-register';
     registerSW({ immediate: true });
   </script>
+
+  <script>
+    // PWAインストール案内
+    let deferredPrompt: any = null;
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      console.log('beforeinstallprompt イベント発火');
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallPrompt();
+    });
+
+    function showInstallPrompt() {
+      // インストール案内バナーを作成
+      const banner = document.createElement('div');
+      banner.id = 'install-banner';
+      banner.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        max-width: 90%;
+        width: 400px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        animation: slideUp 0.3s ease;
+      `;
+      
+      banner.innerHTML = `
+        <img src="/pwa-64x64.png" alt="App Icon" style="width: 48px; height: 48px; border-radius: 8px;">
+        <div style="flex: 1;">
+          <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">グルメサポートAI</div>
+          <div style="font-size: 13px; color: #666;">ホーム画面に追加して簡単アクセス</div>
+        </div>
+        <button id="install-btn" style="
+          background: #667eea;
+          color: white;
+          border: none;
+          padding: 10px 16px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+          white-space: nowrap;
+        ">追加</button>
+        <button id="install-close" style="
+          background: transparent;
+          border: none;
+          font-size: 24px;
+          color: #999;
+          cursor: pointer;
+          padding: 0 8px;
+          line-height: 1;
+        ">×</button>
+      `;
+      
+      // アニメーション用CSS
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translate(-50%, 20px);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(banner);
+      
+      // インストールボタン
+      const installBtn = document.getElementById('install-btn');
+      installBtn?.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          console.log(`ユーザーの選択: ${outcome}`);
+          deferredPrompt = null;
+          banner.remove();
+        }
+      });
+      
+      // 閉じるボタン
+      const closeBtn = document.getElementById('install-close');
+      closeBtn?.addEventListener('click', () => {
+        banner.remove();
+      });
+    }
+
+    // インストール完了時
+    window.addEventListener('appinstalled', () => {
+      console.log('PWAがインストールされました');
+      deferredPrompt = null;
+      const banner = document.getElementById('install-banner');
+      if (banner) banner.remove();
+    });
+  </script>
 </body>
 </html>
