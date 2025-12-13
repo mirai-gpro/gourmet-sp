@@ -188,7 +188,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     <footer class="page-footer" id="pageFooter">
       素敵なグルメ体験をお楽しみください &#10024;
     </footer>
-
+    
   <ReservationModal apiBaseUrl={apiBaseUrl} />
 
   <script>
@@ -230,50 +230,60 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         justify-content: center;
         z-index: 10000;
         animation: fadeIn 0.3s ease;
+        padding: 20px;
+        overflow-y: auto;
       `;
       
       modal.innerHTML = `
         <div style="
           background: white;
           border-radius: 16px;
-          padding: 24px;
+          padding: 20px;
           max-width: 90%;
-          width: 350px;
+          width: 340px;
+          max-height: 85vh;
+          overflow-y: auto;
           text-align: center;
           box-shadow: 0 8px 32px rgba(0,0,0,0.3);
           position: relative;
         ">
+          <!-- 閉じるボタン（大きく目立つ） -->
           <button id="ios-install-close" style="
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: transparent;
+            position: sticky;
+            top: 0;
+            float: right;
+            background: #ff3b30;
             border: none;
-            font-size: 24px;
-            color: #999;
+            font-size: 20px;
+            color: white;
             cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            line-height: 1;
-          ">×</button>
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(255,59,48,0.3);
+            margin-bottom: 10px;
+          ">✕ 閉じる</button>
           
-          <img src="/pwa-152x152.png" style="width: 64px; height: 64px; border-radius: 12px; margin-bottom: 16px;">
+          <div style="clear: both;"></div>
           
-          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">
+          <img src="/pwa-152x152.png" style="width: 64px; height: 64px; border-radius: 12px; margin-bottom: 12px;">
+          
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 6px; color: #333;">
             ホーム画面に追加
           </div>
           
-          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">
+          <div style="font-size: 13px; color: #666; margin-bottom: 16px;">
             アプリのように快適に使えます
           </div>
           
-          <!-- 操作デモ動画 -->
+          <!-- 操作デモ動画（コンパクト） -->
           <div id="demo-video-container" style="
             background: #000;
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             overflow: hidden;
+            max-height: 200px;
           ">
             <video 
               src="/ios-install-demo.mp4" 
@@ -287,60 +297,51 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             ></video>
           </div>
           
-          <div style="text-align: left; background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
-            <div style="font-size: 13px; color: #333; margin-bottom: 12px; font-weight: 600;">
-              📱 インストール手順
+          <div style="text-align: left; background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <div style="font-size: 12px; color: #333; margin-bottom: 10px; font-weight: 600;">
+              📱 3ステップで追加
             </div>
             
-            <!-- Safari画面イラスト -->
-            <div style="
-              background: white;
-              border: 2px solid #ddd;
-              border-radius: 12px;
-              padding: 8px;
-              margin-bottom: 16px;
-              position: relative;
-            ">
-              <div style="text-align: center; padding: 40px 20px; color: #999; font-size: 12px;">
-                このページ（Safari画面）
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <div style="background: #007aff; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">1</div>
+              <div style="font-size: 12px; color: #555;">
+                画面下部の <span style="background: #007aff; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">共有</span> ボタンをタップ
               </div>
-              <div style="
-                position: absolute;
-                bottom: 8px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: #007aff;
-                color: white;
-                padding: 8px 16px;
-                border-radius: 8px;
-                font-size: 11px;
-                font-weight: 600;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-                box-shadow: 0 2px 8px rgba(0,122,255,0.5);
-              ">
-                <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-                  <path d="M7 1L7 10M7 1L4 4M7 1L10 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M2 10L2 13C2 13.5523 2.44772 14 3 14L11 14C11.5523 14 12 13.5523 12 13L12 10" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                ここをタップ
-              </div>
-              <div style="
-                position: absolute;
-                bottom: -25px;
-                left: 50%;
-                transform: translateX(-50%);
-                font-size: 10px;
-                color: #007aff;
-                font-weight: 700;
-                white-space: nowrap;
-              ">↑ 共有ボタン（画面一番下の中央）</div>
             </div>
             
-            <div style="height: 20px;"></div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <div style="background: #007aff; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">2</div>
+              <div style="font-size: 12px; color: #555;">
+                <span style="font-weight: 600;">「ホーム画面に追加」</span> を選択
+              </div>
+            </div>
             
-            <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="background: #007aff; color: white; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">3</div>
+              <div style="font-size: 12px; color: #555;">
+                右上の <span style="font-weight: 600;">「追加」</span> をタップ
+              </div>
+            </div>
+          </div>
+          
+          <div style="font-size: 11px; color: #999; margin-bottom: 12px;">
+            ※共有ボタンは Safari 画面の一番下にあります
+          </div>
+          
+          <!-- 後で追加ボタン -->
+          <button id="ios-install-later" style="
+            background: #f0f0f0;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            width: 100%;
+          ">後で追加する</button>
+        </div>
+      `;
               <div style="
                 background: #667eea;
                 color: white;
@@ -425,8 +426,15 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       document.head.appendChild(style);
       document.body.appendChild(modal);
       
+      // 閉じるボタン
       const closeBtn = document.getElementById('ios-install-close');
       closeBtn?.addEventListener('click', () => {
+        modal.remove();
+      });
+      
+      // 後で追加ボタン
+      const laterBtn = document.getElementById('ios-install-later');
+      laterBtn?.addEventListener('click', () => {
         modal.remove();
       });
       
