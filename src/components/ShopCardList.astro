@@ -551,6 +551,8 @@ const { apiBaseUrl = '' } = Astro.props;
     tripadvisor_url?: string;
     tripadvisor_rating?: number;
     tripadvisor_reviews?: number;
+    latitude?: number;
+    longitude?: number;
   }
 
   class ShopCardManager {
@@ -670,10 +672,25 @@ const { apiBaseUrl = '' } = Astro.props;
       // リンクボタンの生成
       const linksHtml = this.createLinksHtml(shop);
 
-      const mapsUrl = shop.maps_url || '#';
+      // Google Map URLの生成
+      let mapsUrl = '#';
+      if (shop.maps_url) {
+        mapsUrl = shop.maps_url;
+      } else if (shop.latitude && shop.longitude) {
+        // 緯度経度がある場合
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`;
+      } else if (shop.name && shop.location) {
+        // 店名と住所がある場合
+        const query = encodeURIComponent(`${shop.name} ${shop.location}`);
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      } else if (shop.name) {
+        // 店名のみの場合
+        const query = encodeURIComponent(shop.name);
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      }
 
       card.innerHTML = `
-        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link">
+        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" data-maps-url="${mapsUrl}">
           <div class="hero-image">
             <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
             ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
@@ -948,6 +965,21 @@ const { apiBaseUrl = '' } = Astro.props;
       if (event.detail && event.detail.shops) {
         const language = event.detail.language || 'ja';
         manager.displayShops(event.detail.shops, language);
+        
+        // ★★★ スマホ用：Google Mapリンクのクリック処理を強制 ★★★
+        setTimeout(() => {
+          const mapLinks = document.querySelectorAll('.hero-image-link');
+          mapLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+              const url = this.getAttribute('data-maps-url') || this.getAttribute('href');
+              if (url && url !== '#') {
+                e.preventDefault();
+                // 強制的に新しいウィンドウで開く
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }
+            });
+          });
+        }, 100);
       }
     }) as EventListener);
   });
