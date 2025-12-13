@@ -85,10 +85,22 @@ const { apiBaseUrl = '' } = Astro.props;
     color: white;
     gap: 8px;
     z-index: 5;
+    pointer-events: none; /* ★ オーバーレイ自体はクリック不可に */
   }
 
-  .shop-card-list :global(.hero-image-link:hover .maps-overlay) {
-    opacity: 1;
+  /* PC: ホバーで表示 */
+  @media (hover: hover) and (pointer: fine) {
+    .shop-card-list :global(.hero-image-link:hover .maps-overlay) {
+      opacity: 1;
+    }
+  }
+  
+  /* スマホ: 常に薄く表示（タップ可能にするため） */
+  @media (hover: none) {
+    .shop-card-list :global(.maps-overlay) {
+      opacity: 0.8;
+      background: rgba(0, 0, 0, 0.4);
+    }
   }
 
   .shop-card-list :global(.maps-overlay svg) {
