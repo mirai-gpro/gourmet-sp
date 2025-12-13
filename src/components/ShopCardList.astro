@@ -669,12 +669,9 @@ const { apiBaseUrl = '' } = Astro.props;
       const linksHtml = this.createLinksHtml(shop);
 
       const mapsUrl = shop.maps_url || '#';
-      const mapsOnclick = shop.maps_url
-        ? `onclick="return openLinkPopup(event, '${shop.maps_url.replace(/'/g, "\\'")}')"`
-        : '';
 
       card.innerHTML = `
-        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" ${mapsOnclick}>
+        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link">
           <div class="hero-image">
             <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
             ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
