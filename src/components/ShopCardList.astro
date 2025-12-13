@@ -126,6 +126,7 @@ const { apiBaseUrl = '' } = Astro.props;
     font-weight: 700;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 10;
+    pointer-events: none; /* ★ クリックを透過 */
   }
 
   .shop-card-list :global(.location-badge) {
@@ -145,6 +146,7 @@ const { apiBaseUrl = '' } = Astro.props;
     font-weight: 500;
     color: #1f2937;
     z-index: 10;
+    pointer-events: none; /* ★ クリックを透過 */
   }
 
   .shop-card-list :global(.location-badge svg) {
@@ -683,12 +685,6 @@ const { apiBaseUrl = '' } = Astro.props;
                 <span>${shop.location}</span>
               </div>
             ` : ''}
-            <div class="maps-overlay">
-              <svg fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              <span>Google Mapsで見る</span>
-            </div>
           </div>
         </a>
         <div class="card-body">
