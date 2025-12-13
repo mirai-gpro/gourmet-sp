@@ -188,6 +188,25 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     <footer class="page-footer" id="pageFooter">
       素敵なグルメ体験をお楽しみください &#10024;
     </footer>
+    
+    <!-- デバッグ用：iPhone案内テストボタン -->
+    <button id="debug-ios-btn" style="
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      background: #007aff;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 9998;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    ">
+      📱 iPhone案内テスト
+    </button>
   </div>
 
   <ReservationModal apiBaseUrl={apiBaseUrl} />
@@ -197,6 +216,16 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     let deferredPrompt: any = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
+    
+    // デバッグ用：iPhone案内テストボタン
+    window.addEventListener('DOMContentLoaded', () => {
+      const debugBtn = document.getElementById('debug-ios-btn');
+      if (debugBtn) {
+        debugBtn.addEventListener('click', () => {
+          showIOSInstallGuide();
+        });
+      }
+    });
     
     // iPhone: スタンドアロンモードでない場合、案内を表示
     if (isIOS && !isInStandaloneMode) {
@@ -259,12 +288,79 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             アプリのように快適に使えます
           </div>
           
+          <!-- 操作デモ動画 -->
+          <div id="demo-video-container" style="
+            background: #000;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+          ">
+            <video 
+              src="/ios-install-demo.mp4" 
+              autoplay 
+              loop 
+              muted 
+              playsinline
+              style="width: 100%; height: auto; display: block;"
+              onloadeddata="this.parentElement.style.display='block'"
+              onerror="this.parentElement.style.display='none'"
+            ></video>
+          </div>
+          
           <div style="text-align: left; background: #f5f5f5; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
             <div style="font-size: 13px; color: #333; margin-bottom: 12px; font-weight: 600;">
               📱 インストール手順
             </div>
             
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+            <!-- Safari画面イラスト -->
+            <div style="
+              background: white;
+              border: 2px solid #ddd;
+              border-radius: 12px;
+              padding: 8px;
+              margin-bottom: 16px;
+              position: relative;
+            ">
+              <div style="text-align: center; padding: 40px 20px; color: #999; font-size: 12px;">
+                このページ（Safari画面）
+              </div>
+              <div style="
+                position: absolute;
+                bottom: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #007aff;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                box-shadow: 0 2px 8px rgba(0,122,255,0.5);
+              ">
+                <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                  <path d="M7 1L7 10M7 1L4 4M7 1L10 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M2 10L2 13C2 13.5523 2.44772 14 3 14L11 14C11.5523 14 12 13.5523 12 13L12 10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                ここをタップ
+              </div>
+              <div style="
+                position: absolute;
+                bottom: -25px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 10px;
+                color: #007aff;
+                font-weight: 700;
+                white-space: nowrap;
+              ">↑ 共有ボタン（画面一番下の中央）</div>
+            </div>
+            
+            <div style="height: 20px;"></div>
+            
+            <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px;">
               <div style="
                 background: #667eea;
                 color: white;
@@ -278,8 +374,19 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
                 font-weight: 700;
                 flex-shrink: 0;
               ">1</div>
-              <div style="font-size: 13px; color: #555;">
-                画面下部の <span style="font-weight: 600;">共有ボタン</span> をタップ
+              <div style="flex: 1;">
+                <div style="font-size: 13px; color: #555; margin-bottom: 6px;">
+                  画面下部の <span style="display: inline-flex; align-items: center; background: #007aff; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">
+                    <svg width="12" height="14" viewBox="0 0 12 14" fill="none" style="margin-right: 4px;">
+                      <path d="M6 0L6 9M6 0L3 3M6 0L9 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M1 9L1 12C1 12.5523 1.44772 13 2 13L10 13C10.5523 13 11 12.5523 11 12L11 9" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    共有
+                  </span> ボタンをタップ
+                </div>
+                <div style="font-size: 11px; color: #999;">
+                  ※Safari画面の一番下、中央にあるボタンです
+                </div>
               </div>
             </div>
             
