@@ -1496,6 +1496,17 @@ const { apiBaseUrl = '' } = Astro.props;
       // UI状態をリセット
       voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
+      
+      // ★★★ 入力欄をクリアしてフォーカス ★★★
+      userInput.value = '';
+      userInput.focus();
+      
+      // ★★★ チャット画面にスクロール（スマホ対応） ★★★
+      if (window.innerWidth < 1024) {
+        setTimeout(() => {
+          chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
     });
     
     // 最後に初期化を実行
