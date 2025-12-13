@@ -1,0 +1,29 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 青いグラデーション円 -->
+  <defs>
+    <radialGradient id="bgGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#E3F2FD;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#90CAF9;stop-opacity:1" />
+    </radialGradient>
+    <linearGradient id="micGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#42A5F5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1976D2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景円 -->
+  <circle cx="50" cy="50" r="45" fill="url(#bgGradient)" stroke="#42A5F5" stroke-width="2"/>
+  
+  <!-- マイクアイコン（青） -->
+  <g transform="translate(50, 50)">
+    <!-- マイク本体 -->
+    <rect x="-8" y="-18" width="16" height="24" rx="8" fill="url(#micGradient)"/>
+    
+    <!-- マイク下部 -->
+    <path d="M -12 8 Q -12 18 0 18 Q 12 18 12 8" stroke="#1976D2" stroke-width="3" fill="none"/>
+    
+    <!-- スタンド -->
+    <line x1="0" y1="18" x2="0" y2="24" stroke="#1976D2" stroke-width="3"/>
+    <line x1="-8" y1="24" x2="8" y2="24" stroke="#1976D2" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
