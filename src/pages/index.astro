@@ -215,7 +215,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.85);
+        background: rgba(0, 0, 0, 0.5);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -230,9 +230,9 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
           background: white;
           border-radius: 16px;
           padding: 20px;
-          max-width: 90%;
-          width: 340px;
-          max-height: 85vh;
+          max-width: 420px;
+          width: 95%;
+          max-height: 90vh;
           overflow-y: auto;
           text-align: center;
           box-shadow: 0 8px 32px rgba(0,0,0,0.3);
@@ -245,10 +245,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             float: right;
             background: #ff3b30;
             border: none;
-            font-size: 20px;
+            font-size: 16px;
             color: white;
             cursor: pointer;
-            padding: 8px 12px;
+            padding: 8px 16px;
             border-radius: 20px;
             font-weight: 700;
             z-index: 10;
@@ -268,13 +268,12 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             アプリのように快適に使えます
           </div>
           
-          <!-- 操作デモ動画（コンパクト） -->
+          <!-- 操作デモ動画（大きく表示） -->
           <div id="demo-video-container" style="
             background: #000;
             border-radius: 8px;
             margin-bottom: 16px;
             overflow: hidden;
-            max-height: 200px;
           ">
             <video 
               src="/ios-install-demo.mp4" 
@@ -315,22 +314,9 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             </div>
           </div>
           
-          <div style="font-size: 11px; color: #999; margin-bottom: 12px;">
+          <div style="font-size: 11px; color: #999;">
             ※共有ボタンは Safari 画面の一番下にあります
           </div>
-          
-          <!-- 後で追加ボタン -->
-          <button id="ios-install-later" style="
-            background: #f0f0f0;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 13px;
-            color: #666;
-            cursor: pointer;
-            width: 100%;
-          ">後で追加する</button>
         </div>
       `;
       
@@ -347,12 +333,6 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       // 閉じるボタン
       const closeBtn = document.getElementById('ios-install-close');
       closeBtn?.addEventListener('click', () => {
-        modal.remove();
-      });
-      
-      // 後で追加ボタン
-      const laterBtn = document.getElementById('ios-install-later');
-      laterBtn?.addEventListener('click', () => {
         modal.remove();
       });
       
