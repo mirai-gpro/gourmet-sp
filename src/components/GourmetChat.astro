@@ -632,42 +632,38 @@ const { apiBaseUrl = '' } = Astro.props;
           audioContext = null;
         }
         
-        // ★★★ MediaStream: iPhone/PCは維持、Androidのみ破棄 ★★★
-        if (!mediaStream || isAndroid) {
-          // MediaStreamがない、またはAndroidの場合は新規取得
-          if (mediaStream) {
-            mediaStream.getTracks().forEach(track => track.stop());
-            mediaStream = null;
+        // ★★★ MediaStream: 毎回新規取得（シンプルで確実） ★★★
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream = null;
+        }
+        
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+              channelCount: 1, 
+              sampleRate: 16000, 
+              echoCancellation: true, 
+              noiseSuppression: true 
+            } 
+          });
+        } catch (micError: any) {
+          // マイクアクセスエラーの詳細な処理
+          let errorMessage = '';
+          
+          if (micError.name === 'NotAllowedError' || micError.name === 'PermissionDeniedError') {
+            errorMessage = 'マイクの使用が許可されていません。\n\n【解決方法】\n1. ブラウザの設定からマイクを許可\n2. iPhoneの「設定」→「Safari」→「マイク」をONに';
+          } else if (micError.name === 'NotFoundError') {
+            errorMessage = 'マイクが見つかりません。デバイスにマイクが接続されているか確認してください。';
+          } else if (micError.name === 'NotReadableError' || micError.name === 'AbortError') {
+            errorMessage = 'マイクが他のアプリで使用中です。\n\n【解決方法】\n1. 他のブラウザタブを閉じる\n2. 他のアプリを終了\n3. iPhoneを再起動';
+          } else {
+            errorMessage = `マイクエラー: ${micError.message}\n\nページを再読み込みしてください。`;
           }
           
-          try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ 
-              audio: { 
-                channelCount: 1, 
-                sampleRate: 16000, 
-                echoCancellation: true, 
-                noiseSuppression: true 
-              } 
-            });
-          } catch (micError: any) {
-            // マイクアクセスエラーの詳細な処理
-            let errorMessage = '';
-            
-            if (micError.name === 'NotAllowedError' || micError.name === 'PermissionDeniedError') {
-              errorMessage = 'マイクの使用が許可されていません。\n\n【解決方法】\n1. ブラウザの設定からマイクを許可\n2. iPhoneの「設定」→「Safari」→「マイク」をONに';
-            } else if (micError.name === 'NotFoundError') {
-              errorMessage = 'マイクが見つかりません。デバイスにマイクが接続されているか確認してください。';
-            } else if (micError.name === 'NotReadableError' || micError.name === 'AbortError') {
-              errorMessage = 'マイクが他のアプリで使用中です。\n\n【解決方法】\n1. 他のブラウザタブを閉じる\n2. 他のアプリを終了\n3. iPhoneを再起動';
-            } else {
-              errorMessage = `マイクエラー: ${micError.message}\n\nページを再読み込みしてください。`;
-            }
-            
-            addMessage('system', errorMessage);
-            throw micError;
-          }
+          addMessage('system', errorMessage);
+          throw micError;
         }
-        // iPhone/PCの場合は既存のMediaStreamを再利用
         
         audioContext = new AudioContext({ sampleRate: 16000 });
         const source = audioContext.createMediaStreamSource(mediaStream);
@@ -731,7 +727,7 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT() {
       stopVAD();
       
-      // ★★★ Android/iPhone共通: 完全停止（マイク・WebSocket両方） ★★★
+      // ★★★ 全デバイス共通: 完全停止 ★★★
       
       // AudioWorkletNode停止
       if (audioWorkletNode) {
@@ -746,14 +742,11 @@ const { apiBaseUrl = '' } = Astro.props;
         audioContext = null;
       }
       
-      // MediaStream停止
-      // ★ iPhoneでも停止するが、次回startで再利用可能にする
-      if (mediaStream && isAndroid) {
-        // Androidは完全破棄
+      // MediaStream停止（毎回破棄）
+      if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
         mediaStream = null;
       }
-      // iPhoneはMediaStreamを保持（再利用のため）
       
       // WebSocket停止
       if (socket && socket.connected) {
