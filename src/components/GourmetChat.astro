@@ -1238,7 +1238,9 @@ const { apiBaseUrl = '' } = Astro.props;
             setTimeout(() => {
               const shopSection = document.getElementById('shopListSection');
               if (shopSection) {
-                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // ★ behavior: 'auto' に変更（瞬時スクロール）
+                // スムーズスクロール中はタッチイベントが不安定になるため
+                shopSection.scrollIntoView({ behavior: 'auto', block: 'start' });
               }
             }, 300); // DOMレンダリング待ち
           }
