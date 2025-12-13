@@ -731,38 +731,37 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT() {
       stopVAD();
       
-      // ★★★ Android: 完全停止（マイク・WebSocket両方） ★★★
-      if (isAndroid) {
-        // AudioWorkletNode停止
-        if (audioWorkletNode) {
-          audioWorkletNode.port.onmessage = null;
-          audioWorkletNode.disconnect();
-          audioWorkletNode = null;
-        }
-        
-        // AudioContext停止
-        if (audioContext && audioContext.state !== 'closed') {
-          audioContext.close();
-          audioContext = null;
-        }
-        
-        // MediaStream停止
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-          mediaStream = null;
-        }
-        
-        // WebSocket停止
-        if (socket && socket.connected) {
-          socket.emit('stop_stream');
-        }
-      } else {
-        // ★★★ iPhone/PC: WebSocketだけ停止（マイクは継続） ★★★
-        isSendingAudio = false;
-        if (socket && socket.connected) {
-          socket.emit('stop_stream');
-        }
+      // ★★★ Android/iPhone共通: 完全停止（マイク・WebSocket両方） ★★★
+      
+      // AudioWorkletNode停止
+      if (audioWorkletNode) {
+        audioWorkletNode.port.onmessage = null;
+        audioWorkletNode.disconnect();
+        audioWorkletNode = null;
       }
+      
+      // AudioContext停止
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close();
+        audioContext = null;
+      }
+      
+      // MediaStream停止
+      // ★ iPhoneでも停止するが、次回startで再利用可能にする
+      if (mediaStream && isAndroid) {
+        // Androidは完全破棄
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      // iPhoneはMediaStreamを保持（再利用のため）
+      
+      // WebSocket停止
+      if (socket && socket.connected) {
+        socket.emit('stop_stream');
+      }
+      
+      // 音声送信フラグを停止
+      isSendingAudio = false;
       
       isRecording = false; 
       micBtn.classList.remove('recording'); 
@@ -987,7 +986,9 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     async function handleStreamingSTTComplete(transcript: string) {
-      // ★ stopStreamingSTT()を削除（マイクは動き続ける）
+      // ★★★ 音声認識完了後、マイクを自動OFF ★★★
+      stopStreamingSTT();
+      
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
@@ -1238,9 +1239,7 @@ const { apiBaseUrl = '' } = Astro.props;
             setTimeout(() => {
               const shopSection = document.getElementById('shopListSection');
               if (shopSection) {
-                // ★ behavior: 'auto' に変更（瞬時スクロール）
-                // スムーズスクロール中はタッチイベントが不安定になるため
-                shopSection.scrollIntoView({ behavior: 'auto', block: 'start' });
+                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }
             }, 300); // DOMレンダリング待ち
           }
