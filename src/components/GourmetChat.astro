@@ -132,6 +132,18 @@ const { apiBaseUrl = '' } = Astro.props;
     display: flex;
     gap: 12px;
     z-index: 1000;
+    transition: bottom 0.3s ease;
+  }
+  
+  /* ソフトキーボード表示時に上に移動 */
+  .floating-buttons.keyboard-active {
+    bottom: 320px;
+  }
+  
+  @media (max-width: 768px) {
+    .floating-buttons.keyboard-active {
+      bottom: 280px;
+    }
   }
   
   .btn-floating {
@@ -1471,6 +1483,25 @@ const { apiBaseUrl = '' } = Astro.props;
     speakerBtn.addEventListener('click', toggleTTS);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
+    
+    // ★★★ ソフトキーボード表示検知 ★★★
+    const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
+    
+    userInput.addEventListener('focus', () => {
+      // フォーカス時、少し遅延してキーボード表示を検知
+      setTimeout(() => {
+        if (floatingButtons) {
+          floatingButtons.classList.add('keyboard-active');
+        }
+      }, 300);
+    });
+    
+    userInput.addEventListener('blur', () => {
+      // フォーカスが外れたらボタンを元の位置に
+      if (floatingButtons) {
+        floatingButtons.classList.remove('keyboard-active');
+      }
+    });
     
     // ★★★ 中止ボタン ★★★
     stopBtn.addEventListener('click', () => {
