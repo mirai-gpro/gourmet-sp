@@ -689,7 +689,20 @@ const { apiBaseUrl = '' } = Astro.props;
       // Google Map URLの生成
       let mapsUrl = '#';
       if (shop.maps_url) {
-        mapsUrl = shop.maps_url;
+        // ★★★ place_id形式の場合、スマホアプリ対応形式に変換 ★★★
+        if (shop.maps_url.includes('place_id:')) {
+          // place_id:ChIJ... を抽出
+          const placeIdMatch = shop.maps_url.match(/place_id:(ChIJ[\w-]+)/);
+          if (placeIdMatch) {
+            const placeId = placeIdMatch[1];
+            // Google Maps アプリ対応URL
+            mapsUrl = `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${placeId}`;
+          } else {
+            mapsUrl = shop.maps_url;
+          }
+        } else {
+          mapsUrl = shop.maps_url;
+        }
       } else if (shop.latitude && shop.longitude) {
         // 緯度経度がある場合
         mapsUrl = `https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`;
@@ -982,22 +995,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }) as EventListener);
     
-    // ★★★ イベント委譲でGoogle Mapリンクを処理（確実に動作） ★★★
-    document.addEventListener('click', (e: Event) => {
-      const target = e.target as HTMLElement;
-      const link = target.closest('.hero-image-link') as HTMLAnchorElement;
-      
-      if (link) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const url = link.getAttribute('data-maps-url') || link.getAttribute('href');
-        
-        if (url && url !== '#') {
-          // 同じタブで直接遷移
-          window.location.href = url;
-        }
-      }
-    }, { passive: false });
+    // ★★★ デバッグ用：イベント委譲を一時的に無効化 ★★★
+    // ※ 純粋な<a>タグが機能するか確認
   });
 </script>
