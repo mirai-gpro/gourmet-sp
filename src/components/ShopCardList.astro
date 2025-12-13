@@ -37,6 +37,7 @@ const { apiBaseUrl = '' } = Astro.props;
     display: block;
     text-decoration: none;
     position: relative;
+    -webkit-tap-highlight-color: transparent; /* ★ スマホのタップハイライトを無効化 */
   }
 
   /* ヒーロー画像 */
@@ -44,6 +45,19 @@ const { apiBaseUrl = '' } = Astro.props;
     position: relative;
     aspect-ratio: 16/9;
     overflow: hidden;
+    min-height: 200px; /* ★ スマホでもタップしやすい最低高さ */
+  }
+  
+  /* スマホ用：タッチ領域を確保 */
+  @media (max-width: 768px) {
+    .shop-card-list :global(.hero-image) {
+      min-height: 180px;
+    }
+    
+    .shop-card-list :global(.hero-image-link) {
+      min-height: 180px;
+      display: block;
+    }
   }
 
   .shop-card-list :global(.hero-image::after) {
@@ -965,22 +979,25 @@ const { apiBaseUrl = '' } = Astro.props;
       if (event.detail && event.detail.shops) {
         const language = event.detail.language || 'ja';
         manager.displayShops(event.detail.shops, language);
-        
-        // ★★★ スマホ用：Google Mapリンクのクリック処理を強制 ★★★
-        setTimeout(() => {
-          const mapLinks = document.querySelectorAll('.hero-image-link');
-          mapLinks.forEach(link => {
-            link.addEventListener('click', function(e) {
-              const url = this.getAttribute('data-maps-url') || this.getAttribute('href');
-              if (url && url !== '#') {
-                e.preventDefault();
-                // 強制的に新しいウィンドウで開く
-                window.open(url, '_blank', 'noopener,noreferrer');
-              }
-            });
-          });
-        }, 100);
       }
     }) as EventListener);
+    
+    // ★★★ イベント委譲でGoogle Mapリンクを処理（確実に動作） ★★★
+    document.addEventListener('click', (e: Event) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('.hero-image-link') as HTMLAnchorElement;
+      
+      if (link) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const url = link.getAttribute('data-maps-url') || link.getAttribute('href');
+        
+        if (url && url !== '#') {
+          // 同じタブで直接遷移
+          window.location.href = url;
+        }
+      }
+    }, { passive: false });
   });
 </script>
