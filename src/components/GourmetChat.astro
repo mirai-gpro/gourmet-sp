@@ -54,7 +54,6 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* スタイルは変更なしのため省略 */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -159,6 +158,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const apiBase = container.dataset.apiBase || '';
 
+    // スプラッシュ制御
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
     function hideSplash() {
@@ -168,6 +168,7 @@ const { apiBaseUrl = '' } = Astro.props;
     }
     setTimeout(() => hideSplash(), 10000);
 
+    // DOM要素
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -181,6 +182,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     let waitOverlayTimer: number | null = null;
 
+    // 状態変数
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
     let isProcessing = false;
@@ -195,6 +197,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
+    // エコー対策
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     // ★ 修正：AudioContextをグローバルで保持し、使い回す（シングルトン）
@@ -380,10 +383,14 @@ const { apiBaseUrl = '' } = Astro.props;
     async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
+      
       const cleanText = stripMarkdown(text);
+
       try {
         isAISpeaking = true;
-        if (isAndroid && isRecording) { stopStreamingSTT(); }
+        if (isAndroid && isRecording) {
+          stopStreamingSTT();
+        }
         
         voiceStatus.innerHTML = t('voiceStatusSynthesizing');
         voiceStatus.className = 'voice-status speaking';
@@ -401,16 +408,28 @@ const { apiBaseUrl = '' } = Astro.props;
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
               isAISpeaking = false;
+              
               if (autoRestartMic) {
                 if (isAndroid) {
-                  try { await startStreamingSTT(); } catch (error) { showMicPrompt(); }
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
                 } else if (!isRecording) {
-                  try { await startStreamingSTT(); } catch (error) { showMicPrompt(); }
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
                 }
               }
               resolve();
             };
-            ttsPlayer.onerror = () => { isAISpeaking = false; resolve(); };
+            ttsPlayer.onerror = () => { 
+              isAISpeaking = false;
+              resolve(); 
+            };
           });
           if (isUserInteracted) {
             lastAISpeech = normalizeText(cleanText);
@@ -422,7 +441,9 @@ const { apiBaseUrl = '' } = Astro.props;
             voiceStatus.className = 'voice-status stopped';
             isAISpeaking = false;
           }
-        } else { isAISpeaking = false; }
+        } else {
+          isAISpeaking = false;
+        }
       } catch (error) {
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
@@ -446,8 +467,12 @@ const { apiBaseUrl = '' } = Astro.props;
       style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
       document.head.appendChild(style);
       document.body.appendChild(modal);
+      
       const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => { modal.remove(); await toggleRecording(); });
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
       setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
     }
 
@@ -461,7 +486,6 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     // ★★★ 超軽量Base64変換関数（メモリ負荷・スタック溢れ対策） ★★★
-    // 事前計算テーブルを使った最速の実装
     const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -529,13 +553,13 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ AudioWorklet: シンプルな間引き処理 + 0.5秒バッファ ★★★
+        // ★★★ AudioWorklet: シンプルな間引き処理 + 0.25秒バッファ ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // バッファサイズ：0.5秒分（8192）
-    this.bufferSize = 8192;
+    // バッファサイズ：0.25秒分（4096）
+    this.bufferSize = 4096;
     this.buffer = new Int16Array(this.bufferSize); 
     this.writeIndex = 0;
     this.ratio = ${downsampleRatio}; 
