@@ -306,8 +306,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 15 : 35; // iPhone: 15（超敏感）, Android: 35
-    const SILENCE_DURATION = isIOS ? 3500 : 2000; // iPhone: 3.5秒, Android: 2秒
+    const SILENCE_THRESHOLD = isIOS ? 10 : 35; // iPhone: 10（極めて敏感）, Android: 35
+    const SILENCE_DURATION = isIOS ? 5000 : 2000; // iPhone: 5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
@@ -761,12 +761,16 @@ const { apiBaseUrl = '' } = Astro.props;
             await audioContext.close();
           }
           audioContext = null;
+          // ★★★ クローズ後の待機（完全にクリーンアップされるまで） ★★★
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
         
         // ★★★ MediaStream: 毎回新規取得（シンプルで確実） ★★★
         if (mediaStream) {
           mediaStream.getTracks().forEach(track => track.stop());
           mediaStream = null;
+          // ★★★ MediaStream停止後の待機 ★★★
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         try {
@@ -822,7 +826,7 @@ const { apiBaseUrl = '' } = Astro.props;
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 512; // 1024 → 512に縮小（遅延最小化）
+    this.bufferSize = 2048; // バッファサイズ拡大（余裕を持たせる）
     this.buffer = new Int16Array(this.bufferSize);
     this.bufferIndex = 0;
   }
@@ -834,17 +838,26 @@ class AudioProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     if (!channelData || channelData.length === 0) return true;
 
+    // ★★★ 一括変換してバッファに追加 ★★★
     for (let i = 0; i < channelData.length; i++) {
-      const s = Math.max(-1, Math.min(1, channelData[i]));
-      const int16Value = Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF);
-      this.buffer[this.bufferIndex++] = int16Value;
-
+      // バッファオーバーフロー防止
       if (this.bufferIndex >= this.bufferSize) {
-        const chunk = new Int16Array(this.buffer);
-        this.port.postMessage({ audioChunk: chunk });
+        // バッファ満杯：即座に送信
+        this.port.postMessage({ audioChunk: new Int16Array(this.buffer) });
         this.bufferIndex = 0;
       }
+      
+      const s = Math.max(-1, Math.min(1, channelData[i]));
+      this.buffer[this.bufferIndex++] = Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF);
     }
+    
+    // ★★★ 一定サイズに達したら送信 ★★★
+    if (this.bufferIndex >= 1024) {
+      const chunk = new Int16Array(this.buffer.subarray(0, this.bufferIndex));
+      this.port.postMessage({ audioChunk: chunk });
+      this.bufferIndex = 0;
+    }
+    
     return true;
   }
 }
@@ -854,7 +867,15 @@ registerProcessor('audio-processor', AudioProcessor);
         try {
           const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
           const processorUrl = URL.createObjectURL(blob);
-          await audioContext.audioWorklet.addModule(processorUrl);
+          
+          // ★★★ 既に登録されている可能性があるのでtry-catchで囲む ★★★
+          try {
+            await audioContext.audioWorklet.addModule(processorUrl);
+          } catch (moduleError) {
+            // 既に登録済みの場合は無視（エラーにならない）
+            console.log('[AudioWorklet] モジュールは既に登録済み');
+          }
+          
           URL.revokeObjectURL(processorUrl);
         } catch (workletError: any) {
           console.error('[AudioWorklet読み込みエラー]', workletError);
@@ -868,32 +889,23 @@ registerProcessor('audio-processor', AudioProcessor);
           const { audioChunk } = event.data;
           if (!isSendingAudio) return;
           
-          // ★★★ 送信チャンク数をカウント ★★★
-          if (!window.audioChunkCount) window.audioChunkCount = 0;
-          window.audioChunkCount++;
-          
-          // ★★★ Int16Array → Uint8Array（正しい変換） ★★★
+          // ★★★ Int16Array → base64（最速変換） ★★★
           const int16Array = audioChunk;
           const uint8Array = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
           
-          // ★★★ 安全なbase64エンコード ★★★
+          // ★★★ 直接btoa（チャンク分割なし） ★★★
           let binary = '';
-          const chunkSize = 1024;
-          for (let i = 0; i < uint8Array.length; i += chunkSize) {
-            const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-            binary += String.fromCharCode.apply(null, Array.from(chunk));
+          for (let i = 0; i < uint8Array.length; i++) {
+            binary += String.fromCharCode(uint8Array[i]);
           }
           const base64 = btoa(binary);
           
           if (socket && socket.connected) {
             socket.emit('audio_chunk', { chunk: base64 });
-          } else {
-            console.error('[音声送信エラー] WebSocket未接続');
           }
         };
         
         // ★★★ 音声チャンクカウンターをリセット ★★★
-        window.audioChunkCount = 0;
         
         // ★★★ WebSocketセッションのリセット ★★★
         if (socket && socket.connected) {
@@ -959,20 +971,6 @@ registerProcessor('audio-processor', AudioProcessor);
     function stopStreamingSTT() {
       stopVAD();
       
-      // ★★★ 送信チャンク数を詳細表示 ★★★
-      if (window.audioChunkCount !== undefined) {
-        const totalSamples = window.audioChunkCount * 512; // バッファサイズ512
-        const totalSeconds = totalSamples / 16000;
-        console.log(`[iPhone音声送信詳細]`);
-        console.log(`  チャンク数: ${window.audioChunkCount}個`);
-        console.log(`  サンプル数: ${totalSamples}個`);
-        console.log(`  合計時間: ${totalSeconds.toFixed(2)}秒`);
-        console.log(`  デバイス: ${/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iPhone' : 'その他'}`);
-      }
-      
-      // ★★★ 蓄積されたテキストを処理 ★★★
-      const finalText = streamingTranscript || userInput.value;
-      
       // 録音タイマーをクリア
       if (recordingTimer) {
         clearTimeout(recordingTimer);
@@ -1011,11 +1009,6 @@ registerProcessor('audio-processor', AudioProcessor);
       isRecording = false; 
       micBtnFloat.classList.remove('recording'); 
       micBtnFloat.innerHTML = '🎤';
-      
-      // ★★★ テキストがあれば処理実行 ★★★
-      if (finalText && finalText.trim()) {
-        handleStreamingSTTComplete(finalText);
-      }
     }
 
     async function startLegacyRecording() {
@@ -1222,13 +1215,11 @@ registerProcessor('audio-processor', AudioProcessor);
             return;
           }
           
-          // ★★★ is_finalでもすぐに停止せず、テキストを蓄積 ★★★
-          if (is_final) {
-            // 最終結果を入力欄に表示（録音は継続）
-            userInput.value = text;
-            streamingTranscript = text;
+          if (is_final) { 
+            streamingTranscript = text; 
+            handleStreamingSTTComplete(text);
+            currentAISpeech = "";
           } else { 
-            // 中間結果を入力欄に表示
             userInput.value = text;
           }
         });
@@ -1243,7 +1234,8 @@ registerProcessor('audio-processor', AudioProcessor);
     }
 
     async function handleStreamingSTTComplete(transcript: string) {
-      // ★★★ stopStreamingSTT()は呼ばない（VADから呼ばれる） ★★★
+      // ★★★ 音声認識完了後、マイクを自動OFF ★★★
+      stopStreamingSTT();
       
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
