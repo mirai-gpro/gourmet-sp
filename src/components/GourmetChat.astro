@@ -306,8 +306,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 20 : 35; // iPhone: 20（非常に敏感）, Android: 35
-    const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
+    const SILENCE_THRESHOLD = isIOS ? 15 : 35; // iPhone: 15（超敏感）, Android: 35
+    const SILENCE_DURATION = isIOS ? 3500 : 2000; // iPhone: 3.5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
@@ -822,7 +822,7 @@ const { apiBaseUrl = '' } = Astro.props;
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 1024;
+    this.bufferSize = 512; // 1024 → 512に縮小（遅延最小化）
     this.buffer = new Int16Array(this.bufferSize);
     this.bufferIndex = 0;
   }
@@ -959,11 +959,19 @@ registerProcessor('audio-processor', AudioProcessor);
     function stopStreamingSTT() {
       stopVAD();
       
-      // ★★★ 送信チャンク数を表示 ★★★
+      // ★★★ 送信チャンク数を詳細表示 ★★★
       if (window.audioChunkCount !== undefined) {
-        const totalSeconds = (window.audioChunkCount * 1024) / 16000;
-        console.log(`[音声送信] チャンク数: ${window.audioChunkCount}, 合計: ${totalSeconds.toFixed(2)}秒分`);
+        const totalSamples = window.audioChunkCount * 512; // バッファサイズ512
+        const totalSeconds = totalSamples / 16000;
+        console.log(`[iPhone音声送信詳細]`);
+        console.log(`  チャンク数: ${window.audioChunkCount}個`);
+        console.log(`  サンプル数: ${totalSamples}個`);
+        console.log(`  合計時間: ${totalSeconds.toFixed(2)}秒`);
+        console.log(`  デバイス: ${/iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iPhone' : 'その他'}`);
       }
+      
+      // ★★★ 蓄積されたテキストを処理 ★★★
+      const finalText = streamingTranscript || userInput.value;
       
       // 録音タイマーをクリア
       if (recordingTimer) {
@@ -1003,6 +1011,11 @@ registerProcessor('audio-processor', AudioProcessor);
       isRecording = false; 
       micBtnFloat.classList.remove('recording'); 
       micBtnFloat.innerHTML = '🎤';
+      
+      // ★★★ テキストがあれば処理実行 ★★★
+      if (finalText && finalText.trim()) {
+        handleStreamingSTTComplete(finalText);
+      }
     }
 
     async function startLegacyRecording() {
@@ -1209,11 +1222,13 @@ registerProcessor('audio-processor', AudioProcessor);
             return;
           }
           
-          if (is_final) { 
-            streamingTranscript = text; 
-            handleStreamingSTTComplete(text);
-            currentAISpeech = "";
+          // ★★★ is_finalでもすぐに停止せず、テキストを蓄積 ★★★
+          if (is_final) {
+            // 最終結果を入力欄に表示（録音は継続）
+            userInput.value = text;
+            streamingTranscript = text;
           } else { 
+            // 中間結果を入力欄に表示
             userInput.value = text;
           }
         });
@@ -1228,8 +1243,7 @@ registerProcessor('audio-processor', AudioProcessor);
     }
 
     async function handleStreamingSTTComplete(transcript: string) {
-      // ★★★ 音声認識完了後、マイクを自動OFF ★★★
-      stopStreamingSTT();
+      // ★★★ stopStreamingSTT()は呼ばない（VADから呼ばれる） ★★★
       
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
