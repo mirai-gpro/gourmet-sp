@@ -297,7 +297,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // ★★★ エコー対策：直前のAI発話のみ保持（core_logic.py方式） ★★★
+    // ★★★ エコー対策：Chatアプリ用にシンプル化 ★★★
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -706,45 +706,23 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     // AI音声再生中はtrue
 
-    // ★★★ エコー削除ロジック（phone.html main.pyから移植） ★★★
+    // ★★★ エコー対策：汎用チャット用（AI発話を記録して比較） ★★★
     let currentAISpeech = "";
-    // 現在AIが喋っている/喋った内容
 
     function normalizeText(text: string): string {
       // テキストの正規化（空白・記号除去）
       return text.replace(/\s+/g, '').replace(/[、。！？,.!?]/g, '').toLowerCase();
     }
 
+    // チャットアプリ向けのエコー判定（直前のAI発話と一致するか）
     function isSemanticEcho(transcript: string, aiText: string): boolean {
       if (!aiText || !transcript) return false;
       const normTranscript = normalizeText(transcript);
       const normAI = normalizeText(aiText);
       
-      // 1. 完全包含チェック
-      if (normAI.includes(normTranscript) && normTranscript.length > 3) {
-        console.log('[エコー検出] 包含一致:', transcript);
-        return true;
-      }
-      if (normTranscript.includes(normAI) && normAI.length > 3) {
-        console.log('[エコー検出] 包含一致:', transcript);
-        return true;
-      }
-      
-      // 2. 類似度チェック（簡易版：共通部分の長さで判定）
-      const maxLen = Math.max(normTranscript.length, normAI.length);
-      if (maxLen === 0) return false;
-      
-      let matchCount = 0;
-      const minLen = Math.min(normTranscript.length, normAI.length);
-      for (let i = 0; i < minLen; i++) {
-        if (normTranscript[i] === normAI[i]) matchCount++;
-      }
-      
-      const similarity = matchCount / maxLen;
-      if (similarity > 0.5) { // 50%以上一致
-        console.log('[エコー検出] 類似度:', similarity.toFixed(2), transcript);
-        return true;
-      }
+      // 完全一致または強い包含関係のみチェック
+      if (normAI === normTranscript) return true;
+      if (normAI.includes(normTranscript) && normTranscript.length > 5) return true;
       
       return false;
     }
@@ -821,8 +799,10 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         // ネイティブサンプルレートを取得
+        const targetSampleRate = 16000;
         const nativeSampleRate = audioContext.sampleRate;
-        console.log(`[AudioContext] ネイティブサンプルレート: ${nativeSampleRate}Hz`);
+        const downsampleRatio = nativeSampleRate / targetSampleRate;
+        console.log(`[Audio] Native: ${nativeSampleRate}Hz, Target: ${targetSampleRate}Hz, Ratio: ${downsampleRatio}`);
         
         // ★★★ AudioContextの状態確認 ★★★
         if (audioContext.state === 'closed') {
@@ -831,65 +811,48 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         const source = audioContext.createMediaStreamSource(mediaStream);
-        // ★★★ AudioWorkletをインラインで登録（ダウンサンプリング＆バッチ送信） ★★★
+        // ★★★ AudioWorkletをインラインで登録（動的ダウンサンプリング） ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // ★ 修正：バッファサイズを大きく確保（16000 = 1秒分）
+    // ★ バッファサイズ：16kHzで約1秒分確保（16000）
     this.bufferSize = 16000;
-    // ★ リングバッファ：最初に確保して使い回す（GC対策）
     this.buffer = new Int16Array(this.bufferSize); 
     this.writeIndex = 0;
     
-    // ★ 48kHz→16kHzダウンサンプリング用（1/3に間引く）
-    this.ratio = 3;
+    // ★ 外部から注入された比率を使用（動的に比率を決定）
+    this.ratio = ${downsampleRatio}; 
     this.inputSampleCount = 0;
     
-    // ★ 修正：送信トリガー閾値（0.5秒分 = 8000サンプル）
-    // これにより通信回数が従来の半分以下になり、メインスレッドの負荷が下がる
+    // ★ 送信トリガー閾値（0.5秒分 = 8000サンプル）
+    // これにより通信回数が減り、メインスレッドの負荷が下がる
     this.flushThreshold = 8000;
-
-    this.totalSamples = 0;
-    this.chunksSent = 0;
-    this.emptyInputCount = 0;
-    this.processCalls = 0;
   }
 
   process(inputs, outputs, parameters) {
-    this.processCalls++;
     const input = inputs[0];
+    if (!input || input.length === 0) return true;
     
-    if (!input || input.length === 0) {
-      this.emptyInputCount++;
-      return true;
-    }
+    const channelData = input[0];
+    if (!channelData || channelData.length === 0) return true;
     
-    if (input.length > 0) {
-      const channelData = input[0];
-      if (!channelData || channelData.length === 0) {
-        this.emptyInputCount++;
-        return true;
-      }
-      
-      // ★ 48kHz→16kHzダウンサンプリング（1/3に間引く）+ バッチ処理
-      for (let i = 0; i < channelData.length; i++) {
-        this.inputSampleCount++;
-        if (this.inputSampleCount >= this.ratio) {
-          this.inputSampleCount -= this.ratio;
+    // ★ ダウンサンプリング処理 (Nearest Neighbor for performance)
+    for (let i = 0; i < channelData.length; i++) {
+      this.inputSampleCount++;
+      if (this.inputSampleCount >= this.ratio) {
+        this.inputSampleCount -= this.ratio;
 
-          // ★ 修正：閾値（8000サンプル）を超えたら送信
-          if (this.writeIndex >= this.flushThreshold) {
-            this.flush();
-          }
-          
-          // 安全策：バッファオーバーフロー防止（通常はflushでリセットされる）
-          if (this.writeIndex < this.bufferSize) {
-            const s = Math.max(-1, Math.min(1, channelData[i]));
-            const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            this.buffer[this.writeIndex++] = Math.max(-32768, Math.min(32767, int16Value));
-            this.totalSamples++;
-          }
+        // バッファ書き込み
+        if (this.writeIndex < this.bufferSize) {
+          const s = Math.max(-1, Math.min(1, channelData[i]));
+          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          this.buffer[this.writeIndex++] = int16Value;
+        }
+
+        // 閾値を超えたら送信
+        if (this.writeIndex >= this.flushThreshold) {
+          this.flush();
         }
       }
     }
@@ -899,21 +862,11 @@ class AudioProcessor extends AudioWorkletProcessor {
   flush() {
     if (this.writeIndex === 0) return;
 
-    // ★ slice()でコピーして送信（ここだけは避けられないが頻度は低い）
+    // データをコピーして送信
     const chunk = this.buffer.slice(0, this.writeIndex);
+    this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
     
-    this.chunksSent++;
-    this.port.postMessage({
-      audioChunk: chunk,
-      stats: {
-        totalSamples: this.totalSamples,
-        chunksSent: this.chunksSent,
-        emptyInputCount: this.emptyInputCount,
-        processCalls: this.processCalls
-      }
-    }, [chunk.buffer]); // Transferable Objectで転送（高速化）
-    
-    // インデックスをリセット（再利用）
+    // インデックスリセット
     this.writeIndex = 0;
   }
 }
@@ -930,25 +883,30 @@ registerProcessor('audio-processor', AudioProcessor);
           throw workletError;
         }
         
-        // ★★★ AudioWorkletNode作成（processorOptions不要） ★★★
+        // ★★★ AudioWorkletNode作成 ★★★
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
         audioWorkletNode.port.onmessage = (event) => {
-          const { audioChunk, stats } = event.data;
-          console.log('[AudioWorklet] メッセージ受信:', { audioChunkSize: audioChunk?.length, stats: stats });
+          const { audioChunk } = event.data;
           
-          if (!isSendingAudio) return;
+          if (!isSendingAudio || !socket || !socket.connected) return;
           
-          const uint8Array = new Uint8Array(audioChunk.buffer);
-          const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
+          // ★★★ 修正：FileReaderを使って非同期・爆速でBase64化する ★★★
+          // これによりメインスレッドのブロッキング（＝音飛び）を防ぐ
+          const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
+          const reader = new FileReader();
           
-          console.log('[WebSocket] 送信:', { chunkSize: base64.length, sample_rate: 16000, stats: stats });
-          if (socket && socket.connected) {
+          reader.onload = () => {
+            // resultは "data:application/octet-stream;base64,AAAA..." 形式
+            const result = reader.result as string;
+            const base64 = result.split(',')[1]; // ヘッダ除去
+            
             socket.emit('audio_chunk', { 
               chunk: base64,
-              sample_rate: 16000,  // 16kHzで送信
-              stats: stats  // 統計情報を一緒に送信
+              sample_rate: 16000
             });
-          }
+          };
+          
+          reader.readAsDataURL(blob);
         };
         
         source.connect(audioWorkletNode);
@@ -1091,59 +1049,22 @@ registerProcessor('audio-processor', AudioProcessor);
           const data = await response.json();
 
           if (data.success && data.transcript) {
-            // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
-            const transcript = data.transcript;
-            console.log('[エコー判定] 受信transcript:', transcript);
             
-            // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
-            const echoKeywords = [
-              'お店の空席状況',
-              '後ほど私がお店に',
-              '直接電話して確認',
-              'まずはお店のご希望',
-              'もう少し詳しくご希望'
-           
-            ];
-            
-            // いずれかのキーワードを含んでいたら即削除
-            for (const keyword of echoKeywords) {
-              if (transcript.includes(keyword)) {
-                console.log('[固定文言エコー検知!!!] キーワード一致:', keyword);
-                console.log('[固定文言エコー検知!!!] 削除transcript:', transcript);
+            // ★★★ エコー判定（シンプル版） ★★★
+            const normTranscript = normalizeText(data.transcript);
+            if (isSemanticEcho(normTranscript, lastAISpeech)) {
+                console.log('[エコー検知] 無視:', data.transcript);
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                return;
-                // ★ ここで完全終了
-              }
-            }
-
-            // ★★★ 通常のエコー判定（完全一致: core_logic.py方式） ★★★
-            const normTranscript = normalizeText(transcript);
-            console.log('[デバッグ] STT認識:', transcript);
-            console.log('[デバッグ] 正規化後:', normTranscript);
-            console.log('[デバッグ] lastAISpeech:', lastAISpeech);
-            console.log('[デバッグ] 一致判定:', normTranscript === lastAISpeech);
-            if (lastAISpeech && normTranscript === lastAISpeech) {
-                console.log('[エコー検知] 無視:', transcript, '| 直前AI:', lastAISpeech);
-                voiceStatus.innerHTML = t('voiceStatusStopped');
-                voiceStatus.className = 'voice-status stopped';
-                // エコー検知後は lastAISpeech をクリア（連続エコー防止）
                 lastAISpeech = '';
                 return;
             }
 
-            userInput.value = transcript;
+            userInput.value = data.transcript;
             voiceStatus.innerHTML = t('voiceStatusComplete');
             voiceStatus.className = 'voice-status';
             
-            // ★★★ エコーチェック ★★★
-            const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
-            if (echoCheck.some(kw => transcript.includes(kw))) {
-              return;
-              // エコーなので何もしない
-            }
-            
-            addMessage('user', transcript);
+            addMessage('user', data.transcript);
             // 1. 日時チェック
             // @ts-ignore
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
@@ -1211,7 +1132,6 @@ registerProcessor('audio-processor', AudioProcessor);
               firstAckPromise = new Promise<void>((resolve) => {
                 // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
                 lastAISpeech = normalizeText(ack.text);
-                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
   
                 ttsPlayer.onended = () => resolve();
@@ -1280,37 +1200,12 @@ registerProcessor('audio-processor', AudioProcessor);
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
 
-      // ★★★ 固定文言の狙い撃ちエコー判定（超厳格版） ★★★
-      
-      // 固定文言の特徴的なフレーズ（短いキーワードで確実に捕捉）
-      const echoKeywords = [
-        'お店の空席状況',
-        '後ほど私がお店に',
-        '直接電話して確認',
-        'まずはお店のご希望',
-        'もう少し詳しくご希望'
-      ];
-      // いずれかのキーワードを含んでいたら即削除
-      for (const keyword of echoKeywords) {
-        if (transcript.includes(keyword)) {
-          voiceStatus.innerHTML = t('voiceStatusStopped');
-          voiceStatus.className = 'voice-status stopped';
-          return; // ★ ここで完全終了
-        }
-      }
-
-
-      // ★★★ エコー判定（完全一致: core_logic.py方式） ★★★
+      // ★★★ エコー判定（シンプル版） ★★★
       const normTranscript = normalizeText(transcript);
-      console.log('[デバッグWS] STT認識:', transcript);
-      console.log('[デバッグWS] 正規化後:', normTranscript);
-      console.log('[デバッグWS] lastAISpeech:', lastAISpeech);
-      console.log('[デバッグWS] 一致判定:', normTranscript === lastAISpeech);
-      if (lastAISpeech && normTranscript === lastAISpeech) {
-          console.log('[エコー検知WS] 無視:', transcript, '| 直前AI:', lastAISpeech);
+      if (isSemanticEcho(normTranscript, lastAISpeech)) {
+          console.log('[エコー検知WS] 無視:', transcript);
           voiceStatus.innerHTML = t('voiceStatusStopped');
           voiceStatus.className = 'voice-status stopped';
-          // エコー検知後は lastAISpeech をクリア
           lastAISpeech = '';
           return;
       }
@@ -1336,14 +1231,6 @@ registerProcessor('audio-processor', AudioProcessor);
         return;
       }
 
-      // 通常フロー
-      // ★★★ エコーチェック ★★★
-      const echoCheck = ['お店の空席状況', '後ほど私がお店に', '直接電話して確認', 'まずはお店のご希望', 'もう少し詳しくご希望'];
-      if (echoCheck.some(kw => transcript.includes(kw))) {
-        return;
-        // エコーなので何もしない
-      }
-      
       addMessage('user', transcript);
       const textLength = transcript.trim().replace(/\s+/g, '').length;
       if (textLength < 4) {
@@ -1374,7 +1261,6 @@ registerProcessor('audio-processor', AudioProcessor);
         firstAckPromise = new Promise<void>((resolve) => {
           // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
           lastAISpeech = normalizeText(ack.text);
-          console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
           ttsPlayer.onended = () => resolve();
           ttsPlayer.play().catch(e => resolve());
@@ -1398,45 +1284,14 @@ registerProcessor('audio-processor', AudioProcessor);
             addMessage('assistant', additionalResponse);
           }, 3000);
           
-          // ★★★ sendMessage前にuserInputをエコーチェック ★★★
           if (userInput.value.trim()) {
-         
-            const echoKeywords = [
-              'お店の空席状況',
-              '後ほど私がお店に',
-              '直接電話して確認',
-              'まずはお店のご希望',
-              'もう少し詳しくご希望'
-            ];
-            
-            const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
-            
-            if (!isEcho) {
-              isFromVoiceInput = true;
-              sendMessage();
-            } else {
-              userInput.value = '';
-              // エコーなのでクリア
-            }
+            isFromVoiceInput = true;
+            sendMessage();
           }
         } catch (error) { 
-          if (userInput.value.trim()) { 
-            const echoKeywords = [
-              'お店の空席状況',
-              '後ほど私がお店に',
-         
-              '直接電話して確認',
-              'まずはお店のご希望',
-              'もう少し詳しくご希望'
-            ];
-            const isEcho = echoKeywords.some(keyword => userInput.value.includes(keyword));
-            
-            if (!isEcho) {
-              isFromVoiceInput = true;
-              sendMessage();
-            } else {
-              userInput.value = '';
-            }
+          if (userInput.value.trim()) {
+            isFromVoiceInput = true;
+            sendMessage();
           }
         }
       })();
@@ -1487,7 +1342,6 @@ registerProcessor('audio-processor', AudioProcessor);
               firstAckPromise = new Promise<void>((resolve) => {
                 // ★★★ preGeneratedAudio再生時もlastAISpeechに記録 ★★★
                 lastAISpeech = normalizeText(ack.text);
-                console.log('[エコー対策] AI発話記録(preGen):', lastAISpeech);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
     
                 ttsPlayer.onended = () => resolve();
