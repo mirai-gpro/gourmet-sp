@@ -306,7 +306,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 30 : 35; // iPhone: 30に下げる（小さい音も拾う）
+    const SILENCE_THRESHOLD = isIOS ? 20 : 35; // iPhone: 20（非常に敏感）, Android: 35
     const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
@@ -664,7 +664,11 @@ const { apiBaseUrl = '' } = Astro.props;
 
     async function toggleRecording() {
       enableAudioPlayback(); stopCurrentAudio();
-      if (isRecording) { stopStreamingSTT(); return; }
+      if (isRecording) { 
+        // ★★★ マイクボタンで停止時も中止処理を実行 ★★★
+        stopAllActivities();
+        return; 
+      }
       if (isStreamingSTT) { await new Promise(r => setTimeout(r, 100)); await startStreamingSTT(); }
       else { await startLegacyRecording(); }
     }
@@ -821,6 +825,9 @@ const { apiBaseUrl = '' } = Astro.props;
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
         
+        // ★★★ isSendingAudioをtrueに（音声送信を開始） ★★★
+        isSendingAudio = true;
+        
         // ★★★ WebSocketセッションのリセット ★★★
         if (socket && socket.connected) {
           // 古いセッションがあれば確実に停止
@@ -831,9 +838,6 @@ const { apiBaseUrl = '' } = Astro.props;
         
         console.log('[startStreamingSTT] start_stream送信前 socket.connected:', socket?.connected);
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
-        
-        // ★★★ isSendingAudioをtrueに ★★★
-        isSendingAudio = true;
         
         isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         
@@ -1537,9 +1541,9 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     });
     
-    // ★★★ 中止ボタン ★★★
-    stopBtn.addEventListener('click', () => {
-      // ★★★ 録音タイマーをクリア ★★★
+    // ★★★ 中止処理（共通関数） ★★★
+    function stopAllActivities() {
+      // 録音タイマーをクリア
       if (recordingTimer) {
         clearTimeout(recordingTimer);
         recordingTimer = null;
@@ -1568,16 +1572,21 @@ const { apiBaseUrl = '' } = Astro.props;
       voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
       
-      // ★★★ 入力欄をクリアしてフォーカス ★★★
+      // 入力欄をクリアしてフォーカス
       userInput.value = '';
       userInput.focus();
       
-      // ★★★ チャット画面にスクロール（スマホ対応） ★★★
+      // チャット画面にスクロール（スマホ対応）
       if (window.innerWidth < 1024) {
         setTimeout(() => {
           chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       }
+    }
+    
+    // ★★★ 中止ボタン ★★★
+    stopBtn.addEventListener('click', () => {
+      stopAllActivities();
     });
     
     // 最後に初期化を実行
