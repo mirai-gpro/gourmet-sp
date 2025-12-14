@@ -832,28 +832,17 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ AudioWorkletをインラインで登録（ダウンサンプリング対応） ★★★
+        // ★★★ AudioWorkletをインラインで登録（48kHzそのまま送信） ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    this.targetSampleRate = 16000;
-    this.sourceSampleRate = options.processorOptions.sourceSampleRate;
-    this.ratio = this.sourceSampleRate / this.targetSampleRate;
-    
     this.bufferSize = 4096;
     this.buffer = [];
     this.totalSamples = 0;
     this.chunksSent = 0;
     this.emptyInputCount = 0;
     this.processCalls = 0;
-    this.inputSampleCount = 0; // ダウンサンプリング用カウンタ
-    
-    console.log('[AudioWorklet] 初期化:', {
-      sourceSampleRate: this.sourceSampleRate,
-      targetSampleRate: this.targetSampleRate,
-      ratio: this.ratio
-    });
   }
 
   process(inputs, outputs, parameters) {
@@ -874,21 +863,14 @@ class AudioProcessor extends AudioWorkletProcessor {
         return true;
       }
       
-      // ★★★ ダウンサンプリング：ratio分の1に間引く ★★★
+      // ★★★ 48kHzそのまま送信（ダウンサンプリングしない） ★★★
       for (let i = 0; i < channelData.length; i++) {
-        this.inputSampleCount++;
+        // Float32 (-1.0 ~ 1.0) → Int16 (-32768 ~ 32767)
+        const s = Math.max(-1, Math.min(1, channelData[i]));
+        const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
         
-        // ratioサンプルごとに1つだけ取得（例：44100→16000なら2.75625サンプルに1つ）
-        if (this.inputSampleCount >= this.ratio) {
-          this.inputSampleCount -= this.ratio;
-          
-          // Float32 (-1.0 ~ 1.0) → Int16 (-32768 ~ 32767)
-          const s = Math.max(-1, Math.min(1, channelData[i]));
-          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          
-          this.buffer.push(int16Value);
-          this.totalSamples++;
-        }
+        this.buffer.push(int16Value);
+        this.totalSamples++;
       }
       
       // 4096サンプル溜まったら送信
@@ -922,12 +904,8 @@ registerProcessor('audio-processor', AudioProcessor);
           throw workletError;
         }
         
-        // ★★★ AudioWorkletNodeにsourceSampleRateを渡す ★★★
-        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor', {
-          processorOptions: {
-            sourceSampleRate: nativeSampleRate
-          }
-        });
+        // ★★★ AudioWorkletNode作成（processorOptions不要） ★★★
+        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
         
         audioWorkletNode.port.onmessage = (event) => {
           const { audioChunk, stats } = event.data;
@@ -939,6 +917,7 @@ registerProcessor('audio-processor', AudioProcessor);
           if (socket && socket.connected) {
             socket.emit('audio_chunk', { 
               chunk: base64,
+              sample_rate: 48000,  // 48kHzで送信
               stats: stats  // 統計情報を一緒に送信
             });
           }
