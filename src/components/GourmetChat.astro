@@ -781,13 +781,12 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         try {
-          // ★★★ sampleRate指定を削除してネイティブレートで取得 ★★★
+          // ★★★ iOS音声処理による途切れ対策：すべてfalseに ★★★
           const audioConstraints: any = { 
             channelCount: 1,
-            // sampleRate: 16000, ← 削除！iOSの処理落ち対策
-            echoCancellation: true, 
-            noiseSuppression: true,
-            autoGainControl: true
+            echoCancellation: false,    // エコーキャンセル無効
+            noiseSuppression: false,    // ノイズ抑制無効
+            autoGainControl: false      // 自動ゲイン調整無効（これが最重要！）
           };
           
           mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -835,10 +834,17 @@ const { apiBaseUrl = '' } = Astro.props;
         // ★★★ AudioWorkletをインラインで登録（48kHzそのまま送信） ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
-  constructor(options) {
+  constructor() {
     super();
-    this.bufferSize = 4096;
-    this.buffer = [];
+    this.bufferSize = 4096;  // 16kHzで約0.256秒
+    // ★ リングバッファ：最初に確保して使い回す（GC対策）
+    this.buffer = new Int16Array(this.bufferSize * 2);
+    this.writeIndex = 0;
+    
+    // ★ 48kHz→16kHzダウンサンプリング用（1/3に間引く）
+    this.ratio = 3;
+    this.inputSampleCount = 0;
+    
     this.totalSamples = 0;
     this.chunksSent = 0;
     this.emptyInputCount = 0;
@@ -863,32 +869,46 @@ class AudioProcessor extends AudioWorkletProcessor {
         return true;
       }
       
-      // ★★★ 48kHzそのまま送信（ダウンサンプリングしない） ★★★
+      // ★ 48kHz→16kHzダウンサンプリング（1/3に間引く）+ リングバッファ
       for (let i = 0; i < channelData.length; i++) {
-        // Float32 (-1.0 ~ 1.0) → Int16 (-32768 ~ 32767)
-        const s = Math.max(-1, Math.min(1, channelData[i]));
-        const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        
-        this.buffer.push(int16Value);
-        this.totalSamples++;
-      }
-      
-      // 4096サンプル溜まったら送信
-      if (this.buffer.length >= this.bufferSize) {
-        const chunk = new Int16Array(this.buffer.splice(0, this.bufferSize));
-        this.chunksSent++;
-        this.port.postMessage({ 
-          audioChunk: chunk,
-          stats: {
-            totalSamples: this.totalSamples,
-            chunksSent: this.chunksSent,
-            emptyInputCount: this.emptyInputCount,
-            processCalls: this.processCalls
+        this.inputSampleCount++;
+        if (this.inputSampleCount >= this.ratio) {
+          this.inputSampleCount -= this.ratio;
+          
+          // バッファがいっぱいなら送信
+          if (this.writeIndex >= this.bufferSize) {
+            this.flush();
           }
-        });
+          
+          const s = Math.max(-1, Math.min(1, channelData[i]));
+          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          this.buffer[this.writeIndex++] = Math.max(-32768, Math.min(32767, int16Value));
+          this.totalSamples++;
+        }
       }
     }
     return true;
+  }
+  
+  flush() {
+    if (this.writeIndex === 0) return;
+    
+    // ★ slice()でコピー（ここだけは避けられないが頻度は低い）
+    const chunk = this.buffer.slice(0, this.writeIndex);
+    
+    this.chunksSent++;
+    this.port.postMessage({
+      audioChunk: chunk,
+      stats: {
+        totalSamples: this.totalSamples,
+        chunksSent: this.chunksSent,
+        emptyInputCount: this.emptyInputCount,
+        processCalls: this.processCalls
+      }
+    }, [chunk.buffer]); // Transferable Objectで転送（高速化）
+    
+    // インデックスをリセット
+    this.writeIndex = 0;
   }
 }
 registerProcessor('audio-processor', AudioProcessor);
@@ -909,15 +929,19 @@ registerProcessor('audio-processor', AudioProcessor);
         
         audioWorkletNode.port.onmessage = (event) => {
           const { audioChunk, stats } = event.data;
+          console.log('[AudioWorklet] メッセージ受信:', { audioChunkSize: audioChunk?.length, stats: stats });
+          
           if (!isSendingAudio) return;
           
           const uint8Array = new Uint8Array(audioChunk.buffer);
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           
+          console.log('[WebSocket] 送信:', { chunkSize: base64.length, sample_rate: 16000, stats: stats });
+          
           if (socket && socket.connected) {
             socket.emit('audio_chunk', { 
               chunk: base64,
-              sample_rate: 48000,  // 48kHzで送信
+              sample_rate: 16000,  // 16kHzで送信
               stats: stats  // 統計情報を一緒に送信
             });
           }
@@ -950,7 +974,7 @@ registerProcessor('audio-processor', AudioProcessor);
         
         socket.emit('start_stream', { 
           language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
-          sample_rate: 16000  // バックエンドには常に16kHzで送信
+          sample_rate: 16000  // 16kHzで送信
         });
         
         // ★★★ isSendingAudioをtrueに ★★★
