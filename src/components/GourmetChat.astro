@@ -306,8 +306,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 10 : 35; // iPhone: 10（極めて敏感）, Android: 35
-    const SILENCE_DURATION = isIOS ? 5000 : 2000; // iPhone: 5秒, Android: 2秒
+    const SILENCE_THRESHOLD = isIOS ? 30 : 35; // iPhone: 30, Android: 35
+    const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
@@ -756,21 +756,16 @@ const { apiBaseUrl = '' } = Astro.props;
           audioWorkletNode = null;
         }
         if (audioContext) {
-          // ★★★ 状態に関わらず確実にクローズしてnullに ★★★
           if (audioContext.state !== 'closed') {
             await audioContext.close();
           }
           audioContext = null;
-          // ★★★ クローズ後の待機（完全にクリーンアップされるまで） ★★★
-          await new Promise(resolve => setTimeout(resolve, 100));
         }
         
-        // ★★★ MediaStream: 毎回新規取得（シンプルで確実） ★★★
+        // ★★★ MediaStream: 毎回新規取得 ★★★
         if (mediaStream) {
           mediaStream.getTracks().forEach(track => track.stop());
           mediaStream = null;
-          // ★★★ MediaStream停止後の待機 ★★★
-          await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         try {
@@ -821,43 +816,33 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ AudioWorkletをインラインで登録（パス問題を回避） ★★★
+        // ★★★ AudioWorkletをインラインで登録 ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 2048; // バッファサイズ拡大（余裕を持たせる）
-    this.buffer = new Int16Array(this.bufferSize);
-    this.bufferIndex = 0;
+    this.bufferSize = 4096;
+    this.buffer = [];
   }
 
   process(inputs, outputs, parameters) {
     const input = inputs[0];
-    if (!input || input.length === 0) return true;
-    
-    const channelData = input[0];
-    if (!channelData || channelData.length === 0) return true;
-
-    // ★★★ 一括変換してバッファに追加 ★★★
-    for (let i = 0; i < channelData.length; i++) {
-      // バッファオーバーフロー防止
-      if (this.bufferIndex >= this.bufferSize) {
-        // バッファ満杯：即座に送信
-        this.port.postMessage({ audioChunk: new Int16Array(this.buffer) });
-        this.bufferIndex = 0;
+    if (input.length > 0) {
+      const channelData = input[0];
+      const int16Data = new Int16Array(channelData.length);
+      
+      for (let i = 0; i < channelData.length; i++) {
+        const s = Math.max(-1, Math.min(1, channelData[i]));
+        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
       
-      const s = Math.max(-1, Math.min(1, channelData[i]));
-      this.buffer[this.bufferIndex++] = Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF);
+      this.buffer.push(...int16Data);
+      
+      if (this.buffer.length >= this.bufferSize) {
+        const chunk = new Int16Array(this.buffer.splice(0, this.bufferSize));
+        this.port.postMessage({ audioChunk: chunk });
+      }
     }
-    
-    // ★★★ 一定サイズに達したら送信 ★★★
-    if (this.bufferIndex >= 1024) {
-      const chunk = new Int16Array(this.buffer.subarray(0, this.bufferIndex));
-      this.port.postMessage({ audioChunk: chunk });
-      this.bufferIndex = 0;
-    }
-    
     return true;
   }
 }
@@ -867,18 +852,9 @@ registerProcessor('audio-processor', AudioProcessor);
         try {
           const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
           const processorUrl = URL.createObjectURL(blob);
-          
-          // ★★★ 既に登録されている可能性があるのでtry-catchで囲む ★★★
-          try {
-            await audioContext.audioWorklet.addModule(processorUrl);
-          } catch (moduleError) {
-            // 既に登録済みの場合は無視（エラーにならない）
-            console.log('[AudioWorklet] モジュールは既に登録済み');
-          }
-          
+          await audioContext.audioWorklet.addModule(processorUrl);
           URL.revokeObjectURL(processorUrl);
         } catch (workletError: any) {
-          console.error('[AudioWorklet読み込みエラー]', workletError);
           addMessage('system', `音声処理の初期化に失敗: ${workletError.message || workletError}`);
           throw workletError;
         }
@@ -889,45 +865,14 @@ registerProcessor('audio-processor', AudioProcessor);
           const { audioChunk } = event.data;
           if (!isSendingAudio) return;
           
-          // ★★★ Int16Array → base64（最速変換） ★★★
-          const int16Array = audioChunk;
-          const uint8Array = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
-          
-          // ★★★ 直接btoa（チャンク分割なし） ★★★
-          let binary = '';
-          for (let i = 0; i < uint8Array.length; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
-          }
-          const base64 = btoa(binary);
+          const uint8Array = new Uint8Array(audioChunk.buffer);
+          const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           
           if (socket && socket.connected) {
             socket.emit('audio_chunk', { chunk: base64 });
           }
         };
         
-        // ★★★ 音声チャンクカウンターをリセット ★★★
-        
-        // ★★★ WebSocketセッションのリセット ★★★
-        if (socket && socket.connected) {
-          // 古いセッションがあれば確実に停止
-          socket.emit('stop_stream');
-          // 少し待ってから新しいセッション開始
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        // ★★★ start_stream送信（音声接続前に！） ★★★
-        socket.emit('start_stream', { 
-          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
-          sample_rate: sampleRate
-        });
-        
-        // ★★★ 短い待機（バックエンドの準備を待つ） ★★★
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        // ★★★ isSendingAudioをtrueに（音声接続前に！） ★★★
-        isSendingAudio = true;
-        
-        // ★★★ ここから音声が流れ始める ★★★
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
         analyser = audioContext.createAnalyser();
@@ -944,6 +889,22 @@ registerProcessor('audio-processor', AudioProcessor);
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
+        
+        // ★★★ 音声チャンクカウンターをリセット ★★★
+        
+        // ★★★ WebSocketセッションのリセット ★★★
+        if (socket && socket.connected) {
+          socket.emit('stop_stream');
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        socket.emit('start_stream', { 
+          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+          sample_rate: sampleRate
+        });
+        
+        // ★★★ isSendingAudioをtrueに ★★★
+        isSendingAudio = true;
         
         isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         
