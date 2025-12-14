@@ -663,15 +663,17 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     async function toggleRecording() {
-      enableAudioPlayback(); stopCurrentAudio();
+      enableAudioPlayback(); 
+      
+      // ★★★ AI話中でも入力欄をクリア ★★★
+      userInput.value = '';
+      
+      stopCurrentAudio();
       if (isRecording) { 
         // ★★★ マイクボタンで停止時も中止処理を実行 ★★★
         stopAllActivities();
         return; 
       }
-      
-      // ★★★ 録音開始前に入力欄をクリア ★★★
-      userInput.value = '';
       
       if (isStreamingSTT) { await new Promise(r => setTimeout(r, 100)); await startStreamingSTT(); }
       else { await startLegacyRecording(); }
@@ -753,8 +755,11 @@ const { apiBaseUrl = '' } = Astro.props;
           audioWorkletNode.disconnect();
           audioWorkletNode = null;
         }
-        if (audioContext && audioContext.state !== 'closed') {
-          await audioContext.close();
+        if (audioContext) {
+          // ★★★ 状態に関わらず確実にクローズしてnullに ★★★
+          if (audioContext.state !== 'closed') {
+            await audioContext.close();
+          }
           audioContext = null;
         }
         
@@ -795,9 +800,21 @@ const { apiBaseUrl = '' } = Astro.props;
           throw micError;
         }
         
-        // ★★★ テスト：全デバイス16000Hz ★★★
+        // ★★★ AudioContext作成（エラーハンドリング強化） ★★★
         const sampleRate = 16000;
-        audioContext = new AudioContext({ sampleRate: sampleRate });
+        try {
+          audioContext = new AudioContext({ sampleRate: sampleRate });
+        } catch (contextError: any) {
+          addMessage('system', 'AudioContext作成エラー。ページを再読み込みしてください。');
+          throw contextError;
+        }
+        
+        // ★★★ AudioContextの状態確認 ★★★
+        if (audioContext.state === 'closed') {
+          addMessage('system', 'AudioContextがクローズされています。ページを再読み込みしてください。');
+          throw new Error('AudioContext is closed');
+        }
+        
         const source = audioContext.createMediaStreamSource(mediaStream);
         
         try {
