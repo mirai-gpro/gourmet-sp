@@ -306,7 +306,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 50 : 35;
+    const SILENCE_THRESHOLD = isIOS ? 30 : 35; // iPhone: 30に下げる（小さい音も拾う）
     const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
@@ -733,12 +733,10 @@ const { apiBaseUrl = '' } = Astro.props;
 
     async function startStreamingSTT() {
       try {
-        // ★★★ 古い録音タイマーをクリア（デバッグログ付き） ★★★
-        debugLog(`[startStreamingSTT] 開始時 recordingTimer: ${recordingTimer}`);
+        // 古い録音タイマーをクリア
         if (recordingTimer) {
           clearTimeout(recordingTimer);
           recordingTimer = null;
-          debugLog('[startStreamingSTT] 古いタイマーをクリア');
         }
         
         // ★★★ AudioWorkletNodeとAudioContextをクリーンアップ ★★★
@@ -818,6 +816,7 @@ const { apiBaseUrl = '' } = Astro.props;
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
@@ -830,16 +829,13 @@ const { apiBaseUrl = '' } = Astro.props;
         
         isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         
-        // ★★★ 録音タイマー設定（デバッグログ付き） ★★★
-        debugLog(`[録音タイマー] 設定前 recordingTimer: ${recordingTimer}`);
+        // 録音タイマー設定
         recordingTimer = window.setTimeout(() => { 
-          debugLog('[録音タイマー] 55秒経過で発火');
           if (isRecording) { 
             stopStreamingSTT(); 
             addMessage('system', t('recordingTimeLimit')); 
           } 
         }, MAX_RECORDING_TIME);
-        debugLog(`[録音タイマー] 設定後 recordingTimer: ${recordingTimer}`);
       } catch (error: any) {
         // エラー時はMediaStreamをクリーンアップ（次回は再取得）
         if (mediaStream) {
@@ -857,12 +853,10 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT() {
       stopVAD();
       
-      // ★★★ 録音タイマーをクリア（デバッグログ付き） ★★★
-      debugLog(`[stopStreamingSTT] タイマークリア前 recordingTimer: ${recordingTimer}`);
+      // 録音タイマーをクリア
       if (recordingTimer) {
         clearTimeout(recordingTimer);
         recordingTimer = null;
-        debugLog('[stopStreamingSTT] タイマークリア完了');
       }
       
       // ★★★ 全デバイス共通: 完全停止 ★★★
