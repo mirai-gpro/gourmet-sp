@@ -830,10 +830,13 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio) return;
           
-          // ★★★ 安全なbase64エンコード（iPhoneで安定） ★★★
-          const uint8Array = new Uint8Array(audioChunk.buffer);
+          // ★★★ Int16Array → Uint8Array（正しい変換） ★★★
+          const int16Array = audioChunk;
+          const uint8Array = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
+          
+          // ★★★ 安全なbase64エンコード ★★★
           let binary = '';
-          const chunkSize = 1024; // 1KBずつ処理
+          const chunkSize = 1024;
           for (let i = 0; i < uint8Array.length; i += chunkSize) {
             const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
             binary += String.fromCharCode.apply(null, Array.from(chunk));
