@@ -297,7 +297,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // ★★★ エコー対策：Chatアプリ用にシンプル化 ★★★
+    // ★★★ エコー対策：汎用チャット用（AI発話を記録して比較） ★★★
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     let audioContext: AudioContext | null = null;
@@ -759,12 +759,13 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         try {
-          // ★★★ 修正：iOSは全OFF（処理落ち防止）、Android/PCは全ON（音質確保） ★★★
+          // ★★★ 修正：autoGainControl: true にして入力感度を確保 ★★★
+          // iOSのエコーキャンセル等の問題よりも、入力レベル不足による音切れを優先して解消
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: isIOS ? false : true,
             noiseSuppression: isIOS ? false : true,
-            autoGainControl: isIOS ? false : true
+            autoGainControl: true // ★ ここをtrueに変更！（重要）
           };
           
           console.log('[Microphone] Constraints:', audioConstraints);
@@ -811,7 +812,8 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         const source = audioContext.createMediaStreamSource(mediaStream);
-        // ★★★ AudioWorkletをインラインで登録（動的ダウンサンプリング） ★★★
+        
+        // ★★★ AudioWorkletをインラインで登録（平均化ダウンサンプリング） ★★★
         const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -821,12 +823,15 @@ class AudioProcessor extends AudioWorkletProcessor {
     this.buffer = new Int16Array(this.bufferSize); 
     this.writeIndex = 0;
     
-    // ★ 外部から注入された比率を使用（動的に比率を決定）
+    // ★ 動的ダウンサンプリング比率
     this.ratio = ${downsampleRatio}; 
     this.inputSampleCount = 0;
     
+    // ★ 平均化のための蓄積変数
+    this.accumulatedValue = 0;
+    this.accumulatedCount = 0;
+    
     // ★ 送信トリガー閾値（0.5秒分 = 8000サンプル）
-    // これにより通信回数が減り、メインスレッドの負荷が下がる
     this.flushThreshold = 8000;
   }
 
@@ -837,15 +842,27 @@ class AudioProcessor extends AudioWorkletProcessor {
     const channelData = input[0];
     if (!channelData || channelData.length === 0) return true;
     
-    // ★ ダウンサンプリング処理 (Nearest Neighbor for performance)
+    // ★ 平均化ダウンサンプリング処理 ★
     for (let i = 0; i < channelData.length; i++) {
+      this.accumulatedValue += channelData[i];
+      this.accumulatedCount++;
+      
       this.inputSampleCount++;
+      
+      // ダウンサンプリングのタイミングが来たら
       if (this.inputSampleCount >= this.ratio) {
         this.inputSampleCount -= this.ratio;
 
+        // 平均値を計算（音質向上）
+        const avgValue = this.accumulatedValue / this.accumulatedCount;
+        
+        // リセット
+        this.accumulatedValue = 0;
+        this.accumulatedCount = 0;
+
         // バッファ書き込み
         if (this.writeIndex < this.bufferSize) {
-          const s = Math.max(-1, Math.min(1, channelData[i]));
+          const s = Math.max(-1, Math.min(1, avgValue));
           const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
           this.buffer[this.writeIndex++] = int16Value;
         }
@@ -890,13 +907,11 @@ registerProcessor('audio-processor', AudioProcessor);
           
           if (!isSendingAudio || !socket || !socket.connected) return;
           
-          // ★★★ 修正：FileReaderを使って非同期・爆速でBase64化する ★★★
-          // これによりメインスレッドのブロッキング（＝音飛び）を防ぐ
+          // ★★★ FileReaderを使って非同期・爆速でBase64化する ★★★
           const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
           const reader = new FileReader();
           
           reader.onload = () => {
-            // resultは "data:application/octet-stream;base64,AAAA..." 形式
             const result = reader.result as string;
             const base64 = result.split(',')[1]; // ヘッダ除去
             
@@ -925,7 +940,6 @@ registerProcessor('audio-processor', AudioProcessor);
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
-        // ★★★ 音声チャンクカウンターをリセット ★★★
         
         // ★★★ WebSocketセッションのリセット ★★★
         if (socket && socket.connected) {
