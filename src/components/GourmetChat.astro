@@ -823,12 +823,29 @@ class AudioProcessor extends AudioWorkletProcessor {
     super();
     this.bufferSize = 4096;
     this.buffer = [];
+    this.totalSamples = 0;
+    this.chunksSent = 0;
+    this.emptyInputCount = 0;
   }
 
   process(inputs, outputs, parameters) {
     const input = inputs[0];
+    
+    // ★★★ 入力が空の場合をカウント ★★★
+    if (!input || input.length === 0) {
+      this.emptyInputCount++;
+      return true;
+    }
+    
     if (input.length > 0) {
       const channelData = input[0];
+      
+      // ★★★ チャンネルデータが空の場合もカウント ★★★
+      if (!channelData || channelData.length === 0) {
+        this.emptyInputCount++;
+        return true;
+      }
+      
       const int16Data = new Int16Array(channelData.length);
       
       for (let i = 0; i < channelData.length; i++) {
@@ -837,10 +854,19 @@ class AudioProcessor extends AudioWorkletProcessor {
       }
       
       this.buffer.push(...int16Data);
+      this.totalSamples += int16Data.length;
       
       if (this.buffer.length >= this.bufferSize) {
         const chunk = new Int16Array(this.buffer.splice(0, this.bufferSize));
-        this.port.postMessage({ audioChunk: chunk });
+        this.chunksSent++;
+        this.port.postMessage({ 
+          audioChunk: chunk,
+          stats: {
+            totalSamples: this.totalSamples,
+            chunksSent: this.chunksSent,
+            emptyInputCount: this.emptyInputCount
+          }
+        });
       }
     }
     return true;
@@ -862,14 +888,17 @@ registerProcessor('audio-processor', AudioProcessor);
         audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
         
         audioWorkletNode.port.onmessage = (event) => {
-          const { audioChunk } = event.data;
+          const { audioChunk, stats } = event.data;
           if (!isSendingAudio) return;
           
           const uint8Array = new Uint8Array(audioChunk.buffer);
           const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
           
           if (socket && socket.connected) {
-            socket.emit('audio_chunk', { chunk: base64 });
+            socket.emit('audio_chunk', { 
+              chunk: base64,
+              stats: stats  // 統計情報を一緒に送信
+            });
           }
         };
         
