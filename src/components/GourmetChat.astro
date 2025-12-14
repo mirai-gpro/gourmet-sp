@@ -49,8 +49,8 @@ const { apiBaseUrl = '' } = Astro.props;
   
   <!-- フローティングボタン（右下固定） -->
   <div class="floating-buttons">
-    <button class="btn-floating btn-stop" id="stopBtn" title="中止">⏹</button>
-    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="音声入力" disabled>🎤</button>
+    <button class="btn-floating btn-stop" id="stopBtn" title="中止"></button>
+    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="音声入力" disabled></button>
   </div>
 </div>
 
@@ -169,6 +169,18 @@ const { apiBaseUrl = '' } = Astro.props;
   .btn-stop {
     background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%);
     color: white;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .btn-stop::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: url('/stop.svg') center/60% no-repeat;
   }
   
   .btn-mic-float {
@@ -659,7 +671,7 @@ const { apiBaseUrl = '' } = Astro.props;
       console.log('VAD Stop'); stopVAD();
       if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
       if (recordingTimer) clearTimeout(recordingTimer);
-      isRecording = false; micBtnFloat.classList.remove('recording'); micBtnFloat.innerHTML = '🎤';
+      isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
     async function toggleRecording() {
@@ -959,13 +971,13 @@ registerProcessor('audio-processor', AudioProcessor);
         
         socket.emit('start_stream', { 
           language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
-          sample_rate: sampleRate
+          sample_rate: 16000  // バックエンドには常に16kHzで送信
         });
         
         // ★★★ isSendingAudioをtrueに ★★★
         isSendingAudio = true;
         
-        isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
+        isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
         
         // 録音タイマー設定
         recordingTimer = window.setTimeout(() => { 
@@ -1027,8 +1039,7 @@ registerProcessor('audio-processor', AudioProcessor);
       isSendingAudio = false;
       
       isRecording = false; 
-      micBtnFloat.classList.remove('recording'); 
-      micBtnFloat.innerHTML = '🎤';
+      micBtnFloat.classList.remove('recording');
     }
 
     async function startLegacyRecording() {
@@ -1057,8 +1068,8 @@ registerProcessor('audio-processor', AudioProcessor);
           if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob); }
         };
         mediaRecorder.start();
-        isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
-        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); micBtnFloat.innerHTML = '🎤'; addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
+        isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
       } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
 
@@ -1145,7 +1156,6 @@ registerProcessor('audio-processor', AudioProcessor);
                 stopStreamingSTT();
                 isRecording = false;
                 micBtnFloat.classList.remove('recording');
-                micBtnFloat.innerHTML = '🎤';
               }
               
               if (isTTSEnabled && isUserInteracted) {
