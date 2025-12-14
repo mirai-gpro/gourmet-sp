@@ -669,6 +669,10 @@ const { apiBaseUrl = '' } = Astro.props;
         stopAllActivities();
         return; 
       }
+      
+      // ★★★ 録音開始前に入力欄をクリア ★★★
+      userInput.value = '';
+      
       if (isStreamingSTT) { await new Promise(r => setTimeout(r, 100)); await startStreamingSTT(); }
       else { await startLegacyRecording(); }
     }
@@ -761,13 +765,17 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         try {
+          // ★★★ テスト：全デバイス16000Hz ★★★
+          const audioConstraints: any = { 
+            channelCount: 1, 
+            sampleRate: 16000,
+            echoCancellation: true, 
+            noiseSuppression: true,
+            autoGainControl: true
+          };
+          
           mediaStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-              channelCount: 1, 
-              sampleRate: 16000, 
-              echoCancellation: true, 
-              noiseSuppression: true 
-            } 
+            audio: audioConstraints
           });
         } catch (micError: any) {
           // マイクアクセスエラーの詳細な処理
@@ -787,7 +795,9 @@ const { apiBaseUrl = '' } = Astro.props;
           throw micError;
         }
         
-        audioContext = new AudioContext({ sampleRate: 16000 });
+        // ★★★ テスト：全デバイス16000Hz ★★★
+        const sampleRate = 16000;
+        audioContext = new AudioContext({ sampleRate: sampleRate });
         const source = audioContext.createMediaStreamSource(mediaStream);
         
         try {
@@ -803,8 +813,16 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio) return;
           
+          // ★★★ 安全なbase64エンコード（iPhoneで安定） ★★★
           const uint8Array = new Uint8Array(audioChunk.buffer);
-          const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
+          let binary = '';
+          const chunkSize = 1024; // 1KBずつ処理
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+            binary += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          const base64 = btoa(binary);
+          
           if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
         };
         
@@ -836,8 +854,10 @@ const { apiBaseUrl = '' } = Astro.props;
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         
-        console.log('[startStreamingSTT] start_stream送信前 socket.connected:', socket?.connected);
-        socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
+        socket.emit('start_stream', { 
+          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+          sample_rate: sampleRate  // サンプルレート情報を追加
+        });
         
         isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         
@@ -1106,7 +1126,6 @@ const { apiBaseUrl = '' } = Astro.props;
           
           // ★★★ AI音声再生中は全て無視 ★★★
           if (isAISpeaking) {
-            console.log('[🔇 AI音声再生中につき無視]', text);
             return;
           }
           
