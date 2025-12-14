@@ -821,6 +821,14 @@ const { apiBaseUrl = '' } = Astro.props;
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
         
+        // ★★★ WebSocketセッションのリセット ★★★
+        if (socket && socket.connected) {
+          // 古いセッションがあれば確実に停止
+          socket.emit('stop_stream');
+          // 少し待ってから新しいセッション開始
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
         console.log('[startStreamingSTT] start_stream送信前 socket.connected:', socket?.connected);
         socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt });
         
@@ -1106,7 +1114,13 @@ const { apiBaseUrl = '' } = Astro.props;
             userInput.value = text;
           }
         });
-        socket.on('error', (data: any) => { addMessage('system', `${t('sttError')} ${data.message}`); });
+        socket.on('error', (data: any) => { 
+          addMessage('system', `${t('sttError')} ${data.message}`);
+          // エラー時はマイクを停止してセッションをリセット
+          if (isRecording) {
+            stopStreamingSTT();
+          }
+        });
       } catch (error) { isStreamingSTT = false; }
     }
 
