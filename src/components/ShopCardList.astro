@@ -8,8 +8,7 @@ const { apiBaseUrl = '' } = Astro.props;
 ---
 
 <div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
-  <!-- ショップカードはJSで動的に追加 -->
-</div>
+  </div>
 
 <style>
   .shop-card-list {
@@ -353,6 +352,34 @@ const { apiBaseUrl = '' } = Astro.props;
     transform: scale(0.98);
   }
 
+  /* ★変更: Instagramボタンのスタイル */
+  .shop-card-list :global(.link-btn.instagram) {
+    /* 左側は白、右に向かってInstagramのブランドカラーにグラデーション */
+    background: linear-gradient(to right, #ffffff 0%, #ffffff 40%, #f09433 65%, #dc2743 85%, #bc1888 100%);
+    color: #1f2937; /* 背景が白くなるため文字は濃い色に変更 */
+    box-shadow: 0 4px 12px rgba(220, 39, 67, 0.15); /* 影を少し控えめに */
+    border: 1px solid #f3f4f6; /* 白背景部分の境界がわかるように薄い枠線を追加 */
+  }
+  
+  .shop-card-list :global(.link-btn.instagram:hover) {
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(220, 39, 67, 0.25);
+  }
+
+  .shop-card-list :global(.link-btn.instagram .link-icon) {
+    background: transparent; /* 背景を透明に */
+    padding: 2px; /* 画像の余白 */
+  }
+
+  /* ★追加: Instagramロゴ画像のスタイル */
+  .shop-card-list :global(.link-btn.instagram .link-icon img) {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); /* ロゴ自体に少し影をつけて立体感を出す */
+  }
+
   .shop-card-list :global(.link-btn.hotpepper) {
     background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
     color: white;
@@ -379,15 +406,15 @@ const { apiBaseUrl = '' } = Astro.props;
     border-color: #fdba74;
   }
 
-/* [変更] TripAdvisorボタンの背景を明るい緑に、文字色を黒（または濃いグレー）にして視認性アップ */
+  /* TripAdvisorボタン */
   .shop-card-list :global(.link-btn.tripadvisor) {
     background: #34E0A1; /* トリップアドバイザーのブランドカラー（明るい緑） */
-    color: #1f2937; /* 背景が明るいため文字は濃い色に変更 */
+    color: #1f2937;
     box-shadow: 0 4px 12px rgba(52, 224, 161, 0.3);
-    border: none; /* ボーダーなし */
+    border: none;
   }
-.shop-card-list :global(.link-btn.tripadvisor:hover) {
-    background: #2dd498; /* ホバー時は少し濃く */
+  .shop-card-list :global(.link-btn.tripadvisor:hover) {
+    background: #2dd498;
   }
 
   .shop-card-list :global(.link-btn-content) {
@@ -424,16 +451,15 @@ const { apiBaseUrl = '' } = Astro.props;
     color: white;
   }
 
-/* [変更] TripAdvisorロゴ画像のスタイル調整 */
   .shop-card-list :global(.link-btn.tripadvisor .link-icon) {
     background: white; /* ロゴが見やすいように白背景 */
-    padding: 4px;      /* 余白 */
-    border-radius: 50%; /* 丸い枠 */
+    padding: 4px;
+    border-radius: 50%;
   }
-.shop-card-list :global(.link-btn.tripadvisor .link-icon img) {
+  .shop-card-list :global(.link-btn.tripadvisor .link-icon img) {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* 横長ロゴが丸枠に収まるように調整 */
+    object-fit: contain;
   }
 
   .shop-card-list :global(.link-text) {
@@ -469,23 +495,22 @@ const { apiBaseUrl = '' } = Astro.props;
     gap: 2px;
   }
 
-/* [変更] TripAdvisor評価の○スタイル（くすんだ緑に変更） */
   .shop-card-list :global(.tripadvisor-rating .circle) {
     width: 14px;
     height: 14px;
-    color: #004F32; /* [要望対応] くすんだ緑（ダークグリーン） */
+    color: #004F32; /* くすんだ緑 */
   }
 
   .shop-card-list :global(.tripadvisor-rating .circle.filled) {
-    color: #004F32; /* 塗りつぶしも同じくすんだ緑 */
+    color: #004F32;
   }
 
   .shop-card-list :global(.tripadvisor-rating .circle.empty) {
-    color: rgba(0, 79, 50, 0.2); /* 空の丸は薄く */
+    color: rgba(0, 79, 50, 0.2);
   }
 
   .shop-card-list :global(.tripadvisor-rating .circle.half) {
-    color: #004F32; /* 半分の丸 */
+    color: #004F32;
   }
 
   /* 空状態 */
@@ -574,6 +599,8 @@ const { apiBaseUrl = '' } = Astro.props;
     private currentLanguage: string = 'ja'; // デフォルトは日本語
     private i18n = {
       ja: {
+        instagramTitle: 'Instagram',       
+        instagramSubtitle: '最新の投稿を見る',
         tripadvisorTitle: 'TripAdvisor',
         tripadvisorSubtitle: 'レビュー・写真',
         tabelogTitle: '食べログ',
@@ -584,6 +611,8 @@ const { apiBaseUrl = '' } = Astro.props;
         gnaviSubtitle: 'お店情報'
       },
       en: {
+        instagramTitle: 'Instagram',       
+        instagramSubtitle: 'Latest Photos', 
         tripadvisorTitle: 'TripAdvisor',
         tripadvisorSubtitle: 'Reviews & Photos',
         tabelogTitle: 'Tabelog',
@@ -594,24 +623,28 @@ const { apiBaseUrl = '' } = Astro.props;
         gnaviSubtitle: 'Restaurant Info'
       },
       zh: {
+        instagramTitle: 'Instagram',       
+        instagramSubtitle: '?看最新照片',  
         tripadvisorTitle: 'TripAdvisor',
-        tripadvisorSubtitle: '$8BC4$8BBA和照片',
+        tripadvisorSubtitle: '??和照片',
         tabelogTitle: 'Tabelog',
-        tabelogSubtitle: '$8BC4$8BBA和$8BC4分',
+        tabelogSubtitle: '??和?分',
         hotpepperTitle: 'Hotpepper',
-        hotpepperSubtitle: '$9884$8BA2和$4F18惠券',
+        hotpepperSubtitle: '??和?惠券',
         gnaviTitle: 'Gnavi',
-        gnaviSubtitle: '餐$5385信息'
+        gnaviSubtitle: '餐?信息'
       },
       ko: {
+        instagramTitle: 'Instagram',       
+        instagramSubtitle: '?? ?? ??', 
         tripadvisorTitle: 'TripAdvisor',
-        tripadvisorSubtitle: '$B9AC$BDF0 $BC0F $C0AC$C9C4',
+        tripadvisorSubtitle: '?? ? ??',
         tabelogTitle: 'Tabelog',
-        tabelogSubtitle: '$B9AC$BDF0 $BC0F $D3C9$C810',
+        tabelogSubtitle: '?? ? ??',
         hotpepperTitle: 'Hotpepper',
-        hotpepperSubtitle: '$C608$C57D $BC0F $CFE0$D3F0',
+        hotpepperSubtitle: '?? ? ??',
         gnaviTitle: 'Gnavi',
-        gnaviSubtitle: '$C74C$C2DD$C810 $C815$BCF4'
+        gnaviSubtitle: '??? ??'
       }
     };
 
@@ -640,7 +673,6 @@ const { apiBaseUrl = '' } = Astro.props;
       }
       console.log('[ShopCardList] Current language:', this.currentLanguage);
       this.container.innerHTML = '';
-
       if (!shops || shops.length === 0) {
         console.log('[ShopCardList] No shops to display');
         this.container.innerHTML = `
@@ -656,7 +688,6 @@ const { apiBaseUrl = '' } = Astro.props;
         const card = this.createShopCard(shop);
         this.container.appendChild(card);
       });
-      
       console.log(`[ShopCardList] ${shops.length} cards created`);
     }
 
@@ -673,16 +704,12 @@ const { apiBaseUrl = '' } = Astro.props;
 
       // デフォルト画像
       const imageUrl = shop.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=450&fit=crop';
-
       // 星の生成
       const starsHtml = this.createStarsHtml(shop.rating || 0);
-
       // おすすめポイントの生成
       const highlightsHtml = this.createHighlightsHtml(shop.highlights || []);
-
       // 来店のポイント
       const tipsHtml = shop.tips ? this.createTipsHtml(shop.tips) : '';
-
       // リンクボタンの生成
       const linksHtml = this.createLinksHtml(shop);
 
@@ -720,8 +747,10 @@ const { apiBaseUrl = '' } = Astro.props;
         <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" data-maps-url="${mapsUrl}">
           <div class="hero-image">
             <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
-            ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
-            ${shop.location ? `
+            ${shop.category ?
+              `<span class="category-badge">${shop.category}</span>` : ''}
+            ${shop.location ?
+              `
               <div class="location-badge">
                 <svg fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
@@ -739,10 +768,12 @@ const { apiBaseUrl = '' } = Astro.props;
               <div class="rating">
                 <div class="stars">${starsHtml}</div>
                 <span class="rating-value">${shop.rating}</span>
-                ${shop.reviewCount ? `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
+                ${shop.reviewCount ?
+                  `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
               </div>
             ` : ''}
-            ${shop.priceRange ? `
+            ${shop.priceRange ?
+              `
               <div class="price-range">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -752,7 +783,8 @@ const { apiBaseUrl = '' } = Astro.props;
             ` : ''}
           </div>
 
-          ${shop.description ? `<p class="description">${shop.description}</p>` : ''}
+          ${shop.description ?
+            `<p class="description">${shop.description}</p>` : ''}
           
           ${highlightsHtml}
           
@@ -786,7 +818,6 @@ const { apiBaseUrl = '' } = Astro.props;
       let html = '';
       const fullCircles = Math.floor(rating);
       const hasHalfCircle = rating % 1 >= 0.5;
-
       for (let i = 0; i < 5; i++) {
         if (i < fullCircles) {
           // 塗りつぶし○
@@ -823,7 +854,6 @@ const { apiBaseUrl = '' } = Astro.props;
     // おすすめポイントの生成
     private createHighlightsHtml(highlights: string[]): string {
       if (highlights.length === 0) return '';
-
       const listItems = highlights.map(h => `
         <li>
           <span class="check-icon">
@@ -834,10 +864,9 @@ const { apiBaseUrl = '' } = Astro.props;
           <span>${h}</span>
         </li>
       `).join('');
-
       return `
         <div class="highlights">
-          <h4>&#10024; おすすめポイント</h4>
+          <h4>? おすすめポイント</h4>
           <ul>${listItems}</ul>
         </div>
       `;
@@ -860,9 +889,33 @@ const { apiBaseUrl = '' } = Astro.props;
       `;
     }
 
-// リンクボタンの生成（URLの有無に基づいて表示）
+    // リンクボタンの生成（URLの有無に基づいて表示）
     private createLinksHtml(shop: ShopData): string {
       const links: string[] = [];
+
+      // 0. Instagram検索 (店名のみで検索)
+      if (shop.name) {
+        const searchKeyword = shop.name;
+        const instaUrl = `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(searchKeyword)}`;
+        
+        // ★変更: アイコン部分をSVGから画像に変更
+        links.push(`
+          <a href="${instaUrl}" target="_blank" rel="noopener noreferrer" class="link-btn instagram" onclick="return openLinkPopup(event, '${instaUrl}')">
+            <div class="link-btn-content">
+              <div class="link-icon">
+                <img src="/instagram-logo.png" alt="Instagram" loading="lazy" />
+              </div>
+              <div class="link-text">
+                <div class="link-title">${this.t('instagramTitle')}</div>
+                <div class="link-subtitle">${this.t('instagramSubtitle')}</div>
+              </div>
+            </div>
+            <svg class="link-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+        `);
+      }
 
       // 1. TripAdvisor (データがあれば表示)
       if (shop.tripadvisor_url) {
@@ -871,30 +924,29 @@ const { apiBaseUrl = '' } = Astro.props;
         const ratingValue = shop.tripadvisor_rating ? shop.tripadvisor_rating.toFixed(1) : '';
         const reviewCount = shop.tripadvisor_reviews || 0;
 
-// [変更] アイコン部分を <img> タグに変更し、ロゴ画像を表示
-          links.push(`
-            <a href="${shop.tripadvisor_url}" target="_blank" rel="noopener noreferrer" class="link-btn tripadvisor" onclick="return openLinkPopup(event, '${escapedUrl}')">
-              <div class="link-btn-content">
-                <div class="link-icon">
-                  <img src="/TripAdvisor-logo.png" alt="TripAdvisor" loading="lazy" />
-                </div>
-                <div class="link-text">
-                  <div class="link-title">${this.t('tripadvisorTitle')}</div>
-                  ${circlesHtml ? `
-                    <div class="tripadvisor-rating">
-                      <div class="circles">${circlesHtml}</div>
-                      <span class="rating-score">${ratingValue}</span>
-                      <span class="review-count">(${reviewCount})</span>
-                    </div>
-                  ` : `<div class="link-subtitle">${this.t('tripadvisorSubtitle')}</div>`}
-                </div>
+        links.push(`
+          <a href="${shop.tripadvisor_url}" target="_blank" rel="noopener noreferrer" class="link-btn tripadvisor" onclick="return openLinkPopup(event, '${escapedUrl}')">
+            <div class="link-btn-content">
+              <div class="link-icon">
+                <img src="/TripAdvisor-logo.png" alt="TripAdvisor" loading="lazy" />
               </div>
-              <svg class="link-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-              </svg>
-            </a>
-          `);
-        }
+              <div class="link-text">
+                <div class="link-title">${this.t('tripadvisorTitle')}</div>
+                ${circlesHtml ? `
+                  <div class="tripadvisor-rating">
+                    <div class="circles">${circlesHtml}</div>
+                    <span class="rating-score">${ratingValue}</span>
+                    <span class="review-count">(${reviewCount})</span>
+                  </div>
+                ` : `<div class="link-subtitle">${this.t('tripadvisorSubtitle')}</div>`}
+              </div>
+            </div>
+            <svg class="link-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+        `);
+      }
 
       // 2. 食べログ
       if (shop.tabelog_url) {
@@ -903,7 +955,7 @@ const { apiBaseUrl = '' } = Astro.props;
         const onclickAttr = isGoogleSearch
           ? `onclick="return handleTabelogSearch(event, '${escapedUrl}')"`
           : `onclick="return openLinkPopup(event, '${escapedUrl}')"`;
-        
+
         links.push(`
           <a href="${shop.tabelog_url}" target="_blank" rel="noopener noreferrer" class="link-btn tabelog" ${onclickAttr}>
             <div class="link-btn-content">
@@ -994,8 +1046,5 @@ const { apiBaseUrl = '' } = Astro.props;
         manager.displayShops(event.detail.shops, language);
       }
     }) as EventListener);
-    
-    // ★★★ デバッグ用：イベント委譲を一時的に無効化 ★★★
-    // ※ 純粋な<a>タグが機能するか確認
   });
 </script>
