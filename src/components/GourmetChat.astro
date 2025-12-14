@@ -830,6 +830,10 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio) return;
           
+          // ★★★ 送信チャンク数をカウント ★★★
+          if (!window.audioChunkCount) window.audioChunkCount = 0;
+          window.audioChunkCount++;
+          
           // ★★★ Int16Array → Uint8Array（正しい変換） ★★★
           const int16Array = audioChunk;
           const uint8Array = new Uint8Array(int16Array.buffer, int16Array.byteOffset, int16Array.byteLength);
@@ -843,9 +847,37 @@ const { apiBaseUrl = '' } = Astro.props;
           }
           const base64 = btoa(binary);
           
-          if (socket && socket.connected) socket.emit('audio_chunk', { chunk: base64 });
+          if (socket && socket.connected) {
+            socket.emit('audio_chunk', { chunk: base64 });
+          } else {
+            console.error('[音声送信エラー] WebSocket未接続');
+          }
         };
         
+        // ★★★ 音声チャンクカウンターをリセット ★★★
+        window.audioChunkCount = 0;
+        
+        // ★★★ WebSocketセッションのリセット ★★★
+        if (socket && socket.connected) {
+          // 古いセッションがあれば確実に停止
+          socket.emit('stop_stream');
+          // 少し待ってから新しいセッション開始
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        // ★★★ start_stream送信（音声接続前に！） ★★★
+        socket.emit('start_stream', { 
+          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+          sample_rate: sampleRate
+        });
+        
+        // ★★★ 短い待機（バックエンドの準備を待つ） ★★★
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // ★★★ isSendingAudioをtrueに（音声接続前に！） ★★★
+        isSendingAudio = true;
+        
+        // ★★★ ここから音声が流れ始める ★★★
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
         analyser = audioContext.createAnalyser();
@@ -862,22 +894,6 @@ const { apiBaseUrl = '' } = Astro.props;
           if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
           else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
         }, 100);
-        
-        // ★★★ isSendingAudioをtrueに（音声送信を開始） ★★★
-        isSendingAudio = true;
-        
-        // ★★★ WebSocketセッションのリセット ★★★
-        if (socket && socket.connected) {
-          // 古いセッションがあれば確実に停止
-          socket.emit('stop_stream');
-          // 少し待ってから新しいセッション開始
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        socket.emit('start_stream', { 
-          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
-          sample_rate: sampleRate  // サンプルレート情報を追加
-        });
         
         isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
         
@@ -904,6 +920,12 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function stopStreamingSTT() {
       stopVAD();
+      
+      // ★★★ 送信チャンク数を表示 ★★★
+      if (window.audioChunkCount !== undefined) {
+        const totalSeconds = (window.audioChunkCount * 1024) / 16000;
+        console.log(`[音声送信] チャンク数: ${window.audioChunkCount}, 合計: ${totalSeconds.toFixed(2)}秒分`);
+      }
       
       // 録音タイマーをクリア
       if (recordingTimer) {
@@ -1582,6 +1604,15 @@ const { apiBaseUrl = '' } = Astro.props;
     
     // ★★★ 中止処理（共通関数） ★★★
     function stopAllActivities() {
+      // ★★★ バックエンドのLLM処理を中止 ★★★
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      
       // 録音タイマーをクリア
       if (recordingTimer) {
         clearTimeout(recordingTimer);
