@@ -352,7 +352,7 @@ const { apiBaseUrl = '' } = Astro.props;
     transform: scale(0.98);
   }
 
-  /* ★変更: Instagramボタンのスタイル */
+  /* ★Instagramボタンのスタイル */
   .shop-card-list :global(.link-btn.instagram) {
     /* 左側は白、右に向かってInstagramのブランドカラーにグラデーション */
     background: linear-gradient(to right, #ffffff 0%, #ffffff 40%, #f09433 65%, #dc2743 85%, #bc1888 100%);
@@ -372,7 +372,7 @@ const { apiBaseUrl = '' } = Astro.props;
     padding: 2px; /* 画像の余白 */
   }
 
-  /* ★追加: Instagramロゴ画像のスタイル */
+  /* ★Instagramロゴ画像のスタイル */
   .shop-card-list :global(.link-btn.instagram .link-icon img) {
     width: 100%;
     height: 100%;
@@ -624,27 +624,27 @@ const { apiBaseUrl = '' } = Astro.props;
       },
       zh: {
         instagramTitle: 'Instagram',       
-        instagramSubtitle: '?看最新照片',  
+        instagramSubtitle: '查看最新照片',  
         tripadvisorTitle: 'TripAdvisor',
-        tripadvisorSubtitle: '??和照片',
+        tripadvisorSubtitle: '评论和照片',
         tabelogTitle: 'Tabelog',
-        tabelogSubtitle: '??和?分',
+        tabelogSubtitle: '评论和评分',
         hotpepperTitle: 'Hotpepper',
-        hotpepperSubtitle: '??和?惠券',
+        hotpepperSubtitle: '预订和优惠券',
         gnaviTitle: 'Gnavi',
-        gnaviSubtitle: '餐?信息'
+        gnaviSubtitle: '餐厅信息'
       },
       ko: {
         instagramTitle: 'Instagram',       
-        instagramSubtitle: '?? ?? ??', 
+        instagramSubtitle: '최신 사진 보기', 
         tripadvisorTitle: 'TripAdvisor',
-        tripadvisorSubtitle: '?? ? ??',
+        tripadvisorSubtitle: '리뷰 및 사진',
         tabelogTitle: 'Tabelog',
-        tabelogSubtitle: '?? ? ??',
+        tabelogSubtitle: '리뷰 및 평점',
         hotpepperTitle: 'Hotpepper',
-        hotpepperSubtitle: '?? ? ??',
+        hotpepperSubtitle: '예약 및 쿠폰',
         gnaviTitle: 'Gnavi',
-        gnaviSubtitle: '??? ??'
+        gnaviSubtitle: '음식점 정보'
       }
     };
 
@@ -866,7 +866,7 @@ const { apiBaseUrl = '' } = Astro.props;
       `).join('');
       return `
         <div class="highlights">
-          <h4>? おすすめポイント</h4>
+          <h4>✨ おすすめポイント</h4>
           <ul>${listItems}</ul>
         </div>
       `;
@@ -893,12 +893,13 @@ const { apiBaseUrl = '' } = Astro.props;
     private createLinksHtml(shop: ShopData): string {
       const links: string[] = [];
 
-      // 0. Instagram検索 (店名のみで検索)
+      // 0. Instagram検索 (★修正: スマホ対応のためハッシュタグ検索URLに変更)
       if (shop.name) {
-        const searchKeyword = shop.name;
-        const instaUrl = `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(searchKeyword)}`;
+        // ハッシュタグではスペースが使えないため削除する
+        const tagName = shop.name.replace(/\s+/g, '');
+        // URL形式: /explore/tags/店名/ (これならアプリでも開く)
+        const instaUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(tagName)}/`;
         
-        // ★変更: アイコン部分をSVGから画像に変更
         links.push(`
           <a href="${instaUrl}" target="_blank" rel="noopener noreferrer" class="link-btn instagram" onclick="return openLinkPopup(event, '${instaUrl}')">
             <div class="link-btn-content">
