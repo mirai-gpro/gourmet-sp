@@ -817,10 +817,48 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
+        // ★★★ AudioWorkletをインラインで登録（パス問題を回避） ★★★
+        const audioProcessorCode = `
+class AudioProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 1024;
+    this.buffer = new Int16Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    if (!input || input.length === 0) return true;
+    
+    const channelData = input[0];
+    if (!channelData || channelData.length === 0) return true;
+
+    for (let i = 0; i < channelData.length; i++) {
+      const s = Math.max(-1, Math.min(1, channelData[i]));
+      const int16Value = Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF);
+      this.buffer[this.bufferIndex++] = int16Value;
+
+      if (this.bufferIndex >= this.bufferSize) {
+        const chunk = new Int16Array(this.buffer);
+        this.port.postMessage({ audioChunk: chunk });
+        this.bufferIndex = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('audio-processor', AudioProcessor);
+`;
+        
         try {
-          await audioContext.audioWorklet.addModule('/audio-processor.js');
+          const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+          const processorUrl = URL.createObjectURL(blob);
+          await audioContext.audioWorklet.addModule(processorUrl);
+          URL.revokeObjectURL(processorUrl);
         } catch (workletError: any) {
-          addMessage('system', '音声処理の初期化に失敗しました。ページを再読み込みしてください。');
+          console.error('[AudioWorklet読み込みエラー]', workletError);
+          addMessage('system', `音声処理の初期化に失敗: ${workletError.message || workletError}`);
           throw workletError;
         }
         
