@@ -826,9 +826,12 @@ class AudioProcessor extends AudioWorkletProcessor {
     this.totalSamples = 0;
     this.chunksSent = 0;
     this.emptyInputCount = 0;
+    this.processCalls = 0;  // ★★★ process()呼び出し回数 ★★★
   }
 
   process(inputs, outputs, parameters) {
+    this.processCalls++;  // ★★★ カウント ★★★
+    
     const input = inputs[0];
     
     // ★★★ 入力が空の場合をカウント ★★★
@@ -864,7 +867,8 @@ class AudioProcessor extends AudioWorkletProcessor {
           stats: {
             totalSamples: this.totalSamples,
             chunksSent: this.chunksSent,
-            emptyInputCount: this.emptyInputCount
+            emptyInputCount: this.emptyInputCount,
+            processCalls: this.processCalls  // ★★★ 追加 ★★★
           }
         });
       }
