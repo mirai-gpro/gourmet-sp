@@ -307,7 +307,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const SILENCE_THRESHOLD = isIOS ? 50 : 35;
-    const SILENCE_DURATION = isIOS ? 1500 : 2000;
+    const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
@@ -733,6 +733,12 @@ const { apiBaseUrl = '' } = Astro.props;
 
     async function startStreamingSTT() {
       try {
+        // ★★★ 古い録音タイマーをクリア ★★★
+        if (recordingTimer) {
+          clearTimeout(recordingTimer);
+          recordingTimer = null;
+        }
+        
         // ★★★ AudioWorkletNodeとAudioContextをクリーンアップ ★★★
         if (audioWorkletNode) {
           audioWorkletNode.port.onmessage = null;
@@ -838,6 +844,12 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function stopStreamingSTT() {
       stopVAD();
+      
+      // ★★★ 録音タイマーをクリア ★★★
+      if (recordingTimer) {
+        clearTimeout(recordingTimer);
+        recordingTimer = null;
+      }
       
       // ★★★ 全デバイス共通: 完全停止 ★★★
       
@@ -1505,6 +1517,12 @@ const { apiBaseUrl = '' } = Astro.props;
     
     // ★★★ 中止ボタン ★★★
     stopBtn.addEventListener('click', () => {
+      // ★★★ 録音タイマーをクリア ★★★
+      if (recordingTimer) {
+        clearTimeout(recordingTimer);
+        recordingTimer = null;
+      }
+      
       // 音声認識を停止
       if (isRecording) {
         stopStreamingSTT();
