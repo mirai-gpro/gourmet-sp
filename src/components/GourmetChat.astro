@@ -1,5 +1,6 @@
 ---
-// GourmetChat.astro - iPhone AGC有効化版
+// GourmetChat.astro - 修正完了版
+// 変更点: 関数定義順序の適正化、iPhone AGC有効化、GainNode削除
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -134,6 +135,7 @@ const { apiBaseUrl = '' } = Astro.props;
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
 
+  // Base64変換（iPhone用最適化）
   const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -163,6 +165,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
 
+    // スプラッシュ制御
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
     function hideSplash() {
@@ -187,13 +190,21 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     let waitOverlayTimer: number | null = null;
     
+    // 変数定義
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
     let isProcessing = false;
     let currentStage = 'conversation';
     let isRecording = false;
+    
+    // PC/Android用
     let mediaRecorder: MediaRecorder | null = null;
     let audioChunks: Blob[] = [];
+    let audioContext: AudioContext | null = null;
+
+    // iPhone用
+    let globalAudioContext: AudioContext | null = null;
+    
     let recordingTimer: number | null = null;
     const MAX_RECORDING_TIME = 55000;
     let isTTSEnabled = true;
@@ -204,9 +215,6 @@ const { apiBaseUrl = '' } = Astro.props;
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     
-    let globalAudioContext: AudioContext | null = null; 
-    let audioContext: AudioContext | null = null; 
-    
     let audioWorkletNode: AudioWorkletNode | null = null;
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
@@ -216,6 +224,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
+    // VAD (PC/Androidでのみ使用)
     let analyser: AnalyserNode | null = null;
     let silenceTimer: number | null = null;
     let vadCheckInterval: number | null = null;
@@ -227,7 +236,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
 
-    // --- 関数定義 ---
+    // ----------------------------------------------------
+    // 1. ヘルパー関数 (参照されるもの)
+    // ----------------------------------------------------
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -396,8 +407,11 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // --- ロジック関数 (定義順序を整理) ---
+    // ----------------------------------------------------
+    // 2. コアロジック関数 (定義順序を最適化してReferenceError回避)
+    // ----------------------------------------------------
 
+    // ★ Stop系関数 (定義順序: 最上位)
     function stopVAD_Default() {
       if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
@@ -409,6 +423,7 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT_iOS() {
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
+      // iPhone: AudioContextは閉じない
       if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
       if (socket && socket.connected) { socket.emit('stop_stream'); }
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
@@ -432,6 +447,31 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
+    }
+
+    // ★ Start系関数
     async function startStreamingSTT_iOS() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -456,7 +496,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ iPhone用: AGC有効、他はOFF (音量改善 + 処理落ち回避)
+          // ★ iPhone: AGC=true, 他はOFF (Source 1 + AGC ON)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: false, 
@@ -475,9 +515,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★ GainNodeなし (音割れ防止、Source 1準拠)
-        
-        // AudioWorklet (Source 1コード)
+        // ★ AudioWorklet (Source 1準拠: Buffer 4096)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -599,6 +637,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
+          // PC/Android: Source 2準拠 (Full ON)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: true,
@@ -617,6 +656,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
+        // AudioWorklet (Source 2準拠: Buffer 16000)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -677,6 +717,7 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio || !socket || !socket.connected) return;
           
+          // FileReader for PC (Source 2)
           try {
             const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
             const reader = new FileReader();
@@ -694,6 +735,7 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
 
+        // VAD有効
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
@@ -780,40 +822,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    function stopStreamingSTT() {
-      if (isIOS) {
-        stopStreamingSTT_iOS();
-      } else {
-        stopStreamingSTT_Default();
-      }
-    }
-
-    // --- 他のイベントリスナー関連関数 ---
-
-    function showMicPrompt() {
-      const modal = document.createElement('div');
-      modal.id = 'mic-prompt-modal';
-      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
-      modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
-          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
-          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
-          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
-        </div>
-      `;
-      const style = document.createElement('style');
-      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
-      document.head.appendChild(style);
-      document.body.appendChild(modal);
-      const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => {
-        modal.remove();
-        await toggleRecording();
-      });
-      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
-    }
-
+    // ★ toggleRecording (上に配置)
     async function toggleRecording() {
       enableAudioPlayback();
       userInput.value = '';
@@ -832,6 +841,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    // ★ speakTextGCP (上に配置)
     async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
@@ -840,7 +850,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
       try {
         isAISpeaking = true;
-        // Androidのみマイク停止 (Source 1)
+        // ★ iPhoneはマイク停止しない
         if (isAndroid && isRecording) {
           stopStreamingSTT();
         }
@@ -869,7 +879,8 @@ const { apiBaseUrl = '' } = Astro.props;
                   } catch (error) {
                     showMicPrompt();
                   }
-                } else if (!isRecording) {
+                } else if (!isRecording && !isIOS) {
+                  // iPhoneは継続中なので再開不要
                   try {
                     await startStreamingSTT();
                   } catch (error) {
@@ -904,31 +915,439 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    function stopAllActivities() {
-      if (isProcessing) {
-        fetch(`${apiBase}/api/cancel`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
-        }).catch(err => console.error('中止リクエスト失敗:', err));
+    // ★ showMicPrompt (toggleRecordingを使うのでその後)
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
+          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
+        </div>
+      `;
+      const style = document.createElement('style');
+      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      const btn = document.getElementById('mic-prompt-btn');
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
+    }
+
+    async function transcribeAudio(audioBlob: Blob) {
+      try {
+        voiceStatus.innerHTML = t('voiceStatusRecognizing');
+        voiceStatus.className = 'voice-status';
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = (reader.result as string).split(',')[1];
+          const response = await fetch(`${apiBase}/api/stt/transcribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio: base64Audio, language_code: LANGUAGE_CODE_MAP[currentLanguage].stt }) });
+          const data = await response.json();
+
+          if (data.success && data.transcript) {
+            const normTranscript = normalizeText(data.transcript);
+            if (isSemanticEcho(normTranscript, lastAISpeech)) {
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                lastAISpeech = '';
+                return;
+            }
+
+            userInput.value = data.transcript;
+            voiceStatus.innerHTML = t('voiceStatusComplete');
+            voiceStatus.className = 'voice-status';
+            
+            addMessage('user', data.transcript);
+            // @ts-ignore
+            if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
+              const msg = t('dateWarningMsg');
+              addMessage('assistant', msg);
+              if (isTTSEnabled && isUserInteracted) {
+                await speakTextGCP(msg, true);
+                await new Promise(r => setTimeout(r, 1000));
+              } else {
+                await new Promise(r => setTimeout(r, 2000));
+              }
+              userInput.value = '';
+              voiceStatus.innerHTML = t('voiceStatusStopped');
+              voiceStatus.className = 'voice-status stopped';
+              return;
+            }
+
+            const textLength = data.transcript.trim().replace(/\s+/g, '').length;
+            if (textLength < 4) {
+                const msg = t('shortMsgWarning');
+                addMessage('assistant', msg);
+                if (isTTSEnabled && isUserInteracted) {
+                  await speakTextGCP(msg, true);
+                  await new Promise(r => setTimeout(r, 500));
+                } else {
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+                userInput.value = '';
+                voiceStatus.innerHTML = t('voiceStatusStopped');
+                voiceStatus.className = 'voice-status stopped';
+                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+                return;
+            }
+
+            const ack = selectSmartAcknowledgment(data.transcript);
+            const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+            let firstAckPromise: Promise<void> | null = null;
+            if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
+              firstAckPromise = new Promise<void>((resolve) => {
+                lastAISpeech = normalizeText(ack.text);
+                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+                ttsPlayer.onended = () => resolve();
+                ttsPlayer.play().catch(e => resolve());
+              });
+            } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
+            addMessage('assistant', ack.text);
+            (async () => {
+                if (firstAckPromise) await firstAckPromise;
+                const cleanText = removeFillers(data.transcript);
+                const fallbackResponse = generateFallbackResponse(cleanText);
+                if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+                addMessage('assistant', fallbackResponse);
+                setTimeout(async () => {
+                  const additionalResponse = t('additionalResponse');
+                  if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+                  addMessage('assistant', additionalResponse);
+                }, 3000);
+                if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); }
+            })();
+            voiceStatus.innerHTML = t('voiceStatusStopped');
+            voiceStatus.className = 'voice-status stopped';
+          }
+        };
+      } catch (error) { console.error('STT Error:', error); }
+    }
+
+    function initializeWebSocketSTT() {
+      try {
+        const wsUrl = apiBase || window.location.origin;
+        socket = io(wsUrl);
+        socket.on('connect', () => { isStreamingSTT = true; });
+        socket.on('disconnect', () => { isStreamingSTT = false; });
+        socket.on('transcript', (data: any) => {
+          const { text, is_final } = data;
+          if (isAISpeaking) return;
+          if (is_final) { 
+            streamingTranscript = text; 
+            handleStreamingSTTComplete(text);
+            currentAISpeech = "";
+          } else { 
+            userInput.value = text;
+          }
+        });
+        socket.on('error', (data: any) => { 
+          addMessage('system', `${t('sttError')} ${data.message}`);
+          if (isRecording) stopStreamingSTT();
+        });
+      } catch (error) { isStreamingSTT = false; }
+    }
+
+    async function handleStreamingSTTComplete(transcript: string) {
+      stopStreamingSTT();
+      voiceStatus.innerHTML = t('voiceStatusComplete');
+      voiceStatus.className = 'voice-status';
+
+      const normTranscript = normalizeText(transcript);
+      if (isSemanticEcho(normTranscript, lastAISpeech)) {
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          lastAISpeech = '';
+          return;
       }
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-      if (isRecording) stopStreamingSTT();
-      stopCurrentAudio();
-      waitOverlay.classList.add('hidden');
-      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
-      isProcessing = false;
-      isAISpeaking = false;
+
+      userInput.value = transcript;
+      // @ts-ignore
+      if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
+        const msg = t('dateWarningMsg');
+        currentAISpeech = msg;
+        addMessage('assistant', msg);
+        if (isTTSEnabled && isUserInteracted) {
+          await speakTextGCP(msg, true, true);
+        } else { await new Promise(r => setTimeout(r, 2000)); }
+        userInput.value = '';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        return;
+      }
+
+      addMessage('user', transcript);
+      const textLength = transcript.trim().replace(/\s+/g, '').length;
+      if (textLength < 4) {
+          const msg = t('shortMsgWarning');
+          addMessage('assistant', msg);
+          isSendingAudio = false;
+          if (isTTSEnabled && isUserInteracted) {
+            await speakTextGCP(msg, true);
+          } else { await new Promise(r => setTimeout(r, 2000)); }
+          isSendingAudio = true;
+          userInput.value = '';
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          return;
+      }
+
+      const ack = selectSmartAcknowledgment(transcript);
+      const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+      let firstAckPromise: Promise<void> | null = null;
+      if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
+        firstAckPromise = new Promise<void>((resolve) => {
+          lastAISpeech = normalizeText(ack.text);
+          ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+          ttsPlayer.onended = () => resolve();
+          ttsPlayer.play().catch(e => resolve());
+        });
+      } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
+      addMessage('assistant', ack.text);
+      (async () => {
+        try {
+          if (firstAckPromise) await firstAckPromise;
+          const cleanText = removeFillers(transcript);
+          const fallbackResponse = generateFallbackResponse(cleanText);
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+          addMessage('assistant', fallbackResponse);
+          setTimeout(async () => {
+            const additionalResponse = t('additionalResponse');
+            if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+            addMessage('assistant', additionalResponse);
+          }, 3000);
+          if (userInput.value.trim()) {
+            isFromVoiceInput = true;
+            sendMessage();
+          }
+        } catch (error) { 
+          if (userInput.value.trim()) {
+            isFromVoiceInput = true;
+            sendMessage();
+          }
+        }
+      })();
       voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
-      userInput.value = '';
-      userInput.focus();
-      if (window.innerWidth < 1024) {
-        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+    }
+
+    // ★ sendMessage (Definition moved to be accessible)
+    async function sendMessage() {
+      let firstAckPromise: Promise<void> | null = null; 
+      unlockAudioParams();
+      const message = userInput.value.trim();
+      if (!message || isProcessing) return;
+      isProcessing = true; sendBtn.disabled = true;
+      micBtnFloat.disabled = true; userInput.disabled = true;
+
+      if (!isFromVoiceInput) {
+        addMessage('user', message);
+        // @ts-ignore
+        if (i18n[currentLanguage].patterns.dateCheck.test(message)) {
+             const msg = t('dateWarningMsg');
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             addMessage('assistant', msg);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        const textLength = message.trim().replace(/\s+/g, '').length;
+        if (textLength < 4) {
+             const msg = t('shortMsgWarning');
+             addMessage('assistant', msg);
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        userInput.value = '';
+        const ack = selectSmartAcknowledgment(message);
+        currentAISpeech = ack.text;
+        addMessage('assistant', ack.text);
+        if (isTTSEnabled) {
+          try {
+            const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+            if (preGeneratedAudio && isUserInteracted) {
+              firstAckPromise = new Promise<void>((resolve) => {
+                lastAISpeech = normalizeText(ack.text);
+                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+                ttsPlayer.onended = () => resolve();
+                ttsPlayer.play().catch(e => resolve());
+              });
+            } else { firstAckPromise = speakTextGCP(ack.text, false); }
+          } catch (e) {}
+        }
+        if (firstAckPromise) await firstAckPromise;
+        const cleanText = removeFillers(message);
+        const fallbackResponse = generateFallbackResponse(cleanText);
+        if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+        addMessage('assistant', fallbackResponse);
+        setTimeout(async () => {
+          const additionalResponse = t('additionalResponse');
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+          addMessage('assistant', additionalResponse);
+        }, 3000);
+      }
+
+      const wasVoiceInput = isFromVoiceInput;
+      isFromVoiceInput = false;
+      if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
+      waitOverlayTimer = window.setTimeout(() => { showWaitOverlay(); }, 4000);
+
+      try {
+        const response = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, message: message, stage: currentStage, language: currentLanguage }) });
+        const data = await response.json();
+        hideWaitOverlay();
+        currentAISpeech = data.response;
+        addMessage('assistant', data.response, data.summary);
+        stopCurrentAudio();
+        if (data.shops && data.shops.length > 0) {
+          currentShops = data.shops;
+          reservationBtn.disabled = false;
+          userInput.value = '';
+          document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: data.shops, language: currentLanguage } }));
+          const section = document.getElementById('shopListSection');
+          if (section) section.classList.add('has-shops');
+          if (window.innerWidth < 1024) {
+            setTimeout(() => {
+              const shopSection = document.getElementById('shopListSection');
+              if (shopSection) {
+                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 300);
+          }
+          
+          (async () => {
+            try {
+              isAISpeaking = true;
+              if (isRecording) { stopStreamingSTT(); }
+
+              await speakTextGCP(t('ttsIntro'));
+              const lines = data.response.split('\n\n');
+              let introText = ""; let shopLines = lines;
+              if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { introText = lines[0]; shopLines = lines.slice(1); }
+              let introPart2Promise: Promise<void> | null = null;
+              if (introText && isTTSEnabled && isUserInteracted) {
+                const preGeneratedIntro = preGeneratedAcks.get(introText);
+                if (preGeneratedIntro) {
+                  introPart2Promise = new Promise<void>((resolve) => {
+                    lastAISpeech = normalizeText(introText);
+                    ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+                    ttsPlayer.onended = () => resolve();
+                    ttsPlayer.play();
+                  });
+                } else { introPart2Promise = speakTextGCP(introText, false); }
+              }
+
+              let firstShopAudioPromise: Promise<string | null> | null = null;
+              let remainingAudioPromise: Promise<string | null> | null = null;
+              const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
+              if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
+                const firstShop = shopLines[0];
+                const restShops = shopLines.slice(1).join('\n\n');
+                firstShopAudioPromise = (async () => {
+                  const cleanText = stripMarkdown(firstShop);
+                  const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                  const result = await response.json();
+                  return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                })();
+                if (restShops) {
+                  remainingAudioPromise = (async () => {
+                    const cleanText = stripMarkdown(restShops);
+                    const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                    const result = await response.json();
+                    return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                  })();
+                }
+              }
+
+              if (introPart2Promise) await introPart2Promise;
+              if (firstShopAudioPromise) {
+                const firstShopAudio = await firstShopAudioPromise;
+                if (firstShopAudio) {
+                  const firstShopText = stripMarkdown(shopLines[0]);
+                  lastAISpeech = normalizeText(firstShopText);
+                  stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
+                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                  if (remainingAudioPromise) {
+                    const remainingAudio = await remainingAudioPromise;
+                    if (remainingAudio) {
+                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
+                      lastAISpeech = normalizeText(restShopsText);
+                      await new Promise(r => setTimeout(r, 500));
+                      stopCurrentAudio(); ttsPlayer.src = remainingAudio;
+                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                    }
+                  }
+                }
+              }
+              isAISpeaking = false;
+            } catch (e) { isAISpeaking = false; }
+          })();
+        } else {
+          if (data.response) {
+            const extractedShops = extractShopsFromResponse(data.response);
+            if (extractedShops.length > 0) {
+              currentShops = extractedShops;
+              reservationBtn.disabled = false;
+              document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: extractedShops, language: currentLanguage } }));
+              const section = document.getElementById('shopListSection');
+              if (section) section.classList.add('has-shops');
+              speakTextGCP(data.response);
+            } else { speakTextGCP(data.response); }
+          }
+        }
+      } catch (error) { console.error('送信エラー:', error);
+      hideWaitOverlay(); showError('メッセージの送信に失敗しました。'); }
+      finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
+      userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
       }
     }
 
-    // イベントリスナー登録
+    function toggleTTS() {
+      if (!isUserInteracted) { enableAudioPlayback(); return; }
+      enableAudioPlayback();
+      isTTSEnabled = !isTTSEnabled;
+      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
+      if (!isTTSEnabled) stopCurrentAudio();
+    }
+
+    function openReservationModal() {
+      if (currentShops.length === 0) { showError(t('searchError')); return; }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    }
+
+    async function initialize() {
+        try {
+            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
+            const data = await response.json(); sessionId = data.session_id;
+            addMessage('assistant', t('initialGreeting'), null, true);
+            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+            const ackPromises = ackTexts.map(async (text) => {
+              try {
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackData = await ackResponse.json();
+                if (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+              } catch (e) {}
+            });
+            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
+            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            if (splashOverlay) hideSplash();
+            initializeWebSocketSTT();
+            updateUILanguage();
+        } catch(e) { console.error(e); }
+    }
+
+    // イベントリスナー登録 (すべて関数定義後に配置)
     languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
     micBtnFloat.addEventListener('click', toggleRecording);
@@ -936,6 +1355,7 @@ const { apiBaseUrl = '' } = Astro.props;
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
     
+    // ソフトキーボード検知
     const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
     userInput.addEventListener('focus', () => {
       setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
