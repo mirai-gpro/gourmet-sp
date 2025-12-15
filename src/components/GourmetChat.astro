@@ -514,198 +514,225 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     // ★ iPhone実装（改善版）
-    async function startStreamingSTT_iOS() {
+// ============================================================
+// iPhone実装 - プリバッファリングなし版（修正前ベース + 安定化改善）
+// 場所: stopVAD_Default() の直後
+// ============================================================
+
+async function startStreamingSTT_iOS() {
+  try {
+    if (splashVideo) splashVideo.pause();
+    if (waitVideo) waitVideo.pause();
+    if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+    
+    // 🔧 修正1: Workletの完全クリーンアップ
+    if (audioWorkletNode) { 
+      audioWorkletNode.port.onmessage = null; 
+      audioWorkletNode.disconnect(); 
+      audioWorkletNode = null; 
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // 🔧 修正2: AudioContext作成と完全起動待機
+    if (!globalAudioContext) {
       try {
-        if (splashVideo) { splashVideo.pause(); }
-        if (waitVideo) { waitVideo.pause(); }
-        if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-        
-        // ★修正: Workletの完全クリーンアップ
-        if (audioWorkletNode) { 
-          audioWorkletNode.port.onmessage = null; 
-          audioWorkletNode.disconnect(); 
-          audioWorkletNode = null; 
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        
-        // AudioContext作成（初回のみ）
-        if (!globalAudioContext) {
-          try {
-            globalAudioContext = new AudioContext({ 
-              latencyHint: 'interactive',  // ★修正
-              sampleRate: 48000            // ★追加
-            });
-          } catch (e) {
-            addMessage('system', 'AudioContext作成エラー');
-            throw e;
-          }
-        }
-        
-        if (globalAudioContext.state === 'suspended') {
-          await globalAudioContext.resume();
-        }
-        
-        // ★修正: MediaStreamの再利用を試みる
-        if (mediaStream) {
-          const tracks = mediaStream.getAudioTracks();
-          if (tracks.length > 0 && tracks[0].readyState === 'live') {
-            console.log('既存のMediaStreamを再利用');
-          } else {
-            mediaStream.getTracks().forEach(track => track.stop());
-            mediaStream = null;
-          }
-        }
-        
-        // MediaStream取得（必要な場合のみ）
-        if (!mediaStream) {
-          try {
-            // ★修正: エコキャン/ノイズ抑制をON
-            const audioConstraints: any = { 
-              channelCount: 1,
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 48000
-            };
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-          } catch (micError: any) {
-            addMessage('system', `マイクエラー: ${micError.message}`);
-            throw micError;
-          }
-        }
-        
-        const targetSampleRate = 16000;
-        const nativeSampleRate = globalAudioContext.sampleRate;
-        const downsampleRatio = nativeSampleRate / targetSampleRate;
-        
-        const source = globalAudioContext.createMediaStreamSource(mediaStream);
-        
-        // ★修正: プロセッサ名の重複回避
-        const processorName = 'audio-processor-ios';
-        try {
-          audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
-        } catch (e) {
-          // ★修正: バッファサイズ8192、タイムアウト対策追加
-          const audioProcessorCode = `
-          class AudioProcessor extends AudioWorkletProcessor {
-            constructor() {
-              super();
-              this.bufferSize = 8192;
-              this.buffer = new Int16Array(this.bufferSize); 
-              this.writeIndex = 0;
-              this.ratio = ${downsampleRatio}; 
-              this.inputSampleCount = 0;
-              this.lastFlushTime = Date.now();
-            }
-
-            process(inputs, outputs, parameters) {
-              const input = inputs[0];
-              if (!input || input.length === 0) return true;
-              const channelData = input[0];
-              if (!channelData || channelData.length === 0) return true;
-              for (let i = 0; i < channelData.length; i++) {
-                this.inputSampleCount++;
-                if (this.inputSampleCount >= this.ratio) {
-                  this.inputSampleCount -= this.ratio;
-                  if (this.writeIndex < this.bufferSize) {
-                    const s = Math.max(-1, Math.min(1, channelData[i]));
-                    const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                    this.buffer[this.writeIndex++] = int16Value;
-                  }
-                  
-                  if (this.writeIndex >= this.bufferSize || 
-                      (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
-                    this.flush();
-                  }
-                }
-              }
-              return true;
-            }
-            
-            flush() {
-              if (this.writeIndex === 0) return;
-              const chunk = this.buffer.slice(0, this.writeIndex);
-              this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
-              this.writeIndex = 0;
-              this.lastFlushTime = Date.now();
-            }
-          }
-          registerProcessor('${processorName}', AudioProcessor);
-          `;
-
-          try {
-            const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
-            const processorUrl = URL.createObjectURL(blob);
-            await globalAudioContext.audioWorklet.addModule(processorUrl);
-            URL.revokeObjectURL(processorUrl);
-          } catch (workletError: any) {
-            addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
-            throw workletError;
-          }
-          
-          audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
-        }
-        
-        audioWorkletNode.port.onmessage = (event) => {
-          const { audioChunk } = event.data;
-          if (!isSendingAudio || !socket || !socket.connected) return;
-          
-          try {
-            const base64 = fastArrayBufferToBase64(audioChunk.buffer);
-            socket.emit('audio_chunk', { 
-              chunk: base64,
-              sample_rate: 16000
-            });
-          } catch (e) {
-            console.error('Audio convert error', e);
-          }
+        globalAudioContext = new AudioContext({ 
+          latencyHint: 'interactive',
+          sampleRate: 48000
+        });
+      } catch (e) {
+        addMessage('system', 'AudioContext作成エラー');
+        throw e;
+      }
+    }
+    
+    if (globalAudioContext.state === 'suspended') {
+      await globalAudioContext.resume();
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    
+    // 🔧 修正3: MediaStreamの適切な管理
+    if (mediaStream) {
+      const tracks = mediaStream.getAudioTracks();
+      if (tracks.length > 0 && tracks[0].readyState === 'live') {
+        console.log('既存のMediaStreamを再利用');
+      } else {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+    }
+    
+    if (!mediaStream) {
+      try {
+        const audioConstraints: any = { 
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000
         };
-        
-        source.connect(audioWorkletNode);
-        audioWorkletNode.connect(globalAudioContext.destination);
-        
-        // ★修正: Socket待機時間を延長
-        if (socket && socket.connected) {
-          socket.emit('stop_stream');
-          await new Promise(resolve => setTimeout(resolve, 200));
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (micError: any) {
+        addMessage('system', `マイクエラー: ${micError.message}`);
+        throw micError;
+      }
+    }
+    
+    const targetSampleRate = 16000;
+    const nativeSampleRate = globalAudioContext.sampleRate;
+    const downsampleRatio = nativeSampleRate / targetSampleRate;
+    
+    const source = globalAudioContext.createMediaStreamSource(mediaStream);
+    
+    // 🔧 修正4: AudioWorklet処理（プリバッファリングなし）
+    const processorName = 'audio-processor-ios';
+    try {
+      audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
+    } catch (e) {
+      // 修正前のシンプルなロジックをベースに安定化
+      const audioProcessorCode = `
+      class AudioProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.bufferSize = 8192; // 約512ms分
+          this.buffer = new Int16Array(this.bufferSize); 
+          this.writeIndex = 0;
+          this.ratio = ${downsampleRatio}; 
+          this.inputSampleCount = 0;
+          this.lastFlushTime = Date.now();
+        }
+
+        process(inputs, outputs, parameters) {
+          const input = inputs[0];
+          if (!input || input.length === 0) return true;
+          const channelData = input[0];
+          if (!channelData || channelData.length === 0) return true;
+          
+          for (let i = 0; i < channelData.length; i++) {
+            this.inputSampleCount++;
+            if (this.inputSampleCount >= this.ratio) {
+              this.inputSampleCount -= this.ratio;
+              if (this.writeIndex < this.bufferSize) {
+                const s = Math.max(-1, Math.min(1, channelData[i]));
+                const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                this.buffer[this.writeIndex++] = int16Value;
+              }
+              
+              // シンプルな即時送信ロジック（修正前と同じ）
+              if (this.writeIndex >= this.bufferSize || 
+                  (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
+                this.flush();
+              }
+            }
+          }
+          return true;
         }
         
-        socket.emit('start_stream', { 
-          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+        flush() {
+          if (this.writeIndex === 0) return;
+          const chunk = this.buffer.slice(0, this.writeIndex);
+          this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
+          this.writeIndex = 0;
+          this.lastFlushTime = Date.now();
+        }
+      }
+      registerProcessor('${processorName}', AudioProcessor);
+      `;
+
+      try {
+        const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+        const processorUrl = URL.createObjectURL(blob);
+        await globalAudioContext.audioWorklet.addModule(processorUrl);
+        URL.revokeObjectURL(processorUrl);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (workletError: any) {
+        addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
+        throw workletError;
+      }
+      
+      audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
+    }
+    
+    audioWorkletNode.port.onmessage = (event) => {
+      const { audioChunk } = event.data;
+      if (!isSendingAudio || !socket || !socket.connected) return;
+      
+      try {
+        const base64 = fastArrayBufferToBase64(audioChunk.buffer);
+        socket.emit('audio_chunk', { 
+          chunk: base64,
           sample_rate: 16000
         });
-        isSendingAudio = true;
-        isRecording = true; micBtnFloat.classList.add('recording');
-        voiceStatus.innerHTML = t('voiceStatusListening');
-        recordingTimer = window.setTimeout(() => { 
-          if (isRecording) { 
-            stopStreamingSTT(); 
-            addMessage('system', t('recordingTimeLimit')); 
-          } 
-        }, MAX_RECORDING_TIME);
-      } catch (error: any) {
-        if (audioWorkletNode) { 
-          audioWorkletNode.port.onmessage = null; 
-          audioWorkletNode.disconnect(); 
-          audioWorkletNode = null; 
-        }
-        if (!error.message?.includes('マイク')) { 
-          addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); 
-        }
+      } catch (e) {
+        console.error('Audio convert error', e);
       }
+    };
+    
+    source.connect(audioWorkletNode);
+    audioWorkletNode.connect(globalAudioContext.destination);
+    
+    // 🔧 修正5: Socket待機時間を延長
+    if (socket && socket.connected) {
+      socket.emit('stop_stream');
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
+    
+    // 🔧 修正6: オーディオグラフの安定化待機
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    socket.emit('start_stream', { 
+      language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+      sample_rate: 16000
+    });
+    
+    // 🔧 修正7: Socket接続確認待機
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    isSendingAudio = true;
+    isRecording = true; 
+    micBtnFloat.classList.add('recording');
+    voiceStatus.innerHTML = t('voiceStatusListening');
+    
+    recordingTimer = window.setTimeout(() => { 
+      if (isRecording) { 
+        stopStreamingSTT(); 
+        addMessage('system', t('recordingTimeLimit')); 
+      } 
+    }, MAX_RECORDING_TIME);
+    
+  } catch (error: any) {
+    if (audioWorkletNode) { 
+      audioWorkletNode.port.onmessage = null; 
+      audioWorkletNode.disconnect(); 
+      audioWorkletNode = null; 
+    }
+    if (!error.message?.includes('マイク')) { 
+      addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); 
+    }
+  }
+}
 
-    // ★修正: MediaStreamを保持
-    function stopStreamingSTT_iOS() {
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-      if (audioWorkletNode) { 
-        audioWorkletNode.port.onmessage = null; 
-        audioWorkletNode.disconnect(); 
-        audioWorkletNode = null; 
-      }
-      if (socket && socket.connected) { socket.emit('stop_stream'); }
-      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
-    }
+function stopStreamingSTT_iOS() {
+  if (recordingTimer) { 
+    clearTimeout(recordingTimer); 
+    recordingTimer = null; 
+  }
+  
+  if (audioWorkletNode) { 
+    audioWorkletNode.port.onmessage = null; 
+    audioWorkletNode.disconnect(); 
+    audioWorkletNode = null; 
+  }
+  
+  if (socket && socket.connected) { 
+    socket.emit('stop_stream'); 
+  }
+  
+  isSendingAudio = false; 
+  isRecording = false; 
+  micBtnFloat.classList.remove('recording');
+}
 
     // PC/Android実装（従来版）
     async function startStreamingSTT_Default() {
