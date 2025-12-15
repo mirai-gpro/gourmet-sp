@@ -319,7 +319,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const SILENCE_THRESHOLD = 30;  // 統一: 30（より敏感に）
-    const SILENCE_DURATION = 3500;  // 統一: 3.5秒（十分な余裕）
+    const SILENCE_DURATION = 4000;  // 統一: 4.0秒（さらに余裕）
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
