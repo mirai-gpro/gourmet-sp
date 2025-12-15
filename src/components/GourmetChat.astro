@@ -318,8 +318,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const SILENCE_THRESHOLD = isIOS ? 30 : 35; // iPhone: 30, Android: 35
-    const SILENCE_DURATION = isIOS ? 2500 : 2000; // iPhone: 2.5秒, Android: 2秒
+    const SILENCE_THRESHOLD = 30;  // 統一: 30（より敏感に）
+    const SILENCE_DURATION = 3500;  // 統一: 3.5秒（十分な余裕）
     const MIN_RECORDING_TIME = 3000;
 
     // ★★★ デバッグ用：画面にログ表示 ★★★
@@ -836,7 +836,7 @@ const { apiBaseUrl = '' } = Astro.props;
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 16384;  // 16kHzで約1.024秒（さらに安定化）
+    this.bufferSize = 2048;  // 16kHzで約0.128秒（最適値）
     // ★ リングバッファ：bufferSize * 2で余裕を持たせる（GC対策）
     this.buffer = new Int16Array(this.bufferSize * 2);
     this.writeIndex = 0;
