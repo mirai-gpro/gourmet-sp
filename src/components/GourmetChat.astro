@@ -240,14 +240,99 @@ const { apiBaseUrl = '' } = Astro.props;
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-  import { i18n } from '../constants/i18n';
+  // i18nインポートを動的に処理
+  let i18n;
+  try {
+    i18n = (await import('../constants/i18n')).i18n;
+  } catch (e) {
+    console.error('Failed to load i18n:', e);
+    // フォールバック用の最小限のi18n
+    i18n = {
+      ja: {
+        voiceStatusStopped: '🎤 音声認識: 停止中',
+        inputPlaceholder: 'メッセージを入力...',
+        btnVoiceInput: '音声入力',
+        btnTTSOn: '音声読み上げON',
+        btnTTSOff: '音声読み上げOFF',
+        btnSend: '送信',
+        btnReservation: '📞 予約依頼する',
+        waitMessage: 'AIがお店を検索しています...',
+        pageTitle: 'グルメAIチャット',
+        pageSubtitle: 'お店を探してお手伝いします',
+        shopListTitle: 'おすすめのお店',
+        shopListEmpty: 'お店が見つかりませんでした',
+        footerMessage: 'Powered by AI',
+        clickPrompt: 'タップして音声を有効にしてください',
+        initialGreeting: 'こんにちは！何かお探しですか？',
+        ackConfirm: 'かしこまりました',
+        ackSearch: 'お店を探しますね',
+        ackUnderstood: '理解しました',
+        ackYes: 'はい',
+        ttsIntro: 'ご希望に合うお店をご紹介します',
+        dateWarningMsg: '日時に関するご質問にはお答えできません',
+        shortMsgWarning: 'もう少し詳しく教えてください',
+        fallbackResponse: (text) => `${text}についてですね。詳しく教えてください。`,
+        additionalResponse: '他にご希望はありますか？',
+        micAccessError: 'マイクにアクセスできません',
+        sttError: '音声認識エラー',
+        recordingTimeLimit: '録音時間の上限に達しました',
+        voiceStatusListening: '🎤 音声認識中...',
+        voiceStatusRecording: '🎤 録音中...',
+        voiceStatusWaiting: '🎤 待機中...',
+        voiceStatusRecognizing: '🎤 認識中...',
+        voiceStatusSynthesizing: '🔊 音声合成中...',
+        voiceStatusSpeaking: '🔊 音声再生中...',
+        voiceStatusComplete: '✅ 認識完了',
+        searchError: '検索結果がありません'
+      },
+      en: {
+        voiceStatusStopped: '🎤 Voice Recognition: Stopped',
+        inputPlaceholder: 'Type a message...',
+        btnVoiceInput: 'Voice Input',
+        btnTTSOn: 'TTS ON',
+        btnTTSOff: 'TTS OFF',
+        btnSend: 'Send',
+        btnReservation: '📞 Make Reservation',
+        waitMessage: 'AI is searching for restaurants...',
+        pageTitle: 'Gourmet AI Chat',
+        pageSubtitle: 'Helping you find restaurants',
+        shopListTitle: 'Recommended Restaurants',
+        shopListEmpty: 'No restaurants found',
+        footerMessage: 'Powered by AI',
+        clickPrompt: 'Tap to enable audio',
+        initialGreeting: 'Hello! What are you looking for?',
+        ackConfirm: 'Understood',
+        ackSearch: 'I will search for restaurants',
+        ackUnderstood: 'Got it',
+        ackYes: 'Yes',
+        ttsIntro: 'Let me introduce restaurants that match your preferences',
+        dateWarningMsg: 'I cannot answer questions about dates and times',
+        shortMsgWarning: 'Please tell me more details',
+        fallbackResponse: (text) => `About ${text}. Please tell me more.`,
+        additionalResponse: 'Is there anything else?',
+        micAccessError: 'Cannot access microphone',
+        sttError: 'Speech recognition error',
+        recordingTimeLimit: 'Recording time limit reached',
+        voiceStatusListening: '🎤 Listening...',
+        voiceStatusRecording: '🎤 Recording...',
+        voiceStatusWaiting: '🎤 Waiting...',
+        voiceStatusRecognizing: '🎤 Recognizing...',
+        voiceStatusSynthesizing: '🔊 Synthesizing...',
+        voiceStatusSpeaking: '🔊 Speaking...',
+        voiceStatusComplete: '✅ Recognition complete',
+        searchError: 'No search results'
+      }
+    };
+  }
+
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
     en: { tts: 'en-US', stt: 'en-US', voice: 'en-US-Studio-O' },
     zh: { tts: 'cmn-CN', stt: 'cmn-CN', voice: 'cmn-CN-Wavenet-A' },
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
-  document.addEventListener('DOMContentLoaded', () => {
+
+  document.addEventListener('DOMContentLoaded', async () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
     if (!container) return;
 
@@ -257,9 +342,11 @@ const { apiBaseUrl = '' } = Astro.props;
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
     function hideSplash() {
-      splashVideo.loop = false;
-      splashOverlay.classList.add('fade-out');
-      setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      }
     }
     setTimeout(() => hideSplash(), 10000);
 
@@ -341,6 +428,7 @@ const { apiBaseUrl = '' } = Astro.props;
       getCurrentLanguage: () => currentLanguage,
       t: (key: string, ...args: any[]) => t(key, ...args)
     };
+
     function addMessage(role: string, content: string, summary: string | null = null, isInitial: boolean = false) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${role}`;
@@ -378,18 +466,25 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function showWaitOverlay() {
       waitOverlay.classList.remove('hidden');
-      waitVideo.currentTime = 0;
-      waitVideo.play().catch(e => console.log('Video err', e));
+      if (waitVideo) {
+        waitVideo.currentTime = 0;
+        waitVideo.play().catch(e => console.log('Video err', e));
+      }
     }
 
     function hideWaitOverlay() {
       if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
       waitOverlay.classList.add('hidden');
-      setTimeout(() => waitVideo.pause(), 500);
+      setTimeout(() => {
+        if (waitVideo) waitVideo.pause();
+      }, 500);
     }
 
     function unlockAudioParams() {
-      ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
+      ttsPlayer.play().then(() => { 
+        ttsPlayer.pause(); 
+        ttsPlayer.currentTime = 0; 
+      }).catch(e => {});
     }
 
     function enableAudioPlayback() {
@@ -416,7 +511,16 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     function stripMarkdown(text: string): string {
-      return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
+      return text.replace(/\*\*([^*]+)\*\*/g, '$1')
+                 .replace(/\*([^*]+)\*/g, '$1')
+                 .replace(/__([^_]+)__/g, '$1')
+                 .replace(/_([^_]+)_/g, '$1')
+                 .replace(/^#+\s*/gm, '')
+                 .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                 .replace(/`([^`]+)`/g, '$1')
+                 .replace(/^(\d+)\.\s+/gm, '$1番目、')
+                 .replace(/\s+/g, ' ')
+                 .trim();
     }
 
     // 正規化（エコー判定用：core_logic.py方式）
@@ -427,7 +531,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function removeFillers(text: string): string {
       // @ts-ignore
-      const pattern = i18n[currentLanguage].patterns.fillers;
+      const pattern = i18n[currentLanguage].patterns?.fillers || /(えーと|あの|まあ|そうですね)/g;
       return text.replace(pattern, '');
     }
 
@@ -438,10 +542,14 @@ const { apiBaseUrl = '' } = Astro.props;
     function selectSmartAcknowledgment(userMessage: string): { text: string, logText: string } {
       const messageLower = userMessage.trim();
       // @ts-ignore
-      const p = i18n[currentLanguage].patterns;
-      if (p.ackQuestions.test(messageLower)) return { text: t('ackConfirm'), logText: `質問形式` };
-      if (p.ackLocation.test(messageLower)) return { text: t('ackSearch'), logText: `場所` };
-      if (p.ackSearch.test(messageLower)) return { text: t('ackUnderstood'), logText: `検索` };
+      const p = i18n[currentLanguage].patterns || {};
+      const ackQuestions = p.ackQuestions || /(どうして|なぜ|どうやって|教えて|説明)/;
+      const ackLocation = p.ackLocation || /(近く|周辺|エリア|地域|場所)/;
+      const ackSearch = p.ackSearch || /(探して|検索|おすすめ|教えて)/;
+      
+      if (ackQuestions.test(messageLower)) return { text: t('ackConfirm'), logText: `質問形式` };
+      if (ackLocation.test(messageLower)) return { text: t('ackSearch'), logText: `場所` };
+      if (ackSearch.test(messageLower)) return { text: t('ackUnderstood'), logText: `検索` };
       return { text: t('ackYes'), logText: `デフォルト` };
     }
 
@@ -456,7 +564,14 @@ const { apiBaseUrl = '' } = Astro.props;
         const nameMatch = fullName.match(/^([^（(]+)[（(]([^）)]+)[）)]/);
         if (nameMatch) name = nameMatch[1].trim();
         const encodedName = encodeURIComponent(name);
-        shops.push({ name: name, description: description, category: 'イタリアン', hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, maps_url: `https://www.google.com/maps/search/${encodedName}`, tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` });
+        shops.push({ 
+          name: name, 
+          description: description, 
+          category: 'イタリアン', 
+          hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, 
+          maps_url: `https://www.google.com/maps/search/${encodedName}`, 
+          tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` 
+        });
       }
       return shops;
     }
@@ -511,7 +626,11 @@ const { apiBaseUrl = '' } = Astro.props;
         const response = await fetch(`${apiBase}/api/tts/synthesize`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
+          body: JSON.stringify({ 
+            text: cleanText, 
+            language_code: langConfig.tts, 
+            voice_name: langConfig.voice 
+          })
         });
         const data = await response.json();
         if (data.success && data.audio) {
@@ -652,16 +771,21 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopVAD() {
       if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (audioContext) { audioContext.close(); audioContext = null; }
+      if (audioContext) { 
+        audioContext.close(); 
+        audioContext = null; 
+      }
       analyser = null;
       hasSpoken = false;
     }
 
     function autoStopRecording() {
-      console.log('VAD Stop'); stopVAD();
+      console.log('VAD Stop'); 
+      stopVAD();
       if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
       if (recordingTimer) clearTimeout(recordingTimer);
-      isRecording = false; micBtnFloat.classList.remove('recording');
+      isRecording = false; 
+      micBtnFloat.classList.remove('recording');
     }
 
     async function toggleRecording() {
@@ -685,8 +809,10 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     function toggleTTS() {
-      if (!isUserInteracted) { enableAudioPlayback();
-      return; }
+      if (!isUserInteracted) { 
+        enableAudioPlayback();
+        return; 
+      }
       enableAudioPlayback();
       isTTSEnabled = !isTTSEnabled;
       speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
@@ -991,8 +1117,16 @@ registerProcessor('audio-processor', AudioProcessor);
             analyser.getByteFrequencyData(dataArray);
             const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
             
-            if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
-            else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); }
+            if (average > SILENCE_THRESHOLD) { 
+              hasSpoken = true; 
+              if (silenceTimer) clearTimeout(silenceTimer); 
+              voiceStatus.innerHTML = t('voiceStatusRecording'); 
+            } else if (hasSpoken && !silenceTimer) { 
+              voiceStatus.innerHTML = t('voiceStatusWaiting'); 
+              silenceTimer = window.setTimeout(() => { 
+                stopStreamingSTT(); 
+              }, SILENCE_DURATION); 
+            }
           }, 100);
         }
         
@@ -1075,9 +1209,18 @@ registerProcessor('audio-processor', AudioProcessor);
 
     async function startLegacyRecording() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { 
+            channelCount: 1, 
+            sampleRate: 16000, 
+            echoCancellation: true, 
+            noiseSuppression: true 
+          } 
+        });
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-        audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
+        audioChunks = []; 
+        hasSpoken = false; 
+        recordingStartTime = Date.now();
         audioContext = new AudioContext();
         const source = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
@@ -1089,21 +1232,45 @@ registerProcessor('audio-processor', AudioProcessor);
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
-          else 
-          if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { autoStopRecording(); }, SILENCE_DURATION); }
+          if (average > SILENCE_THRESHOLD) { 
+            hasSpoken = true; 
+            if (silenceTimer) clearTimeout(silenceTimer); 
+            voiceStatus.innerHTML = t('voiceStatusRecording'); 
+          } else if (hasSpoken && !silenceTimer) { 
+            voiceStatus.innerHTML = t('voiceStatusWaiting'); 
+            silenceTimer = window.setTimeout(() => { 
+              autoStopRecording(); 
+            }, SILENCE_DURATION); 
+          }
         }, 100);
-        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
+        mediaRecorder.ondataavailable = (event) => { 
+          if (event.data.size > 0) audioChunks.push(event.data); 
+        };
         mediaRecorder.onstop = async () => {
-          stopVAD(); stream.getTracks().forEach(track => track.stop());
+          stopVAD(); 
+          stream.getTracks().forEach(track => track.stop());
           if (recordingTimer) clearTimeout(recordingTimer);
-          if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob);
+          if (audioChunks.length > 0) { 
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); 
+            await transcribeAudio(audioBlob);
           }
         };
         mediaRecorder.start();
-        isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
-        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
-      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
+        isRecording = true; 
+        micBtnFloat.classList.add('recording'); 
+        voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { 
+          if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { 
+            stopVAD(); 
+            mediaRecorder.stop(); 
+            isRecording = false; 
+            micBtnFloat.classList.remove('recording'); 
+            addMessage('system', t('recordingTimeLimit')); 
+          } 
+        }, MAX_RECORDING_TIME);
+      } catch (error) { 
+        addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); 
+      }
     }
 
     async function transcribeAudio(audioBlob: Blob) {
@@ -1114,7 +1281,14 @@ registerProcessor('audio-processor', AudioProcessor);
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
           const base64Audio = (reader.result as string).split(',')[1];
-          const response = await fetch(`${apiBase}/api/stt/transcribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio: base64Audio, language_code: LANGUAGE_CODE_MAP[currentLanguage].stt }) });
+          const response = await fetch(`${apiBase}/api/stt/transcribe`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+              audio: base64Audio, 
+              language_code: LANGUAGE_CODE_MAP[currentLanguage].stt 
+            }) 
+          });
           const data = await response.json();
 
           if (data.success && data.transcript) {
@@ -1136,7 +1310,7 @@ registerProcessor('audio-processor', AudioProcessor);
             addMessage('user', data.transcript);
             // 1. 日時チェック
             // @ts-ignore
-            if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
+            if (i18n[currentLanguage].patterns?.dateCheck?.test(data.transcript)) {
               const msg = t('dateWarningMsg');
               addMessage('assistant', msg);
               
@@ -1170,7 +1344,9 @@ registerProcessor('audio-processor', AudioProcessor);
               // AI音声再生完了後に録音再開
               if (wasRecording) {
                 console.log('[録音制御] 録音再開');
-                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+                setTimeout(() => { 
+                  toggleRecording().catch(e => {}); 
+                }, 500);
               }
               return;
             }
@@ -1189,7 +1365,9 @@ registerProcessor('audio-processor', AudioProcessor);
                 userInput.value = '';
                 voiceStatus.innerHTML = t('voiceStatusStopped');
                 voiceStatus.className = 'voice-status stopped';
-                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
+                setTimeout(() => { 
+                  toggleRecording().catch(e => {}); 
+                }, 500);
                 return;
             }
 
@@ -1206,7 +1384,9 @@ registerProcessor('audio-processor', AudioProcessor);
                 ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
               });
-            } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
+            } else if (isTTSEnabled) { 
+              firstAckPromise = speakTextGCP(ack.text, false); 
+            }
             addMessage('assistant', ack.text);
             (async () => {
                 if (firstAckPromise) await firstAckPromise;
@@ -1221,22 +1401,30 @@ registerProcessor('audio-processor', AudioProcessor);
                   addMessage('assistant', additionalResponse);
                 }, 3000);
  
-                if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); }
+                if (userInput.value.trim()) { 
+                  isFromVoiceInput = true; 
+                  sendMessage(); 
+                }
             })();
             voiceStatus.innerHTML = t('voiceStatusStopped');
             voiceStatus.className = 'voice-status stopped';
           }
         };
-      } catch (error) { console.error('STT Error:', error); }
+      } catch (error) { 
+        console.error('STT Error:', error); 
+      }
     }
 
     function initializeWebSocketSTT() {
       try {
-        const wsUrl = apiBase ||
-        window.location.origin;
+        const wsUrl = apiBase || window.location.origin;
         socket = io(wsUrl);
-        socket.on('connect', () => { isStreamingSTT = true; });
-        socket.on('disconnect', () => { isStreamingSTT = false; });
+        socket.on('connect', () => { 
+          isStreamingSTT = true; 
+        });
+        socket.on('disconnect', () => { 
+          isStreamingSTT = false; 
+        });
         socket.on('transcript', (data: any) => {
           const { text, is_final } = data;
           
@@ -1260,7 +1448,9 @@ registerProcessor('audio-processor', AudioProcessor);
             stopStreamingSTT();
           }
         });
-      } catch (error) { isStreamingSTT = false; }
+      } catch (error) { 
+        isStreamingSTT = false; 
+      }
     }
 
     async function handleStreamingSTTComplete(transcript: string) {
@@ -1285,7 +1475,7 @@ registerProcessor('audio-processor', AudioProcessor);
       userInput.value = transcript;
       // 日時チェック
       // @ts-ignore
-      if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
+      if (i18n[currentLanguage].patterns?.dateCheck?.test(transcript)) {
         const msg = t('dateWarningMsg');
         currentAISpeech = msg;
         addMessage('assistant', msg);
@@ -1327,8 +1517,7 @@ registerProcessor('audio-processor', AudioProcessor);
 
       const ack = selectSmartAcknowledgment(transcript);
       const preGeneratedAudio = preGeneratedAcks.get(ack.text);
-      let firstAckPromise: Promise<void> |
-      null = null;
+      let firstAckPromise: Promise<void> | null = null;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
         firstAckPromise = new Promise<void>((resolve) => {
           // preGeneratedAudio再生時もlastAISpeechに記録
@@ -1336,9 +1525,9 @@ registerProcessor('audio-processor', AudioProcessor);
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
           ttsPlayer.onended = () => resolve();
           ttsPlayer.play().catch(e => resolve());
-   
         });
-      } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false);
+      } else if (isTTSEnabled) { 
+        firstAckPromise = speakTextGCP(ack.text, false);
       }
       addMessage('assistant', ack.text);
 
@@ -1350,7 +1539,6 @@ registerProcessor('audio-processor', AudioProcessor);
           if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
           addMessage('assistant', fallbackResponse);
           setTimeout(async () => {
- 
             const additionalResponse = t('additionalResponse');
             if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
             addMessage('assistant', additionalResponse);
@@ -1372,23 +1560,28 @@ registerProcessor('audio-processor', AudioProcessor);
     }
 
     async function sendMessage() {
-      let firstAckPromise: Promise<void> |
-      null = null; 
+      let firstAckPromise: Promise<void> | null = null; 
       unlockAudioParams();
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
-      isProcessing = true; sendBtn.disabled = true;
-      micBtnFloat.disabled = true; userInput.disabled = true;
+      isProcessing = true; 
+      sendBtn.disabled = true;
+      micBtnFloat.disabled = true; 
+      userInput.disabled = true;
 
       if (!isFromVoiceInput) {
         addMessage('user', message);
         // @ts-ignore
-        if (i18n[currentLanguage].patterns.dateCheck.test(message)) {
+        if (i18n[currentLanguage].patterns?.dateCheck?.test(message)) {
              const msg = t('dateWarningMsg');
              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
              addMessage('assistant', msg);
-             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
-             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             userInput.value = ''; 
+             isProcessing = false; 
+             sendBtn.disabled = false;
+             micBtnFloat.disabled = false; 
+             userInput.disabled = false; 
+             userInput.focus();
              return;
         }
         const textLength = message.trim().replace(/\s+/g, '').length;
@@ -1396,8 +1589,12 @@ registerProcessor('audio-processor', AudioProcessor);
              const msg = t('shortMsgWarning');
              addMessage('assistant', msg);
              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
-             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
-             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             userInput.value = ''; 
+             isProcessing = false; 
+             sendBtn.disabled = false;
+             micBtnFloat.disabled = false; 
+             userInput.disabled = false; 
+             userInput.focus();
              return;
         }
         userInput.value = '';
@@ -1415,11 +1612,12 @@ registerProcessor('audio-processor', AudioProcessor);
                 // preGeneratedAudio再生時もlastAISpeechに記録
                 lastAISpeech = normalizeText(ack.text);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-    
                 ttsPlayer.onended = () => resolve();
                 ttsPlayer.play().catch(e => resolve());
               });
-            } else { firstAckPromise = speakTextGCP(ack.text, false); }
+            } else { 
+              firstAckPromise = speakTextGCP(ack.text, false); 
+            }
           } catch (e) {}
         }
         if (firstAckPromise) await firstAckPromise;
@@ -1437,10 +1635,21 @@ registerProcessor('audio-processor', AudioProcessor);
       const wasVoiceInput = isFromVoiceInput;
       isFromVoiceInput = false;
       if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
-      waitOverlayTimer = window.setTimeout(() => { showWaitOverlay(); }, 4000);
+      waitOverlayTimer = window.setTimeout(() => { 
+        showWaitOverlay(); 
+      }, 4000);
 
       try {
-        const response = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, message: message, stage: currentStage, language: currentLanguage }) });
+        const response = await fetch(`${apiBase}/api/chat`, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ 
+            session_id: sessionId, 
+            message: message, 
+            stage: currentStage, 
+            language: currentLanguage 
+          }) 
+        });
         const data = await response.json();
         hideWaitOverlay();
         
@@ -1455,7 +1664,9 @@ registerProcessor('audio-processor', AudioProcessor);
           
           // 入力欄をクリア
           userInput.value = '';
-          document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: data.shops, language: currentLanguage } }));
+          document.dispatchEvent(new CustomEvent('displayShops', { 
+            detail: { shops: data.shops, language: currentLanguage } 
+          }));
           const section = document.getElementById('shopListSection');
           if (section) section.classList.add('has-shops');
           // スマホの場合：ショップカードセクションにスクロール
@@ -1463,9 +1674,11 @@ registerProcessor('audio-processor', AudioProcessor);
             setTimeout(() => {
               const shopSection = document.getElementById('shopListSection');
               if (shopSection) {
-                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                shopSection.scrollIntoView({ 
+                  behavior: 'smooth', 
+                  block: 'start' 
+                });
               }
- 
             }, 300);
             // DOMレンダリング待ち
           }
@@ -1475,20 +1688,22 @@ registerProcessor('audio-processor', AudioProcessor);
               // ショップ音声再生開始
               isAISpeaking = true;
               if (isAndroid && isRecording) {
-   
                 stopStreamingSTT();
               }
               
               await speakTextGCP(t('ttsIntro'));
               const lines = data.response.split('\n\n');
-              let introText = ""; let shopLines = lines;
+              let introText = ""; 
+              let shopLines = lines;
       
-              if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { introText = lines[0]; shopLines = lines.slice(1); }
+              if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { 
+                introText = lines[0]; 
+                shopLines = lines.slice(1); 
+              }
               
               let introPart2Promise: Promise<void> | null = null;
               if (introText && isTTSEnabled && isUserInteracted) {
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
-        
                 if (preGeneratedIntro) {
                   introPart2Promise = new Promise<void>((resolve) => {
                     lastAISpeech = normalizeText(introText);
@@ -1496,12 +1711,12 @@ registerProcessor('audio-processor', AudioProcessor);
                     ttsPlayer.onended = () => resolve();
                     ttsPlayer.play();
                   });
-                } else { introPart2Promise = speakTextGCP(introText, false);
+                } else { 
+                  introPart2Promise = speakTextGCP(introText, false);
                 }
               }
 
-              let firstShopAudioPromise: Promise<string |
-              null> | null = null;
+              let firstShopAudioPromise: Promise<string | null> | null = null;
               let remainingAudioPromise: Promise<string | null> | null = null;
               const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
               if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
@@ -1509,16 +1724,30 @@ registerProcessor('audio-processor', AudioProcessor);
                 const restShops = shopLines.slice(1).join('\n\n');
                 firstShopAudioPromise = (async () => {
                   const cleanText = stripMarkdown(firstShop);
-                  const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                  const response = await fetch(`${apiBase}/api/tts/synthesize`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ 
+                      text: cleanText, 
+                      language_code: shopLangConfig.tts, 
+                      voice_name: shopLangConfig.voice 
+                    }) 
+                  });
                   const result = await response.json();
-        
                   return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
                 })();
                 if (restShops) {
                   remainingAudioPromise = (async () => {
                     const cleanText = stripMarkdown(restShops);
-                    const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
-          
+                    const response = await fetch(`${apiBase}/api/tts/synthesize`, { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' }, 
+                      body: JSON.stringify({ 
+                        text: cleanText, 
+                        language_code: shopLangConfig.tts, 
+                        voice_name: shopLangConfig.voice 
+                      }) 
+                    });
                     const result = await response.json();
                     return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
                   })();
@@ -1532,8 +1761,18 @@ registerProcessor('audio-processor', AudioProcessor);
                   const firstShopText = stripMarkdown(shopLines[0]);
                   lastAISpeech = normalizeText(firstShopText);
                   
-                  stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
-                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                  stopCurrentAudio(); 
+                  ttsPlayer.src = firstShopAudio;
+                  await new Promise<void>((resolve) => { 
+                    ttsPlayer.onended = () => { 
+                      voiceStatus.innerHTML = t('voiceStatusStopped'); 
+                      voiceStatus.className = 'voice-status stopped'; 
+                      resolve(); 
+                    }; 
+                    voiceStatus.innerHTML = t('voiceStatusSpeaking'); 
+                    voiceStatus.className = 'voice-status speaking'; 
+                    ttsPlayer.play(); 
+                  });
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
@@ -1541,8 +1780,18 @@ registerProcessor('audio-processor', AudioProcessor);
                       lastAISpeech = normalizeText(restShopsText);
                       
                       await new Promise(r => setTimeout(r, 500));
-                      stopCurrentAudio(); ttsPlayer.src = remainingAudio;
-                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                      stopCurrentAudio(); 
+                      ttsPlayer.src = remainingAudio;
+                      await new Promise<void>((resolve) => { 
+                        ttsPlayer.onended = () => { 
+                          voiceStatus.innerHTML = '🎤 音声認識: 停止中'; 
+                          voiceStatus.className = 'voice-status stopped'; 
+                          resolve(); 
+                        }; 
+                        voiceStatus.innerHTML = '🔊 音声再生中...'; 
+                        voiceStatus.className = 'voice-status speaking'; 
+                        ttsPlayer.play(); 
+                      });
                     }
                   }
                 }
@@ -1560,58 +1809,111 @@ registerProcessor('audio-processor', AudioProcessor);
             if (extractedShops.length > 0) {
               currentShops = extractedShops;
               reservationBtn.disabled = false;
-              document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: extractedShops, language: currentLanguage } }));
+              document.dispatchEvent(new CustomEvent('displayShops', { 
+                detail: { shops: extractedShops, language: currentLanguage } 
+              }));
               const section = document.getElementById('shopListSection');
               if (section) section.classList.add('has-shops');
               speakTextGCP(data.response);
-            } else { speakTextGCP(data.response); }
+            } else { 
+              speakTextGCP(data.response); 
+            }
           }
         }
-      } catch (error) { console.error('送信エラー:', error);
-      hideWaitOverlay(); showError('メッセージの送信に失敗しました。'); }
-      finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
-      userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
+      } catch (error) { 
+        console.error('送信エラー:', error);
+        hideWaitOverlay(); 
+        showError('メッセージの送信に失敗しました。'); 
+      } finally { 
+        isProcessing = false; 
+        sendBtn.disabled = false; 
+        micBtnFloat.disabled = false;
+        userInput.disabled = false; 
+        if (currentShops.length === 0) userInput.focus(); 
+        else userInput.blur();
       }
     }
 
     // イベントリスナー
     function openReservationModal() {
-      if (currentShops.length === 0) { showError(t('searchError'));
-      return; }
-      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+      if (currentShops.length === 0) { 
+        showError(t('searchError'));
+        return; 
+      }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { 
+        detail: { shops: currentShops } 
+      }));
     }
 
     // 初期化関数
     async function initialize() {
         try {
-            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
-            const data = await response.json(); sessionId = data.session_id;
+            const response = await fetch(`${apiBase}/api/session/start`, { 
+              method: 'POST', 
+              headers: { 'Content-Type': 'application/json' }, 
+              body: JSON.stringify({ 
+                user_info: {}, 
+                language: currentLanguage 
+              }) 
+            });
+            const data = await response.json(); 
+            sessionId = data.session_id;
             addMessage('assistant', t('initialGreeting'), null, true);
-            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const ackTexts = [
+              t('ackConfirm'), 
+              t('ackSearch'), 
+              t('ackUnderstood'), 
+              t('ackYes'), 
+              t('ttsIntro')
+            ];
             const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
             const ackPromises = ackTexts.map(async (text) => {
               try {
-                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { 
+                  method: 'POST', 
+                  headers: { 'Content-Type': 'application/json' }, 
+                  body: JSON.stringify({ 
+                    text: text, 
+                    language_code: langConfig.tts, 
+                    voice_name: langConfig.voice 
+                  }) 
+                });
                 const ackData = await ackResponse.json();
-                if 
-                (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+                if (ackData.success && ackData.audio) {
+                  preGeneratedAcks.set(text, ackData.audio);
+                }
               } catch (e) {}
             });
-            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
-            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            await Promise.all([
+              speakTextGCP(t('initialGreeting')), 
+              ...ackPromises
+            ]);
+            userInput.disabled = false; 
+            sendBtn.disabled = false; 
+            micBtnFloat.disabled = false; 
+            speakerBtn.disabled = false; 
+            userInput.focus();
             if (splashOverlay) hideSplash();
             initializeWebSocketSTT();
             updateUILanguage();
-        } catch(e) { console.error(e); }
+        } catch(e) { 
+          console.error(e); 
+        }
     }
 
     // イベントリスナー登録
-    languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
+    languageSelect.addEventListener('change', () => { 
+      currentLanguage = languageSelect.value as any; 
+      updateUILanguage(); 
+    });
     sendBtn.addEventListener('click', sendMessage);
     micBtnFloat.addEventListener('click', toggleRecording);
     speakerBtn.addEventListener('click', toggleTTS);
-    userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    userInput.addEventListener('keypress', (e) => { 
+      if (e.key === 'Enter') sendMessage(); 
+    });
     reservationBtn.addEventListener('click', openReservationModal);
+    
     // ソフトキーボード表示検知
     const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
     userInput.addEventListener('focus', () => {
@@ -1628,6 +1930,7 @@ registerProcessor('audio-processor', AudioProcessor);
         floatingButtons.classList.remove('keyboard-active');
       }
     });
+    
     // 中止処理（共通関数）
     function stopAllActivities() {
       // バックエンドのLLM処理を中止
@@ -1652,6 +1955,7 @@ registerProcessor('audio-processor', AudioProcessor);
       
       // TTS再生を停止
       stopCurrentAudio();
+      
       // 待機オーバーレイを非表示
       waitOverlay.classList.add('hidden');
       if (waitOverlayTimer) {
@@ -1666,13 +1970,18 @@ registerProcessor('audio-processor', AudioProcessor);
       // UI状態をリセット
       voiceStatus.innerHTML = t('voiceStatusStopped');
       voiceStatus.className = 'voice-status stopped';
+      
       // 入力欄をクリアしてフォーカス
       userInput.value = '';
       userInput.focus();
+      
       // チャット画面にスクロール（スマホ対応）
       if (window.innerWidth < 1024) {
         setTimeout(() => {
-          chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          chatArea.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
         }, 100);
       }
     }
@@ -1681,6 +1990,7 @@ registerProcessor('audio-processor', AudioProcessor);
     stopBtn.addEventListener('click', () => {
       stopAllActivities();
     });
+    
     // 最後に初期化を実行
     initialize();
   });
