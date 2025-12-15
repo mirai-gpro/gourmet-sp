@@ -1,5 +1,4 @@
----
-// GourmetChat.astro - グルメサポートチャットコンポーネント
+// GourmetChat.astro - グルメサポートチャットコンポーネント (iPhone版 + 無音検知機能)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -207,6 +206,16 @@ const { apiBaseUrl = '' } = Astro.props;
     let isSendingAudio = true;
     let isAISpeaking = false;
     let currentAISpeech = "";
+
+    // ★★★ 追加: VAD関連変数 ★★★
+    let analyser: AnalyserNode | null = null;
+    let silenceTimer: number | null = null;
+    let vadCheckInterval: number | null = null;
+    let hasSpoken = false;
+    let recordingStartTime = 0;
+    const SILENCE_THRESHOLD = 30; // iPhone用
+    const SILENCE_DURATION = 2500; // iPhone用
+    const MIN_RECORDING_TIME = 3000;
 
     const ttsPlayer = new Audio();
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -502,6 +511,23 @@ const { apiBaseUrl = '' } = Astro.props;
       return binary;
     }
 
+    // ★★★ 追加: VAD停止関数 ★★★
+    function stopVAD() {
+      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (analyser) { analyser.disconnect(); analyser = null; }
+      hasSpoken = false;
+    }
+
+    // ★★★ 追加: 自動停止関数 ★★★
+    function autoStopRecording() {
+      console.log('VADによる自動停止を検知');
+      stopVAD();
+      if (isRecording) {
+        stopStreamingSTT();
+      }
+    }
+
     async function startStreamingSTT() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -624,8 +650,32 @@ registerProcessor('audio-processor', AudioProcessor);
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(globalAudioContext.destination);
         
-        // VAD (今回は無効化して負荷軽減 - 単純送信のみ)
-        // analyser = globalAudioContext.createAnalyser(); ... 削除
+        // ★★★ 追加: VAD（無音検知）の初期化 ★★★
+        analyser = globalAudioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        hasSpoken = false;
+        recordingStartTime = Date.now();
+        
+        vadCheckInterval = window.setInterval(() => {
+          if (!analyser || !isRecording) return;
+          if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
+          
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          
+          if (average > SILENCE_THRESHOLD) { 
+            hasSpoken = true; 
+            if (silenceTimer) clearTimeout(silenceTimer); 
+            voiceStatus.innerHTML = t('voiceStatusRecording'); 
+          } else if (hasSpoken && !silenceTimer) { 
+            voiceStatus.innerHTML = t('voiceStatusWaiting'); 
+            silenceTimer = window.setTimeout(() => { 
+              autoStopRecording(); 
+            }, SILENCE_DURATION); 
+          }
+        }, 100);
         
         if (socket && socket.connected) {
           socket.emit('stop_stream');
@@ -655,7 +705,9 @@ registerProcessor('audio-processor', AudioProcessor);
     }
 
     function stopStreamingSTT() {
-      // VAD停止なし
+      // ★★★ 追加: VAD停止処理 ★★★
+      stopVAD();
+      
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
       // AudioContextは閉じない！
