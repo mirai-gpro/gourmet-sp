@@ -54,6 +54,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
+  /* スタイル定義（変更なし） */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -181,12 +182,11 @@ const { apiBaseUrl = '' } = Astro.props;
     
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
-    let globalAudioContext: AudioContext | null = null;
-    let audioWorkletNode: AudioWorkletNode | null = null;
-    // ★ iOS用 ScriptProcessor + ミュート用GainNode
-    let scriptProcessor: ScriptProcessorNode | null = null;
-    let muteGainNode: GainNode | null = null; // ★ ハウリング防止用
     
+    // ★ 統一された音声処理変数（ScriptProcessorのみ）
+    let globalAudioContext: AudioContext | null = null;
+    let scriptProcessor: ScriptProcessorNode | null = null;
+    let muteGainNode: GainNode | null = null; // ハウリング防止
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
     let streamingTranscript = '';
@@ -206,7 +206,6 @@ const { apiBaseUrl = '' } = Astro.props;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
     
-    // VAD設定
     const SILENCE_THRESHOLD = 30;
     const SILENCE_DURATION = 3000;
     const MIN_RECORDING_TIME = 3000;
@@ -481,7 +480,7 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // 軽量Base64
+    // 軽量Base64変換
     const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -510,13 +509,13 @@ const { apiBaseUrl = '' } = Astro.props;
         if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
         
         // クリーンアップ
-        if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
         if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
         
-        // AudioContext再利用
+        // ★ AudioContext初期化 (全デバイス共通)
         if (!globalAudioContext) {
           try {
+            // iOSはInteractive, 他はPlayback
             globalAudioContext = new AudioContext({ latencyHint: isIOS ? 'interactive' : 'playback' });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
@@ -531,7 +530,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ iOS: AGC ON, 他はOFF (感度確保)
+          // マイク設定 (AGC ON)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: isIOS ? false : true,
@@ -550,130 +549,61 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ iOS: ScriptProcessorNode (メインスレッド処理) ★★★
-        if (isIOS) {
-            const bufferSize = 4096;
-            scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
-            
-            // ★ ハウリング防止用ミュートノード
-            // ScriptProcessorを動かすにはdestinationへの接続が必要だが、
-            // そのままだとスピーカーから音が出てエコーキャンセルが暴走する。
-            // これを防ぐためにGain 0のノードを挟む。
-            muteGainNode = globalAudioContext.createGain();
-            muteGainNode.gain.value = 0;
-            
-            let inputSampleCount = 0;
-            let accumulatedValue = 0;
-            let accumulatedCount = 0;
-            const outputBuffer = new Int16Array(bufferSize); 
-            
-            scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                if (!isSendingAudio || !socket || !socket.connected) return;
-                
-                const inputBuffer = audioProcessingEvent.inputBuffer;
-                const channelData = inputBuffer.getChannelData(0);
-                
-                let writeIndex = 0;
-                
-                // ★ シンプルな間引き + 5倍増幅
-                // 線形補間は計算コストが高く、メインスレッドをブロックするリスクがあるため
-                // 「音量増幅」のみに特化したシンプルなロジックを採用
-                for (let i = 0; i < channelData.length; i++) {
-                    inputSampleCount++;
-                    if (inputSampleCount >= downsampleRatio) {
-                        inputSampleCount -= downsampleRatio;
-                        
-                        // 5倍に増幅して、小さな音も拾わせる
-                        let value = channelData[i] * 5.0;
-                        value = Math.max(-1, Math.min(1, value));
-                        
-                        const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
-                        outputBuffer[writeIndex++] = int16Value;
-                    }
-                }
-                
-                if (writeIndex > 0) {
-                    const chunk = outputBuffer.slice(0, writeIndex);
-                    try {
-                        const base64 = fastArrayBufferToBase64(chunk.buffer);
-                        socket.emit('audio_chunk', { 
-                            chunk: base64,
-                            sample_rate: 16000
-                        });
-                    } catch (e) { console.error(e); }
-                }
-            };
-            
-            source.connect(scriptProcessor);
-            scriptProcessor.connect(muteGainNode);
-            muteGainNode.connect(globalAudioContext.destination);
-            
-        } else {
-            // ★ PC/Android: AudioWorklet (既存ロジック)
-            const audioProcessorCode = `
-class AudioProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this.bufferSize = 4096;
-    this.buffer = new Int16Array(this.bufferSize); 
-    this.writeIndex = 0;
-    this.ratio = ${downsampleRatio}; 
-    this.readIndex = 0;
-  }
-  process(inputs, outputs, parameters) {
-    const input = inputs[0];
-    if (!input || input.length === 0) return true;
-    const channelData = input[0];
-    
-    // AudioWorklet (Simple Decimation)
-    for (let i = 0; i < channelData.length; i++) {
-      this.readIndex += 1.0;
-      if (this.readIndex >= this.ratio) {
-        this.readIndex -= this.ratio;
+        // ★★★ ScriptProcessorNode (全デバイス統一) ★★★
+        // AudioWorkletは廃止し、枯れた技術で確実にデータを拾う
+        const bufferSize = 4096;
+        scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
         
-        let value = channelData[i];
-        const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
+        // ★ ハウリング防止用ミュートノード (必須！)
+        muteGainNode = globalAudioContext.createGain();
+        muteGainNode.gain.value = 0;
         
-        if (this.writeIndex < this.bufferSize) {
-          this.buffer[this.writeIndex++] = int16Value;
-        }
-        if (this.writeIndex >= this.bufferSize) {
-          this.flush();
-        }
-      }
-    }
-    return true;
-  }
-  flush() {
-    if (this.writeIndex === 0) return;
-    const chunk = this.buffer.slice(0, this.writeIndex);
-    this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
-    this.writeIndex = 0;
-  }
-}
-registerProcessor('audio-processor', AudioProcessor);
-`;
-            try {
-                const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
-                const processorUrl = URL.createObjectURL(blob);
-                await globalAudioContext.audioWorklet.addModule(processorUrl);
-                URL.revokeObjectURL(processorUrl);
+        // 線形補間用変数
+        let readIndex = 0;
+        const outputBuffer = new Int16Array(bufferSize); 
+        
+        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+            if (!isSendingAudio || !socket || !socket.connected) return;
+            
+            const inputBuffer = audioProcessingEvent.inputBuffer;
+            const channelData = inputBuffer.getChannelData(0);
+            
+            let writeIndex = 0;
+            
+            // ★ 線形補間 (Linear Interpolation)
+            while (readIndex < channelData.length) {
+                const i = Math.floor(readIndex);
+                const frac = readIndex - i;
                 
-                audioWorkletNode = new AudioWorkletNode(globalAudioContext, 'audio-processor');
-                audioWorkletNode.port.onmessage = (event) => {
-                    const { audioChunk } = event.data;
-                    if (!isSendingAudio || !socket || !socket.connected) return;
-                    try {
-                        const base64 = fastArrayBufferToBase64(audioChunk.buffer);
-                        socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
-                    } catch (e) { }
-                };
-                source.connect(audioWorkletNode);
-                audioWorkletNode.connect(globalAudioContext.destination);
-            } catch(e) { console.error(e); }
-        }
+                const v1 = channelData[i];
+                const v2 = (i + 1 < channelData.length) ? channelData[i + 1] : v1;
+                
+                // 補間計算
+                const value = v1 * (1 - frac) + v2 * frac;
+                
+                // PCM変換 (Math.max/minでクリップ)
+                const int16Value = Math.max(-32768, Math.min(32767, value < 0 ? value * 32768 : value * 32767));
+                outputBuffer[writeIndex++] = int16Value;
+                
+                readIndex += downsampleRatio;
+            }
+            readIndex -= channelData.length;
+            
+            if (writeIndex > 0) {
+                const chunk = outputBuffer.slice(0, writeIndex);
+                try {
+                    const base64 = fastArrayBufferToBase64(chunk.buffer);
+                    socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
+                } catch (e) { console.error(e); }
+            }
+        };
         
-        // ★ VAD (共通)
+        // 接続 (Source -> Processor -> Gain(0) -> Destination)
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(muteGainNode);
+        muteGainNode.connect(globalAudioContext.destination);
+        
+        // ★★★ VAD (共通) ★★★
         analyser = globalAudioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
@@ -684,7 +614,6 @@ registerProcessor('audio-processor', AudioProcessor);
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
-          
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           
@@ -724,14 +653,12 @@ registerProcessor('audio-processor', AudioProcessor);
       
       if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
       if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
-      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
       
       if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
       if (socket && socket.connected) { socket.emit('stop_stream'); }
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
-    // 他の関数はそのまま維持
     async function startLegacyRecording() { /* ... */ }
     async function transcribeAudio(audioBlob: Blob) { /* ... */ }
     function initializeWebSocketSTT() { /* ... */ }
@@ -740,7 +667,7 @@ registerProcessor('audio-processor', AudioProcessor);
     // ...
     
     stopBtn.addEventListener('click', () => { stopAllActivities(); });
-    // ★ ここで初期化を実行
+    // ★ 確実な初期化呼び出し
     initialize();
   });
 </script>
