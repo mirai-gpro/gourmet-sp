@@ -886,17 +886,20 @@ class AudioProcessor extends AudioWorkletProcessor {
           }
           const avg = sum / this.ratio;
           
-          // バッファオーバーフロー検出
+          // Int16に変換
+          const s = Math.max(-1, Math.min(1, avg));
+          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          const sample = Math.max(-32768, Math.min(32767, int16Value));
+          
+          // バッファに書き込み
+          this.buffer[this.writeIndex++] = sample;
+          this.totalSamples++;
+          
+          // ★ 書き込み後にバッファオーバーフロー検出（修正）
           if (this.writeIndex >= this.bufferSize) {
             this.overflowCount++;
             this.flush();
           }
-          
-          // Int16に変換して書き込み
-          const s = Math.max(-1, Math.min(1, avg));
-          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          this.buffer[this.writeIndex++] = Math.max(-32768, Math.min(32767, int16Value));
-          this.totalSamples++;
           
           // バッファインデックスをリセット
           this.sampleBufferIndex = 0;
