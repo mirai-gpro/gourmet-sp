@@ -1,5 +1,7 @@
 ---
-// GourmetChat.astro - 修正版: mimeTypeエラー対策 & ゴミ蓄積防止
+// GourmetChat.astro - 修正版: 関数スコープ修正・参照エラー完全解消
+// iPhone: Source 1準拠 + AGC有効 (音量確保)
+// PC/Android: Source 2準拠 (VAD有効)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -54,7 +56,6 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* 基本スタイル（変更なし） */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -193,15 +194,8 @@ const { apiBaseUrl = '' } = Astro.props;
     let isProcessing = false;
     let currentStage = 'conversation';
     let isRecording = false;
-    
-    // PC/Android用
     let mediaRecorder: MediaRecorder | null = null;
     let audioChunks: Blob[] = [];
-    let audioContext: AudioContext | null = null;
-
-    // iPhone用
-    let globalAudioContext: AudioContext | null = null;
-    
     let recordingTimer: number | null = null;
     const MAX_RECORDING_TIME = 55000;
     let isTTSEnabled = true;
@@ -212,6 +206,9 @@ const { apiBaseUrl = '' } = Astro.props;
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     
+    let globalAudioContext: AudioContext | null = null; 
+    let audioContext: AudioContext | null = null; 
+    
     let audioWorkletNode: AudioWorkletNode | null = null;
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
@@ -221,7 +218,6 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    // VAD (PC/Androidでのみ使用)
     let analyser: AnalyserNode | null = null;
     let silenceTimer: number | null = null;
     let vadCheckInterval: number | null = null;
@@ -233,7 +229,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
 
-    // --- 関数定義 ---
+    // ----------------------------------------------------
+    // 1. 関数定義 (ReferenceError回避のため上部に配置)
+    // ----------------------------------------------------
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -402,9 +400,11 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // --- 2. 重要ロジック関数 (定義順序: 最上位) ---
+    // ----------------------------------------------------
+    // 2. コアロジック関数 (リスナーより先に定義)
+    // ----------------------------------------------------
 
-    // Stop functions
+    // ★ Stop functions
     function stopVAD_Default() {
       if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
@@ -416,11 +416,8 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT_iOS() {
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
-      // ★ 修正: マイクストリームを確実に停止し、メモリリークとゴミ蓄積を防ぐ
-      if (mediaStream) { 
-        mediaStream.getTracks().forEach(track => track.stop()); 
-        mediaStream = null; 
-      }
+      // iPhone: AudioContextは閉じない
+      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
       if (socket && socket.connected) { socket.emit('stop_stream'); }
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
@@ -467,7 +464,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    // Start functions
+    // ★ Start functions
     async function startStreamingSTT_iOS() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -476,6 +473,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         
+        // Singleton Context
         if (!globalAudioContext) {
           try {
             globalAudioContext = new AudioContext({ latencyHint: 'playback' });
@@ -489,11 +487,10 @@ const { apiBaseUrl = '' } = Astro.props;
           await globalAudioContext.resume();
         }
         
-        // ★ 修正: ストリームは毎回確実にクリアして再取得
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // iPhone: Source 1準拠 + AGC ON (音量確保)
+          // ★ iPhone: AGC有効, 他はOFF (Source 1ベース + AGC ON)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: false, 
@@ -512,7 +509,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // AudioWorklet (Source 1準拠: Buffer 4096)
+        // ★ AudioWorklet (Source 1準拠: Buffer 4096)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -586,6 +583,8 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(globalAudioContext.destination);
         
+        // VAD (自動停止) なし (Source 1準拠)
+        
         if (socket && socket.connected) {
           socket.emit('stop_stream');
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -634,6 +633,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
+          // PC/Android: Full options (Source 2準拠)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: true,
@@ -652,6 +652,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
+        // AudioWorklet (Buffer 16000 / Source 2 Code)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -712,6 +713,7 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio || !socket || !socket.connected) return;
           
+          // FileReader for PC
           try {
             const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
             const reader = new FileReader();
@@ -729,6 +731,7 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
 
+        // VAD Enabled (PC/Android Only)
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
@@ -815,7 +818,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    // ★ toggleRecording (上に配置)
+    // ★ toggleRecording
     async function toggleRecording() {
       enableAudioPlayback();
       userInput.value = '';
@@ -828,19 +831,18 @@ const { apiBaseUrl = '' } = Astro.props;
       
       if (isStreamingSTT) { 
         await new Promise(r => setTimeout(r, 100));
-        // ★ 修正: iPhoneでは絶対にLegacyに行かないようガード
+        // ★ iPhoneでLegacyが呼ばれないようガード
         if (isIOS) {
             await startStreamingSTT_iOS();
         } else {
             await startStreamingSTT(); 
         }
       } else { 
-        // WebSocket未接続時のみLegacyへ
         await startLegacyRecording();
       }
     }
 
-    // ★ speakTextGCP (上に配置)
+    // ★ speakTextGCP
     async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
@@ -849,7 +851,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
       try {
         isAISpeaking = true;
-        // ★ iPhoneは発話中もマイクを止めない (Source 1準拠)
+        // ★ iPhone (isIOS) はマイク止めない
         if (isAndroid && isRecording) {
           stopStreamingSTT();
         }
@@ -878,8 +880,8 @@ const { apiBaseUrl = '' } = Astro.props;
                   } catch (error) {
                     showMicPrompt();
                   }
-                } else if (!isRecording) {
-                  // iPhone: マイク停止中なら再開
+                } else if (!isRecording && !isIOS) {
+                  // iPhoneは継続中なので再開処理不要
                   try {
                     await startStreamingSTT();
                   } catch (error) {
@@ -914,7 +916,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    // ★ showMicPrompt (toggleRecordingを使うのでその後)
+    // ★ showMicPrompt
     function showMicPrompt() {
       const modal = document.createElement('div');
       modal.id = 'mic-prompt-modal';
@@ -1136,6 +1138,7 @@ const { apiBaseUrl = '' } = Astro.props;
       voiceStatus.className = 'voice-status stopped';
     }
 
+    // ★ sendMessage (ReferenceError回避のためリスナー前に定義)
     async function sendMessage() {
       let firstAckPromise: Promise<void> | null = null; 
       unlockAudioParams();
@@ -1306,6 +1309,44 @@ const { apiBaseUrl = '' } = Astro.props;
       finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
       userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
       }
+    }
+
+    // ★ toggleTTS (ReferenceError回避のためリスナー前に定義)
+    function toggleTTS() {
+      if (!isUserInteracted) { enableAudioPlayback(); return; }
+      enableAudioPlayback();
+      isTTSEnabled = !isTTSEnabled;
+      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
+      if (!isTTSEnabled) stopCurrentAudio();
+    }
+
+    function openReservationModal() {
+      if (currentShops.length === 0) { showError(t('searchError')); return; }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    }
+
+    async function initialize() {
+        try {
+            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
+            const data = await response.json(); sessionId = data.session_id;
+            addMessage('assistant', t('initialGreeting'), null, true);
+            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+            const ackPromises = ackTexts.map(async (text) => {
+              try {
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackData = await ackResponse.json();
+                if (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+              } catch (e) {}
+            });
+            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
+            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            if (splashOverlay) hideSplash();
+            initializeWebSocketSTT();
+            updateUILanguage();
+        } catch(e) { console.error(e); }
     }
 
     // イベントリスナー登録
