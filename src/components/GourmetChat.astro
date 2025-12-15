@@ -1,5 +1,6 @@
 ---
-// GourmetChat.astro - iPhone音量適正化版 (Gain 1.5x)
+// GourmetChat.astro - 参照エラー修正済み完全版
+// 変更点: 関数定義順序の整理（speakTextGCP等を上部へ移動）
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -54,6 +55,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
+  /* 基本スタイル */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -233,7 +235,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
 
-    // --- 関数定義 ---
+    // --- 1. ヘルパー関数定義 ---
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -291,7 +293,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function unlockAudioParams() {
       ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
-      if (globalAudioContext && globalAudioContext.state === 'suspended') {
+      if (isIOS && globalAudioContext && globalAudioContext.state === 'suspended') {
         globalAudioContext.resume();
       }
     }
@@ -393,10 +395,134 @@ const { apiBaseUrl = '' } = Astro.props;
       document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
-    // ===============================================
-    // 主要ロジック関数の定義（順不同でもホイスティングされる）
-    // ===============================================
+    function isSemanticEcho(transcript: string, aiText: string): boolean {
+      if (!aiText || !transcript) return false;
+      const normTranscript = normalizeText(transcript);
+      const normAI = normalizeText(aiText);
+      if (normAI === normTranscript) return true;
+      if (normAI.includes(normTranscript) && normTranscript.length > 5) return true;
+      return false;
+    }
 
+    // --- 2. 重要ロジック関数（先に定義してReferenceErrorを防ぐ） ---
+
+    // ★ Main Switcher (定義を上に)
+    async function startStreamingSTT() {
+      if (isIOS) {
+        await startStreamingSTT_iOS();
+      } else {
+        await startStreamingSTT_Default();
+      }
+    }
+
+    function stopStreamingSTT() {
+      if (isIOS) {
+        stopStreamingSTT_iOS();
+      } else {
+        stopStreamingSTT_Default();
+      }
+    }
+
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
+    }
+
+    // ★ speakTextGCP (ReferenceError対策で上に)
+    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
+      if (!isTTSEnabled || !text) return;
+      if (stopPrevious) ttsPlayer.pause();
+      
+      const cleanText = stripMarkdown(text);
+
+      try {
+        isAISpeaking = true;
+        // ★ iPhoneは発話中もマイクを止めない (Source 1準拠)
+        // Androidのみ止める
+        if (isAndroid && isRecording) {
+          stopStreamingSTT();
+        }
+        
+        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
+        voiceStatus.className = 'voice-status speaking';
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+        const response = await fetch(`${apiBase}/api/tts/synthesize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
+        });
+        const data = await response.json();
+        if (data.success && data.audio) {
+          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
+          const playPromise = new Promise<void>((resolve) => {
+            ttsPlayer.onended = async () => {
+              voiceStatus.innerHTML = t('voiceStatusStopped');
+              voiceStatus.className = 'voice-status stopped';
+              isAISpeaking = false;
+              
+              if (autoRestartMic) {
+                if (isAndroid) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                } else if (!isRecording) {
+                  // iPhone: マイク停止中なら再開 (Source 1準拠)
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                }
+              }
+              resolve();
+            };
+            ttsPlayer.onerror = () => { 
+              isAISpeaking = false;
+              resolve(); 
+            };
+          });
+          if (isUserInteracted) {
+            lastAISpeech = normalizeText(cleanText);
+            await ttsPlayer.play();
+            await playPromise;
+          } else {
+            showClickPrompt();
+            voiceStatus.innerHTML = t('voiceStatusStopped');
+            voiceStatus.className = 'voice-status stopped';
+            isAISpeaking = false;
+          }
+        } else {
+          isAISpeaking = false;
+        }
+      } catch (error) {
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        isAISpeaking = false;
+      }
+    }
+
+    // ★ toggleRecording (ReferenceError対策で上に)
     async function toggleRecording() {
       enableAudioPlayback();
       userInput.value = '';
@@ -415,20 +541,29 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    async function startStreamingSTT() {
-        if (isIOS) {
-            await startStreamingSTT_iOS();
-        } else {
-            await startStreamingSTT_Default();
-        }
-    }
-
-    function stopStreamingSTT() {
-        if (isIOS) {
-            stopStreamingSTT_iOS();
-        } else {
-            stopStreamingSTT_Default();
-        }
+    // ★ showMicPrompt (toggleRecordingを使うのでその後に)
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
+          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
+        </div>
+      `;
+      const style = document.createElement('style');
+      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      const btn = document.getElementById('mic-prompt-btn');
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
     }
 
     // ----------------------------------------------------
@@ -477,7 +612,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★ GainNode (1.5倍に設定。3.0だと割れるため)
+        // ★ GainNode (1.5倍に設定)
         const gainNode = globalAudioContext.createGain();
         gainNode.gain.value = 1.5; 
         source.connect(gainNode);
