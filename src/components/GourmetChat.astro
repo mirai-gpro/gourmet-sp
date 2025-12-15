@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - iPhone版ベース + PC/Android分岐統合版
+// GourmetChat.astro - iPhone完全最適化版 (Source 1ロジック完全準拠 + PC/Android分岐)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -54,7 +54,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* 基本スタイル (Source 1ベース) */
+  /* Source 1 (iPhone版) のスタイルを優先 */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -135,11 +135,35 @@ const { apiBaseUrl = '' } = Astro.props;
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
 
+  // Base64変換（iPhone版 Source 1 から完全移植）
+  const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function fastArrayBufferToBase64(buffer: ArrayBuffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i += 3) {
+        const c1 = bytes[i];
+        const c2 = bytes[i + 1];
+        const c3 = bytes[i + 2];
+        const enc1 = c1 >> 2;
+        const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
+        const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
+        const enc4 = c3 & 63;
+        binary += b64chars[enc1] + b64chars[enc2];
+        if (Number.isNaN(c2)) { binary += '=='; } 
+        else if (Number.isNaN(c3)) { binary += b64chars[enc3] + '='; } 
+        else { binary += b64chars[enc3] + b64chars[enc4]; }
+      }
+      return binary;
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
     if (!container) return;
 
     const apiBase = container.dataset.apiBase || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
 
     // スプラッシュ制御
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
@@ -209,8 +233,6 @@ const { apiBaseUrl = '' } = Astro.props;
     const MIN_RECORDING_TIME = 3000;
 
     const ttsPlayer = new Audio();
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isAndroid = /Android/i.test(navigator.userAgent);
 
     // --- 便利関数群 ---
     function t(key: string, ...args: any[]): string {
@@ -379,6 +401,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
       try {
         isAISpeaking = true;
+        [cite_start]// ★修正点: iPhoneは発話中に録音を停止しない (Source 1 [cite: 505] 準拠)
         if (isAndroid && isRecording) {
           stopStreamingSTT();
         }
@@ -408,6 +431,7 @@ const { apiBaseUrl = '' } = Astro.props;
                     showMicPrompt();
                   }
                 } else if (!isRecording) {
+                  [cite_start]// ★修正点: iPhoneは録音継続中なら何もしない (Source 1 [cite: 510-512] 準拠)
                   try {
                     await startStreamingSTT();
                   } catch (error) {
@@ -475,33 +499,10 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // ★ Source 1の軽量Base64 (iPhone用)
-    const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-    function fastArrayBufferToBase64(buffer: ArrayBuffer) {
-      let binary = '';
-      const bytes = new Uint8Array(buffer);
-      const len = bytes.byteLength;
-      for (let i = 0; i < len; i += 3) {
-        const c1 = bytes[i];
-        const c2 = bytes[i + 1];
-        const c3 = bytes[i + 2];
-        const enc1 = c1 >> 2;
-        const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
-        const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
-        const enc4 = c3 & 63;
-        binary += b64chars[enc1] + b64chars[enc2];
-        if (Number.isNaN(c2)) { binary += '=='; } 
-        else if (Number.isNaN(c3)) { binary += b64chars[enc3] + '='; } 
-        else { binary += b64chars[enc3] + b64chars[enc4]; }
-      }
-      return binary;
-    }
-
     // ===============================================
     // STT Logic Branching
     // ===============================================
 
-    // ★ Main function that branches
     async function startStreamingSTT() {
       if (isIOS) {
         await startStreamingSTT_iOS();
@@ -518,6 +519,14 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    function stopVAD_Default() {
+      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      analyser = null;
+      hasSpoken = false;
+    }
+
     // ----------------------------------------------------------------
     // 1. iOS Implementation (Based on Source 1 / GourmetChat._iPhone.astro)
     // ----------------------------------------------------------------
@@ -529,7 +538,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         
-        // ★ AudioContext (Singleton)
+        // AudioContext (Singleton)
         if (!globalAudioContext) {
           try {
             globalAudioContext = new AudioContext({ latencyHint: 'playback' });
@@ -546,7 +555,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ iOS: AGCはON、それ以外はOFF（Source 1準拠）
+          // iOS: Source 1準拠 (AGCのみON)
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: false,
@@ -565,7 +574,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★ AudioWorklet (Buffer 4096 / Source 1 Code)
+        // AudioWorklet (Buffer 4096 / Source 1 Code)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -625,7 +634,6 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio || !socket || !socket.connected) return;
           
-          // ★ Sync Base64 for iOS (Source 1)
           try {
             const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { 
@@ -676,15 +684,6 @@ const { apiBaseUrl = '' } = Astro.props;
     // ----------------------------------------------------------------
     // 2. Default Implementation (Based on Source 2 / GourmetChat.astro)
     // ----------------------------------------------------------------
-    
-    function stopVAD_Default() {
-      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
-      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (audioContext) { audioContext.close(); audioContext = null; }
-      analyser = null;
-      hasSpoken = false;
-    }
-
     async function startStreamingSTT_Default() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -693,7 +692,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         
-        // ★ AudioContext (Local, New Instance)
+        // AudioContext (Local, New Instance)
         if (!audioContext) {
           try {
             audioContext = new AudioContext({ latencyHint: 'playback' });
@@ -710,7 +709,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ PC/Android: Full constraints (Source 2準拠)
+          // PC/Android: Source 2準拠
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: true,
@@ -729,12 +728,12 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
-        // ★ AudioWorklet (Buffer 16000 / Source 2 Code)
+        // AudioWorklet (Buffer 16000 / Source 2 Code)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
             super();
-            this.bufferSize = 16000; // PCは1秒バッファ
+            this.bufferSize = 16000;
             this.buffer = new Int16Array(this.bufferSize); 
             this.writeIndex = 0;
             this.ratio = ${downsampleRatio}; 
@@ -790,7 +789,7 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio || !socket || !socket.connected) return;
           
-          // ★ Async FileReader for PC (Source 2)
+          // FileReader for PC (Source 2)
           try {
             const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
             const reader = new FileReader();
@@ -808,7 +807,7 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
 
-        // ★ VAD Activation (PC/Android Only)
+        // VAD (PC/Android Only)
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
@@ -857,7 +856,6 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     function stopStreamingSTT_Default() {
-      // VAD停止
       stopVAD_Default();
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
@@ -868,9 +866,35 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     async function startLegacyRecording() {
-       // Legacy logic is mainly for fallback, but for strict adherence to "100% PC Logic",
-       // we can keep it as is from Source 1 (which seems empty or simple) or copy Source 2.
-       // Given PC uses startStreamingSTT_Default primarily, this is rarely hit unless Socket fails.
+       // Legacy fallback (Source 2)
+       try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        vadCheckInterval = window.setInterval(() => {
+          if (!analyser || !isRecording) return;
+          if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
+          else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, SILENCE_DURATION); }
+        }, 100);
+        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          stopVAD_Default(); stream.getTracks().forEach(track => track.stop());
+          if (recordingTimer) clearTimeout(recordingTimer);
+          if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob); }
+        };
+        mediaRecorder.start();
+        isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD_Default(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
+      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
 
     async function transcribeAudio(audioBlob: Blob) { /* ... */ }
