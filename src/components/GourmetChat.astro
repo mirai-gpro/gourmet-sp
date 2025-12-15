@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - iPhone完全対策版（音量増幅 + 接続維持 + 完全コード）2
+// GourmetChat.astro - iPhone音量適正化版 (Gain 1.5x)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -57,11 +57,7 @@ const { apiBaseUrl = '' } = Astro.props;
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
-  .language-dropdown:hover { background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  .language-dropdown:focus { border-color: #fbbf24; }
   .chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-  .chat-header h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px 0; }
-  .chat-header p { font-size: 13px; opacity: 0.9; margin: 0; }
   .voice-status { padding: 10px 15px; text-align: center; font-size: 12px; border-bottom: 1px solid #e0e0e0; font-weight: 500; }
   .voice-status.listening { background: #e8f5e9; color: #2e7d32; animation: pulse 2s infinite; }
   .voice-status.stopped { background: #ffebee; color: #c62828; }
@@ -81,10 +77,7 @@ const { apiBaseUrl = '' } = Astro.props;
   .message.user .message-content { background: #667eea; color: white; }
   .message.system .message-content { background: #fff3e0; color: #e65100; font-size: 12px; }
   .summary-box { margin-top: 10px; padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; font-size: 13px; color: #92400e; }
-  .summary-box strong { display: block; margin-bottom: 6px; color: #78350f; }
   .final-summary { margin: 16px 0; padding: 16px; background: white; border: 2px solid #10b981; border-radius: 12px; }
-  .final-summary h3 { color: #065f46; margin: 0 0 10px 0; font-size: 16px; }
-  .final-summary-content { white-space: pre-wrap; line-height: 1.7; color: #1f2937; font-size: 13px; }
   .input-area { padding: 16px; background: white; border-top: 1px solid #e5e7eb; }
   .input-group { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   #userInput { flex: 1; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 14px; outline: none; transition: border-color 0.2s; }
@@ -93,15 +86,8 @@ const { apiBaseUrl = '' } = Astro.props;
   .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-reservation { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; font-size: 13px; padding: 10px 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); }
-  .btn-reservation:hover:not(:disabled) { box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4); transform: translateY(-1px); }
-  .btn-reservation:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-icon { padding: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
-  .btn-mic { background: #10b981; }
-  .btn-mic:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
-  .btn-mic.recording { background: #ef4444; animation: pulse-btn 1.5s infinite; }
-  @keyframes pulse-btn { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
   .btn-speaker { background: #f59e0b; }
-  .btn-speaker:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
   .btn-speaker.disabled { background: #9ca3af; }
   .input-actions { display: flex; justify-content: flex-end; }
   .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
@@ -114,34 +100,26 @@ const { apiBaseUrl = '' } = Astro.props;
   .splash-video { width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; transform: scale(0.5); }
   .splash-loading { position: absolute; bottom: 60px; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 1; }
   .splash-loading .spinner { width: 40px; height: 40px; border: 4px solid rgba(102, 126, 234, 0.3); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
-  .splash-loading p { color: #667eea; font-size: 14px; font-weight: 600; margin: 0; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); }
-  
-  .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
-  .click-prompt p { margin: 5px 0; }
-  
   .wait-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 500; display: flex; align-items: center; justify-content: center; border-radius: 16px; opacity: 1; transition: opacity 0.5s ease-out, visibility 0.5s; }
   .wait-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
   .wait-content { text-align: center; width: 80%; max-width: 400px; }
   .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
-  .wait-text { color: #667eea; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
-  
+  .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
+
   .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
   .floating-buttons.keyboard-active { bottom: 320px; }
   @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
   .btn-floating { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; }
   .btn-floating:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
-  .btn-floating:active { transform: translateY(0); }
-  
-  .btn-stop { background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); color: white; position: relative; display: flex; align-items: center; justify-content: center; }
-  .btn-stop::before { content: ''; position: absolute; width: 100%; height: 100%; background: url('/stop.svg') center/60% no-repeat; }
-  
-  .btn-mic-float { background: transparent; color: white; position: relative; display: flex; align-items: center; justify-content: center; overflow: visible; box-shadow: none; }
-  .btn-mic-float::before { content: ''; position: absolute; width: 100%; height: 100%; background: url('/mic-off.svg') center/100% no-repeat; }
+  .btn-stop { background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); color: white; }
+  .btn-stop::before { content: '⏹'; font-size: 24px; }
+  .btn-mic-float { background: #999; color: white; position: relative; overflow: visible; }
+  .btn-mic-float:not(:disabled) { background: #10b981; }
+  .btn-mic-float::before { content: '🎤'; font-size: 28px; }
   .btn-mic-float:disabled { cursor: not-allowed; opacity: 0.6; }
-  .btn-mic-float:disabled::before { opacity: 0.5; }
-  .btn-mic-float.recording { background: transparent; }
-  .btn-mic-float.recording::before { background: url('/mic-on.svg') center/100% no-repeat; }
-  .btn-mic-float.recording::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid #42A5F5; opacity: 0; animation: ripple 1.5s ease-out infinite; }
+  .btn-mic-float.recording { background: #ef4444; }
+  .btn-mic-float.recording::before { content: '⏹'; }
+  .btn-mic-float.recording::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid #ef4444; opacity: 0; animation: ripple 1.5s ease-out infinite; }
   @keyframes ripple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
 </style>
 
@@ -156,7 +134,7 @@ const { apiBaseUrl = '' } = Astro.props;
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
 
-  // Base64変換（iPhone用最適化）
+  // Base64変換（iPhone用最適化: Source 1準拠）
   const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -183,8 +161,9 @@ const { apiBaseUrl = '' } = Astro.props;
     if (!container) return;
 
     const apiBase = container.dataset.apiBase || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
 
-    // スプラッシュ制御
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
     function hideSplash() {
@@ -196,7 +175,6 @@ const { apiBaseUrl = '' } = Astro.props;
     }
     setTimeout(() => hideSplash(), 10000);
 
-    // DOM要素
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -209,8 +187,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitOverlay = document.getElementById('waitOverlay') as HTMLDivElement;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     let waitOverlayTimer: number | null = null;
-
-    // 状態変数
+    
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
     let isProcessing = false;
@@ -244,20 +221,17 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    // VAD (PC/Androidのみ使用)
+    // VAD (PC/Androidでのみ使用)
     let analyser: AnalyserNode | null = null;
     let silenceTimer: number | null = null;
     let vadCheckInterval: number | null = null;
     let hasSpoken = false;
     let recordingStartTime = 0;
-    
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    
-    const ttsPlayer = new Audio();
-    const SILENCE_THRESHOLD = 35;
+    const SILENCE_THRESHOLD = 35; 
     const SILENCE_DURATION = 2000;
     const MIN_RECORDING_TIME = 3000;
+
+    const ttsPlayer = new Audio();
 
     // --- 関数定義 ---
 
@@ -317,7 +291,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function unlockAudioParams() {
       ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
-      if (isIOS && globalAudioContext && globalAudioContext.state === 'suspended') {
+      if (globalAudioContext && globalAudioContext.state === 'suspended') {
         globalAudioContext.resume();
       }
     }
@@ -458,7 +432,7 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     // ----------------------------------------------------
-    // 【iPhone用】 最適化ロジック (Source 1 + Gain増幅)
+    // 【iPhone用】 最適化ロジック (Source 1 + Gain 1.5倍)
     // ----------------------------------------------------
     async function startStreamingSTT_iOS() {
       try {
@@ -484,7 +458,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ Source 1準拠: ノイズ除去OFF (処理落ち回避)
+          // Source 1準拠: ノイズ除去OFF
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: false, 
@@ -503,12 +477,12 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★ GainNodeで音量を増幅 (普通の声でも認識させる対策)
+        // ★ GainNode (1.5倍に設定。3.0だと割れるため)
         const gainNode = globalAudioContext.createGain();
-        gainNode.gain.value = 3.0; // 3倍
+        gainNode.gain.value = 1.5; 
         source.connect(gainNode);
         
-        // ★ AudioWorklet (Source 1コード)
+        // AudioWorklet (Source 1コード)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -568,7 +542,6 @@ const { apiBaseUrl = '' } = Astro.props;
           const { audioChunk } = event.data;
           if (!isSendingAudio || !socket || !socket.connected) return;
           
-          // Source 1準拠: 同期Base64変換
           try {
             const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { 
@@ -584,8 +557,6 @@ const { apiBaseUrl = '' } = Astro.props;
         gainNode.connect(audioWorkletNode);
         audioWorkletNode.connect(globalAudioContext.destination);
         
-        // VAD (自動停止) は実装しない (Source 1同様)
-        
         if (socket && socket.connected) {
           socket.emit('stop_stream');
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -598,8 +569,6 @@ const { apiBaseUrl = '' } = Astro.props;
         isSendingAudio = true;
         isRecording = true; micBtnFloat.classList.add('recording');
         voiceStatus.innerHTML = t('voiceStatusListening');
-        
-        // 55秒で自動停止
         recordingTimer = window.setTimeout(() => { 
           if (isRecording) { 
             stopStreamingSTT(); 
@@ -615,14 +584,14 @@ const { apiBaseUrl = '' } = Astro.props;
     function stopStreamingSTT_iOS() {
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
-      // iPhoneはAudioContext閉じない
+      // Keep globalAudioContext alive
       if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
       if (socket && socket.connected) { socket.emit('stop_stream'); }
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
     // ----------------------------------------------------
-    // 【PC/Android用】 現行安定版 (Source 2)
+    // 【PC/Android用】 Source 2準拠
     // ----------------------------------------------------
     function stopVAD_Default() {
       if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
@@ -660,7 +629,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
             const source = audioContext.createMediaStreamSource(mediaStream);
 
-            // PC用 AudioWorklet (Buffer: 16000)
+            // AudioWorklet (Buffer: 16000)
             const audioProcessorCode = `
             class AudioProcessor extends AudioWorkletProcessor {
             constructor() { super(); this.bufferSize = 16000; this.buffer = new Int16Array(this.bufferSize); this.writeIndex = 0; this.ratio = ${downsampleRatio}; this.inputSampleCount = 0; this.flushThreshold = 8000; }
@@ -693,7 +662,6 @@ const { apiBaseUrl = '' } = Astro.props;
             audioWorkletNode.port.onmessage = (event) => {
                 const { audioChunk } = event.data;
                 if (!isSendingAudio || !socket || !socket.connected) return;
-                // PCはFileReaderを使用 (Source 2)
                 const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
                 const reader = new FileReader();
                 reader.onload = () => {
@@ -707,7 +675,7 @@ const { apiBaseUrl = '' } = Astro.props;
             source.connect(audioWorkletNode);
             audioWorkletNode.connect(audioContext.destination);
 
-            // VAD (PC用: 有効)
+            // VAD有効
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 512;
             source.connect(analyser);
@@ -755,7 +723,6 @@ const { apiBaseUrl = '' } = Astro.props;
         isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
-    // レガシー録音（フォールバック用）
     async function startLegacyRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
@@ -812,7 +779,6 @@ const { apiBaseUrl = '' } = Astro.props;
             voiceStatus.className = 'voice-status';
             
             addMessage('user', data.transcript);
-            
             // @ts-ignore
             if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
               const msg = t('dateWarningMsg');
@@ -876,112 +842,6 @@ const { apiBaseUrl = '' } = Astro.props;
           }
         };
       } catch (error) { console.error('STT Error:', error); }
-    }
-
-    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
-      if (!isTTSEnabled || !text) return;
-      if (stopPrevious) ttsPlayer.pause();
-      
-      const cleanText = stripMarkdown(text);
-
-      try {
-        isAISpeaking = true;
-        // ★ Source 1準拠: iPhone (isIOS) ではマイクを止めない。Androidのみ止める。
-        if (isAndroid && isRecording) {
-          stopStreamingSTT();
-        }
-        
-        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
-        voiceStatus.className = 'voice-status speaking';
-        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
-        const response = await fetch(`${apiBase}/api/tts/synthesize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
-        });
-        const data = await response.json();
-        if (data.success && data.audio) {
-          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
-          const playPromise = new Promise<void>((resolve) => {
-            ttsPlayer.onended = async () => {
-              voiceStatus.innerHTML = t('voiceStatusStopped');
-              voiceStatus.className = 'voice-status stopped';
-              isAISpeaking = false;
-              
-              if (autoRestartMic) {
-                if (isAndroid) {
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                } else if (!isRecording && !isIOS) {
-                  // iPhoneはマイク継続中なら何もしない (Source 1)
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                }
-              }
-              resolve();
-            };
-            ttsPlayer.onerror = () => { 
-              isAISpeaking = false;
-              resolve(); 
-            };
-          });
-          if (isUserInteracted) {
-            lastAISpeech = normalizeText(cleanText);
-            await ttsPlayer.play();
-            await playPromise;
-          } else {
-            showClickPrompt();
-            voiceStatus.innerHTML = t('voiceStatusStopped');
-            voiceStatus.className = 'voice-status stopped';
-            isAISpeaking = false;
-          }
-        } else {
-          isAISpeaking = false;
-        }
-      } catch (error) {
-        voiceStatus.innerHTML = t('voiceStatusStopped');
-        voiceStatus.className = 'voice-status stopped';
-        isAISpeaking = false;
-      }
-    }
-
-    function showMicPrompt() {
-      const modal = document.createElement('div');
-      modal.id = 'mic-prompt-modal';
-      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
-      modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
-          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
-          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
-          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
-        </div>
-      `;
-      const style = document.createElement('style');
-      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
-      document.head.appendChild(style);
-      document.body.appendChild(modal);
-      const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => {
-        modal.remove();
-        await toggleRecording();
-      });
-      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
-    }
-
-    function isSemanticEcho(transcript: string, aiText: string): boolean {
-      if (!aiText || !transcript) return false;
-      const normTranscript = normalizeText(transcript);
-      const normAI = normalizeText(aiText);
-      if (normAI === normTranscript) return true;
-      if (normAI.includes(normTranscript) && normTranscript.length > 5) return true;
-      return false;
     }
 
     function initializeWebSocketSTT() {
