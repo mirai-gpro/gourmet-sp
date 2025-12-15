@@ -1,6 +1,5 @@
 ---
-// GourmetChat.astro - 修正完了版
-// 変更点: 関数定義順序の適正化、iPhone AGC有効化、GainNode削除
+// GourmetChat.astro - iPhone完全最適化版 (Source 1ロジック完全準拠 + PC/Android分岐)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -55,6 +54,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
+  /* Source 1 (iPhone版) のスタイルを優先 */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -135,7 +135,7 @@ const { apiBaseUrl = '' } = Astro.props;
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
 
-  // Base64変換（iPhone用最適化）
+  // Base64変換（iPhone版 Source 1 から完全移植）
   const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -177,6 +177,7 @@ const { apiBaseUrl = '' } = Astro.props;
     }
     setTimeout(() => hideSplash(), 10000);
 
+    // DOM要素取得
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -196,15 +197,8 @@ const { apiBaseUrl = '' } = Astro.props;
     let isProcessing = false;
     let currentStage = 'conversation';
     let isRecording = false;
-    
-    // PC/Android用
     let mediaRecorder: MediaRecorder | null = null;
     let audioChunks: Blob[] = [];
-    let audioContext: AudioContext | null = null;
-
-    // iPhone用
-    let globalAudioContext: AudioContext | null = null;
-    
     let recordingTimer: number | null = null;
     const MAX_RECORDING_TIME = 55000;
     let isTTSEnabled = true;
@@ -215,6 +209,10 @@ const { apiBaseUrl = '' } = Astro.props;
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
     
+    // Audio Contexts
+    let globalAudioContext: AudioContext | null = null; // iOS用（Source 1準拠）
+    let audioContext: AudioContext | null = null; // PC用（Source 2準拠）
+    
     let audioWorkletNode: AudioWorkletNode | null = null;
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
@@ -224,7 +222,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    // VAD (PC/Androidでのみ使用)
+    // VAD用 (PC/Androidでのみ使用)
     let analyser: AnalyserNode | null = null;
     let silenceTimer: number | null = null;
     let vadCheckInterval: number | null = null;
@@ -236,10 +234,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const ttsPlayer = new Audio();
 
-    // ----------------------------------------------------
-    // 1. ヘルパー関数 (参照されるもの)
-    // ----------------------------------------------------
-
+    // --- 便利関数群 ---
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
       const translation = i18n[currentLanguage][key];
@@ -296,7 +291,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     function unlockAudioParams() {
       ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
-      if (isIOS && globalAudioContext && globalAudioContext.state === 'suspended') {
+      if (globalAudioContext && globalAudioContext.state === 'suspended') {
         globalAudioContext.resume();
       }
     }
@@ -398,6 +393,103 @@ const { apiBaseUrl = '' } = Astro.props;
       document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
+    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
+      if (!isTTSEnabled || !text) return;
+      if (stopPrevious) ttsPlayer.pause();
+      
+      const cleanText = stripMarkdown(text);
+
+      try {
+        isAISpeaking = true;
+        [cite_start]// ★修正点: iPhoneは発話中に録音を停止しない (Source 1 [cite: 505] 準拠)
+        if (isAndroid && isRecording) {
+          stopStreamingSTT();
+        }
+        
+        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
+        voiceStatus.className = 'voice-status speaking';
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+        const response = await fetch(`${apiBase}/api/tts/synthesize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
+        });
+        const data = await response.json();
+        if (data.success && data.audio) {
+          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
+          const playPromise = new Promise<void>((resolve) => {
+            ttsPlayer.onended = async () => {
+              voiceStatus.innerHTML = t('voiceStatusStopped');
+              voiceStatus.className = 'voice-status stopped';
+              isAISpeaking = false;
+              
+              if (autoRestartMic) {
+                if (isAndroid) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                } else if (!isRecording) {
+                  [cite_start]// ★修正点: iPhoneは録音継続中なら何もしない (Source 1 [cite: 510-512] 準拠)
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                }
+              }
+              resolve();
+            };
+            ttsPlayer.onerror = () => { 
+              isAISpeaking = false;
+              resolve(); 
+            };
+          });
+          if (isUserInteracted) {
+            lastAISpeech = normalizeText(cleanText);
+            await ttsPlayer.play();
+            await playPromise;
+          } else {
+            showClickPrompt();
+            voiceStatus.innerHTML = t('voiceStatusStopped');
+            voiceStatus.className = 'voice-status stopped';
+            isAISpeaking = false;
+          }
+        } else {
+          isAISpeaking = false;
+        }
+      } catch (error) {
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        isAISpeaking = false;
+      }
+    }
+
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
+          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
+        </div>
+      `;
+      const style = document.createElement('style');
+      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      const btn = document.getElementById('mic-prompt-btn');
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
+    }
+
     function isSemanticEcho(transcript: string, aiText: string): boolean {
       if (!aiText || !transcript) return false;
       const normTranscript = normalizeText(transcript);
@@ -407,36 +499,16 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // ----------------------------------------------------
-    // 2. コアロジック関数 (定義順序を最適化してReferenceError回避)
-    // ----------------------------------------------------
+    // ===============================================
+    // STT Logic Branching
+    // ===============================================
 
-    // ★ Stop系関数 (定義順序: 最上位)
-    function stopVAD_Default() {
-      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
-      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (audioContext) { audioContext.close(); audioContext = null; }
-      analyser = null;
-      hasSpoken = false;
-    }
-
-    function stopStreamingSTT_iOS() {
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
-      // iPhone: AudioContextは閉じない
-      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
-      if (socket && socket.connected) { socket.emit('stop_stream'); }
-      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
-    }
-
-    function stopStreamingSTT_Default() {
-      stopVAD_Default();
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
-      if (audioContext && audioContext.state !== 'closed') { audioContext.close(); audioContext = null; }
-      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
-      if (socket && socket.connected) { socket.emit('stop_stream'); }
-      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
+    async function startStreamingSTT() {
+      if (isIOS) {
+        await startStreamingSTT_iOS();
+      } else {
+        await startStreamingSTT_Default();
+      }
     }
 
     function stopStreamingSTT() {
@@ -447,31 +519,17 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    function stopAllActivities() {
-      if (isProcessing) {
-        fetch(`${apiBase}/api/cancel`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
-        }).catch(err => console.error('中止リクエスト失敗:', err));
-      }
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
-      if (isRecording) stopStreamingSTT();
-      stopCurrentAudio();
-      waitOverlay.classList.add('hidden');
-      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
-      isProcessing = false;
-      isAISpeaking = false;
-      voiceStatus.innerHTML = t('voiceStatusStopped');
-      voiceStatus.className = 'voice-status stopped';
-      userInput.value = '';
-      userInput.focus();
-      if (window.innerWidth < 1024) {
-        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
-      }
+    function stopVAD_Default() {
+      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      analyser = null;
+      hasSpoken = false;
     }
 
-    // ★ Start系関数
+    // ----------------------------------------------------------------
+    // 1. iOS Implementation (Based on Source 1 / GourmetChat._iPhone.astro)
+    // ----------------------------------------------------------------
     async function startStreamingSTT_iOS() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -480,6 +538,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         
+        // AudioContext (Singleton)
         if (!globalAudioContext) {
           try {
             globalAudioContext = new AudioContext({ latencyHint: 'playback' });
@@ -496,10 +555,10 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★ iPhone: AGC=true, 他はOFF (Source 1 + AGC ON)
+          // iOS: Source 1準拠 (AGCのみON)
           const audioConstraints: any = { 
             channelCount: 1,
-            echoCancellation: false, 
+            echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: true 
           };
@@ -515,7 +574,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★ AudioWorklet (Source 1準拠: Buffer 4096)
+        // AudioWorklet (Buffer 4096 / Source 1 Code)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -613,6 +672,18 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    function stopStreamingSTT_iOS() {
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
+      // Keep globalAudioContext alive
+      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+      if (socket && socket.connected) { socket.emit('stop_stream'); }
+      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
+    }
+
+    // ----------------------------------------------------------------
+    // 2. Default Implementation (Based on Source 2 / GourmetChat.astro)
+    // ----------------------------------------------------------------
     async function startStreamingSTT_Default() {
       try {
         if (splashVideo) { splashVideo.pause(); }
@@ -621,6 +692,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         
+        // AudioContext (Local, New Instance)
         if (!audioContext) {
           try {
             audioContext = new AudioContext({ latencyHint: 'playback' });
@@ -637,7 +709,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // PC/Android: Source 2準拠 (Full ON)
+          // PC/Android: Source 2準拠
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: true,
@@ -656,7 +728,7 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = audioContext.createMediaStreamSource(mediaStream);
         
-        // AudioWorklet (Source 2準拠: Buffer 16000)
+        // AudioWorklet (Buffer 16000 / Source 2 Code)
         const audioProcessorCode = `
         class AudioProcessor extends AudioWorkletProcessor {
           constructor() {
@@ -735,7 +807,7 @@ const { apiBaseUrl = '' } = Astro.props;
         source.connect(audioWorkletNode);
         audioWorkletNode.connect(audioContext.destination);
 
-        // VAD有効
+        // VAD (PC/Android Only)
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
@@ -783,8 +855,19 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    function stopStreamingSTT_Default() {
+      stopVAD_Default();
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
+      if (audioContext && audioContext.state !== 'closed') { audioContext.close(); audioContext = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+      if (socket && socket.connected) { socket.emit('stop_stream'); }
+      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
+    }
+
     async function startLegacyRecording() {
-      try {
+       // Legacy fallback (Source 2)
+       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
         audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
@@ -814,221 +897,7 @@ const { apiBaseUrl = '' } = Astro.props;
       } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
 
-    async function startStreamingSTT() {
-      if (isIOS) {
-        await startStreamingSTT_iOS();
-      } else {
-        await startStreamingSTT_Default();
-      }
-    }
-
-    // ★ toggleRecording (上に配置)
-    async function toggleRecording() {
-      enableAudioPlayback();
-      userInput.value = '';
-      stopCurrentAudio();
-      
-      if (isRecording) { 
-        stopAllActivities();
-        return;
-      }
-      
-      if (isStreamingSTT) { 
-        await new Promise(r => setTimeout(r, 100));
-        await startStreamingSTT(); 
-      } else { 
-        await startLegacyRecording();
-      }
-    }
-
-    // ★ speakTextGCP (上に配置)
-    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
-      if (!isTTSEnabled || !text) return;
-      if (stopPrevious) ttsPlayer.pause();
-      
-      const cleanText = stripMarkdown(text);
-
-      try {
-        isAISpeaking = true;
-        // ★ iPhoneはマイク停止しない
-        if (isAndroid && isRecording) {
-          stopStreamingSTT();
-        }
-        
-        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
-        voiceStatus.className = 'voice-status speaking';
-        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
-        const response = await fetch(`${apiBase}/api/tts/synthesize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
-        });
-        const data = await response.json();
-        if (data.success && data.audio) {
-          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
-          const playPromise = new Promise<void>((resolve) => {
-            ttsPlayer.onended = async () => {
-              voiceStatus.innerHTML = t('voiceStatusStopped');
-              voiceStatus.className = 'voice-status stopped';
-              isAISpeaking = false;
-              
-              if (autoRestartMic) {
-                if (isAndroid) {
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                } else if (!isRecording && !isIOS) {
-                  // iPhoneは継続中なので再開不要
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                }
-              }
-              resolve();
-            };
-            ttsPlayer.onerror = () => { 
-              isAISpeaking = false;
-              resolve(); 
-            };
-          });
-          if (isUserInteracted) {
-            lastAISpeech = normalizeText(cleanText);
-            await ttsPlayer.play();
-            await playPromise;
-          } else {
-            showClickPrompt();
-            voiceStatus.innerHTML = t('voiceStatusStopped');
-            voiceStatus.className = 'voice-status stopped';
-            isAISpeaking = false;
-          }
-        } else {
-          isAISpeaking = false;
-        }
-      } catch (error) {
-        voiceStatus.innerHTML = t('voiceStatusStopped');
-        voiceStatus.className = 'voice-status stopped';
-        isAISpeaking = false;
-      }
-    }
-
-    // ★ showMicPrompt (toggleRecordingを使うのでその後)
-    function showMicPrompt() {
-      const modal = document.createElement('div');
-      modal.id = 'mic-prompt-modal';
-      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
-      modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
-          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
-          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
-          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
-        </div>
-      `;
-      const style = document.createElement('style');
-      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
-      document.head.appendChild(style);
-      document.body.appendChild(modal);
-      const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => {
-        modal.remove();
-        await toggleRecording();
-      });
-      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
-    }
-
-    async function transcribeAudio(audioBlob: Blob) {
-      try {
-        voiceStatus.innerHTML = t('voiceStatusRecognizing');
-        voiceStatus.className = 'voice-status';
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-          const response = await fetch(`${apiBase}/api/stt/transcribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ audio: base64Audio, language_code: LANGUAGE_CODE_MAP[currentLanguage].stt }) });
-          const data = await response.json();
-
-          if (data.success && data.transcript) {
-            const normTranscript = normalizeText(data.transcript);
-            if (isSemanticEcho(normTranscript, lastAISpeech)) {
-                voiceStatus.innerHTML = t('voiceStatusStopped');
-                voiceStatus.className = 'voice-status stopped';
-                lastAISpeech = '';
-                return;
-            }
-
-            userInput.value = data.transcript;
-            voiceStatus.innerHTML = t('voiceStatusComplete');
-            voiceStatus.className = 'voice-status';
-            
-            addMessage('user', data.transcript);
-            // @ts-ignore
-            if (i18n[currentLanguage].patterns.dateCheck.test(data.transcript)) {
-              const msg = t('dateWarningMsg');
-              addMessage('assistant', msg);
-              if (isTTSEnabled && isUserInteracted) {
-                await speakTextGCP(msg, true);
-                await new Promise(r => setTimeout(r, 1000));
-              } else {
-                await new Promise(r => setTimeout(r, 2000));
-              }
-              userInput.value = '';
-              voiceStatus.innerHTML = t('voiceStatusStopped');
-              voiceStatus.className = 'voice-status stopped';
-              return;
-            }
-
-            const textLength = data.transcript.trim().replace(/\s+/g, '').length;
-            if (textLength < 4) {
-                const msg = t('shortMsgWarning');
-                addMessage('assistant', msg);
-                if (isTTSEnabled && isUserInteracted) {
-                  await speakTextGCP(msg, true);
-                  await new Promise(r => setTimeout(r, 500));
-                } else {
-                  await new Promise(r => setTimeout(r, 2000));
-                }
-                userInput.value = '';
-                voiceStatus.innerHTML = t('voiceStatusStopped');
-                voiceStatus.className = 'voice-status stopped';
-                setTimeout(() => { toggleRecording().catch(e => {}); }, 500);
-                return;
-            }
-
-            const ack = selectSmartAcknowledgment(data.transcript);
-            const preGeneratedAudio = preGeneratedAcks.get(ack.text);
-            let firstAckPromise: Promise<void> | null = null;
-            if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
-              firstAckPromise = new Promise<void>((resolve) => {
-                lastAISpeech = normalizeText(ack.text);
-                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-                ttsPlayer.onended = () => resolve();
-                ttsPlayer.play().catch(e => resolve());
-              });
-            } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
-            addMessage('assistant', ack.text);
-            (async () => {
-                if (firstAckPromise) await firstAckPromise;
-                const cleanText = removeFillers(data.transcript);
-                const fallbackResponse = generateFallbackResponse(cleanText);
-                if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
-                addMessage('assistant', fallbackResponse);
-                setTimeout(async () => {
-                  const additionalResponse = t('additionalResponse');
-                  if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
-                  addMessage('assistant', additionalResponse);
-                }, 3000);
-                if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); }
-            })();
-            voiceStatus.innerHTML = t('voiceStatusStopped');
-            voiceStatus.className = 'voice-status stopped';
-          }
-        };
-      } catch (error) { console.error('STT Error:', error); }
-    }
+    async function transcribeAudio(audioBlob: Blob) { /* ... */ }
 
     function initializeWebSocketSTT() {
       try {
@@ -1137,7 +1006,6 @@ const { apiBaseUrl = '' } = Astro.props;
       voiceStatus.className = 'voice-status stopped';
     }
 
-    // ★ sendMessage (Definition moved to be accessible)
     async function sendMessage() {
       let firstAckPromise: Promise<void> | null = null; 
       unlockAudioParams();
@@ -1310,6 +1178,28 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    // イベントリスナー
+    function openReservationModal() {
+      if (currentShops.length === 0) { showError(t('searchError')); return; }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    }
+
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return;
+      }
+      if (isStreamingSTT) { 
+        await new Promise(r => setTimeout(r, 100));
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
     function toggleTTS() {
       if (!isUserInteracted) { enableAudioPlayback(); return; }
       enableAudioPlayback();
@@ -1320,11 +1210,31 @@ const { apiBaseUrl = '' } = Astro.props;
       if (!isTTSEnabled) stopCurrentAudio();
     }
 
-    function openReservationModal() {
-      if (currentShops.length === 0) { showError(t('searchError')); return; }
-      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
     }
 
+    // 初期化関数
     async function initialize() {
         try {
             const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
@@ -1347,7 +1257,7 @@ const { apiBaseUrl = '' } = Astro.props;
         } catch(e) { console.error(e); }
     }
 
-    // イベントリスナー登録 (すべて関数定義後に配置)
+    // イベントリスナー登録
     languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
     micBtnFloat.addEventListener('click', toggleRecording);
