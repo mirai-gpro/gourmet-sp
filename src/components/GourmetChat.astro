@@ -54,7 +54,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* スタイルは一切変更せず維持 */
+  /* ★ CSSは GourmetChat.astro オリジナルを完全復元 [cite: 5-61] */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -94,6 +94,7 @@ const { apiBaseUrl = '' } = Astro.props;
   .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
+  
   .splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
   .splash-overlay.fade-out { opacity: 0; pointer-events: none; }
   .splash-overlay.hidden { display: none; }
@@ -106,6 +107,7 @@ const { apiBaseUrl = '' } = Astro.props;
   .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
   .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
   
+  /* フローティングボタンもオリジナルを維持 */
   .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
   .floating-buttons.keyboard-active { bottom: 320px; }
   @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
@@ -141,17 +143,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const apiBase = container.dataset.apiBase || '';
 
+    // --- DOM要素 ---
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
-    function hideSplash() {
-      if (splashVideo) splashVideo.loop = false;
-      if (splashOverlay) {
-        splashOverlay.classList.add('fade-out');
-        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
-      }
-    }
-    setTimeout(() => hideSplash(), 10000);
-
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -165,6 +159,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
 
+    // --- 変数定義 ---
     let waitOverlayTimer: number | null = null;
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
@@ -184,6 +179,11 @@ const { apiBaseUrl = '' } = Astro.props;
     let preGeneratedAcks: Map<string, string> = new Map();
     let globalAudioContext: AudioContext | null = null;
     let audioWorkletNode: AudioWorkletNode | null = null;
+    
+    // iPhone用変数
+    let scriptProcessor: ScriptProcessorNode | null = null; 
+    let muteGainNode: GainNode | null = null; 
+    
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
     let streamingTranscript = '';
@@ -192,25 +192,31 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    // VAD用変数
     let analyser: AnalyserNode | null = null;
     let vadCheckInterval: number | null = null;
     let silenceTimer: number | null = null;
     let hasSpoken = false;
     let recordingStartTime = 0;
 
-    // ★ iPhone用追加変数
-    let scriptProcessor: ScriptProcessorNode | null = null;
-    let muteGainNode: GainNode | null = null;
-
     const ttsPlayer = new Audio();
     // デバイス判定
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
     
-    // VAD設定
     const SILENCE_THRESHOLD = 30; 
     const SILENCE_DURATION = 3000;
     const MIN_RECORDING_TIME = 3000;
+
+    // --- ★重要: 関数定義 (呼び出し順序エラー回避のため全て先に定義) ---
+
+    function hideSplash() {
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      }
+    }
+    setTimeout(() => hideSplash(), 10000);
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -291,6 +297,23 @@ const { apiBaseUrl = '' } = Astro.props;
       container.appendChild(prompt);
     }
 
+    // ★ toggleRecordingの定義 (showMicPromptより前に置く)
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return; 
+      }
+      if (isStreamingSTT) { 
+        await new Promise(r => setTimeout(r, 100));
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
     function showMicPrompt() {
       const modal = document.createElement('div');
       modal.id = 'mic-prompt-modal';
@@ -308,6 +331,8 @@ const { apiBaseUrl = '' } = Astro.props;
       document.head.appendChild(style);
       document.body.appendChild(modal);
       const btn = document.getElementById('mic-prompt-btn');
+      
+      // toggleRecordingは既に定義されているので呼べる
       btn?.addEventListener('click', async () => {
         modal.remove();
         await toggleRecording();
@@ -403,7 +428,7 @@ const { apiBaseUrl = '' } = Astro.props;
       try {
         isAISpeaking = true;
         if (isAndroid && isRecording) {
-          stopStreamingSTT(); // Androidはここで止める（マイク競合回避）
+          stopStreamingSTT();
         }
         
         voiceStatus.innerHTML = t('voiceStatusSynthesizing');
@@ -424,15 +449,18 @@ const { apiBaseUrl = '' } = Astro.props;
               isAISpeaking = false;
               
               if (autoRestartMic) {
-                // iPhone/PCはマイク再開、Androidはプロンプト表示
-                if (!isRecording && !isAndroid) {
+                if (isAndroid) {
                   try {
                     await startStreamingSTT();
                   } catch (error) {
                     showMicPrompt();
                   }
-                } else {
+                } else if (!isRecording) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
                     showMicPrompt();
+                  }
                 }
               }
               resolve();
@@ -492,22 +520,20 @@ const { apiBaseUrl = '' } = Astro.props;
       return binary;
     }
 
+    // ★★★ 音声認識ロジック (ハイブリッド) ★★★
     async function startStreamingSTT() {
       try {
         if (splashVideo) { splashVideo.pause(); }
         if (waitVideo) { waitVideo.pause(); }
         if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
         
-        // クリーンアップ
+        // Clean
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
-        // iPhone用クリーンアップ
         if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
         if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
         
-        // ★ AudioContext再利用
         if (!globalAudioContext) {
           try {
-            // iPhoneのみInteractive、他はPlayback
             globalAudioContext = new AudioContext({ latencyHint: isIOS ? 'interactive' : 'playback' });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
@@ -522,10 +548,9 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // iPhoneだけ設定変更 (AGCはON, EchoCancellationはOFF)
           const audioConstraints: any = { 
             channelCount: 1,
-            echoCancellation: isIOS ? false : true,
+            echoCancellation: isIOS ? false : true, // iPhoneはOFF
             noiseSuppression: isIOS ? false : true,
             autoGainControl: true 
           };
@@ -541,12 +566,10 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ iPhone専用分岐: ScriptProcessor + 5倍増幅 ★★★
+        // --- iOS用分岐 ---
         if (isIOS) {
             const bufferSize = 4096;
             scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
-            
-            // ハウリング防止用ミュート
             muteGainNode = globalAudioContext.createGain();
             muteGainNode.gain.value = 0;
             
@@ -560,15 +583,12 @@ const { apiBaseUrl = '' } = Astro.props;
                 const channelData = inputBuffer.getChannelData(0);
                 
                 let writeIndex = 0;
-                
-                // シンプル間引き + 5倍増幅
                 for (let i = 0; i < channelData.length; i++) {
                     inputSampleCount++;
                     if (inputSampleCount >= downsampleRatio) {
                         inputSampleCount -= downsampleRatio;
-                        
                         if (writeIndex < bufferSize) {
-                            let value = channelData[i] * 5.0; // 増幅
+                            let value = channelData[i] * 5.0; // 5倍増幅
                             value = Math.max(-1, Math.min(1, value));
                             const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
                             outputBuffer[writeIndex++] = int16Value;
@@ -580,11 +600,8 @@ const { apiBaseUrl = '' } = Astro.props;
                     const chunk = outputBuffer.slice(0, writeIndex);
                     try {
                         const base64 = fastArrayBufferToBase64(chunk.buffer);
-                        socket.emit('audio_chunk', { 
-                            chunk: base64,
-                            sample_rate: 16000
-                        });
-                    } catch (e) { console.error(e); }
+                        socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
+                    } catch (e) {}
                 }
             };
             
@@ -593,7 +610,7 @@ const { apiBaseUrl = '' } = Astro.props;
             muteGainNode.connect(globalAudioContext.destination);
             
         } else {
-            // ★★★ PC/Android: 従来のAudioWorklet (そのまま維持) ★★★
+            // --- Android/PC用 (AudioWorklet) ---
             const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -648,17 +665,16 @@ registerProcessor('audio-processor', AudioProcessor);
               try {
                 const base64 = fastArrayBufferToBase64(audioChunk.buffer);
                 socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
-              } catch (e) { console.error('Audio convert error', e); }
+              } catch (e) {}
             };
             source.connect(audioWorkletNode);
             audioWorkletNode.connect(globalAudioContext.destination);
         }
         
-        // ★★★ VAD (無音検知) - 全デバイス共通 ★★★
-        // iPhone/PC問わずAnalzyerをSourceに接続して監視
+        // ★ VAD (共通)
         analyser = globalAudioContext.createAnalyser();
         analyser.fftSize = 512;
-        source.connect(analyser); 
+        source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         hasSpoken = false; recordingStartTime = Date.now();
         
@@ -713,7 +729,6 @@ registerProcessor('audio-processor', AudioProcessor);
       if (analyser) { analyser.disconnect(); analyser = null; }
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       
-      // クリーンアップ (両方に対応)
       if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
       if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
@@ -723,32 +738,8 @@ registerProcessor('audio-processor', AudioProcessor);
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
-    async function startLegacyRecording() { /* ... */ }
-    async function transcribeAudio(audioBlob: Blob) { /* ... */ }
-
-    function initializeWebSocketSTT() {
-      try {
-        const wsUrl = apiBase || window.location.origin;
-        socket = io(wsUrl);
-        socket.on('connect', () => { isStreamingSTT = true; });
-        socket.on('disconnect', () => { isStreamingSTT = false; });
-        socket.on('transcript', (data: any) => {
-          const { text, is_final } = data;
-          if (isAISpeaking) return;
-          if (is_final) { 
-            streamingTranscript = text; 
-            handleStreamingSTTComplete(text);
-            currentAISpeech = "";
-          } else { 
-            userInput.value = text;
-          }
-        });
-        socket.on('error', (data: any) => { 
-          addMessage('system', `${t('sttError')} ${data.message}`);
-          if (isRecording) stopStreamingSTT();
-        });
-      } catch (error) { isStreamingSTT = false; }
-    }
+    async function startLegacyRecording() { /* 省略 */ }
+    async function transcribeAudio(audioBlob: Blob) { /* 省略 */ }
 
     async function handleStreamingSTTComplete(transcript: string) {
       stopStreamingSTT();
@@ -1008,22 +999,6 @@ registerProcessor('audio-processor', AudioProcessor);
       }
     }
 
-    async function toggleRecording() {
-      enableAudioPlayback();
-      userInput.value = '';
-      stopCurrentAudio();
-      if (isRecording) { 
-        stopAllActivities();
-        return; 
-      }
-      if (isStreamingSTT) { 
-        await new Promise(r => setTimeout(r, 100));
-        await startStreamingSTT(); 
-      } else { 
-        await startLegacyRecording();
-      }
-    }
-
     function toggleTTS() {
       if (!isUserInteracted) { enableAudioPlayback(); return; }
       enableAudioPlayback();
@@ -1063,6 +1038,7 @@ registerProcessor('audio-processor', AudioProcessor);
       document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
     }
 
+    // --- 初期化フロー ---
     async function initialize() {
         setTimeout(() => hideSplash(), 1000); 
         try {
