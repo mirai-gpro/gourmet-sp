@@ -54,7 +54,6 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* GourmetChat.astro の完全なオリジナルスタイル */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -94,8 +93,6 @@ const { apiBaseUrl = '' } = Astro.props;
   .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
-  
-  /* スプラッシュ・待機画面 */
   .splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
   .splash-overlay.fade-out { opacity: 0; pointer-events: none; }
   .splash-overlay.hidden { display: none; }
@@ -108,7 +105,6 @@ const { apiBaseUrl = '' } = Astro.props;
   .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
   .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
   
-  /* フローティングボタン */
   .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
   .floating-buttons.keyboard-active { bottom: 320px; }
   @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
@@ -144,20 +140,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
     const apiBase = container.dataset.apiBase || '';
 
+    // --- DOM要素 ---
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
-    
-    // --- 関数定義 (順序を整理) ---
-    
-    function hideSplash() {
-      if (splashVideo) splashVideo.loop = false;
-      if (splashOverlay) {
-        splashOverlay.classList.add('fade-out');
-        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
-      }
-    }
-    setTimeout(() => hideSplash(), 10000);
-
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -171,6 +156,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
 
+    // --- 変数 ---
     let waitOverlayTimer: number | null = null;
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
@@ -190,7 +176,7 @@ const { apiBaseUrl = '' } = Astro.props;
     let preGeneratedAcks: Map<string, string> = new Map();
     let globalAudioContext: AudioContext | null = null;
     let audioWorkletNode: AudioWorkletNode | null = null;
-    // iPhone用変数
+    // iOS用
     let scriptProcessor: ScriptProcessorNode | null = null; 
     let muteGainNode: GainNode | null = null; 
     
@@ -209,13 +195,23 @@ const { apiBaseUrl = '' } = Astro.props;
     let recordingStartTime = 0;
 
     const ttsPlayer = new Audio();
-    // ★ デバイス判定
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
     
     const SILENCE_THRESHOLD = 30; 
     const SILENCE_DURATION = 3000;
     const MIN_RECORDING_TIME = 3000;
+
+    // --- 関数定義 ---
+
+    function hideSplash() {
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      }
+    }
+    setTimeout(() => hideSplash(), 10000);
 
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
@@ -287,6 +283,23 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
+    // Defined before speakTextGCP
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return; 
+      }
+      if (isStreamingSTT) { 
+        await new Promise(r => setTimeout(r, 100));
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
     function showClickPrompt() {
       const prompt = document.createElement('div');
       prompt.className = 'click-prompt';
@@ -294,6 +307,31 @@ const { apiBaseUrl = '' } = Astro.props;
       prompt.addEventListener('click', enableAudioPlayback);
       container.style.position = 'relative';
       container.appendChild(prompt);
+    }
+
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
+          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
+        </div>
+      `;
+      const style = document.createElement('style');
+      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      const btn = document.getElementById('mic-prompt-btn');
+      // toggleRecording is defined above, safe to use
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
     }
 
     function stopCurrentAudio() {
@@ -446,30 +484,6 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    function showMicPrompt() {
-      const modal = document.createElement('div');
-      modal.id = 'mic-prompt-modal';
-      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
-      modal.innerHTML = `
-        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
-          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
-          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
-          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
-        </div>
-      `;
-      const style = document.createElement('style');
-      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
-      document.head.appendChild(style);
-      document.body.appendChild(modal);
-      const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => {
-        modal.remove();
-        await toggleRecording();
-      });
-      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
-    }
-
     function isSemanticEcho(transcript: string, aiText: string): boolean {
       if (!aiText || !transcript) return false;
       const normTranscript = normalizeText(transcript);
@@ -513,7 +527,6 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (!globalAudioContext) {
           try {
-            // iOSはInteractive, 他はPlayback
             globalAudioContext = new AudioContext({ latencyHint: isIOS ? 'interactive' : 'playback' });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
@@ -528,7 +541,6 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // iOSはAGC ON推奨
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: isIOS ? false : true,
@@ -547,12 +559,12 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ iPhone対応ロジック: iOSだけ ScriptProcessor ★★★
+        // ★★★ iOS: ScriptProcessorNode (メインスレッド処理) ★★★
         if (isIOS) {
             const bufferSize = 4096;
             scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
             
-            // ハウリング防止
+            // ハウリング防止用ミュート
             muteGainNode = globalAudioContext.createGain();
             muteGainNode.gain.value = 0;
             
@@ -567,14 +579,13 @@ const { apiBaseUrl = '' } = Astro.props;
                 
                 let writeIndex = 0;
                 
-                // iPhone用: シンプル間引き + 5倍増幅
                 for (let i = 0; i < channelData.length; i++) {
                     inputSampleCount++;
                     if (inputSampleCount >= downsampleRatio) {
                         inputSampleCount -= downsampleRatio;
                         
                         if (writeIndex < bufferSize) {
-                            let value = channelData[i] * 5.0; // 増幅
+                            let value = channelData[i] * 5.0; // 5倍増幅
                             value = Math.max(-1, Math.min(1, value));
                             const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
                             outputBuffer[writeIndex++] = int16Value;
@@ -596,7 +607,7 @@ const { apiBaseUrl = '' } = Astro.props;
             muteGainNode.connect(globalAudioContext.destination);
             
         } else {
-            // ★★★ PC/Android: AudioWorklet (線形補間・高品質) ★★★
+            // ★ PC/Android: AudioWorklet
             const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -605,30 +616,24 @@ class AudioProcessor extends AudioWorkletProcessor {
     this.buffer = new Int16Array(this.bufferSize); 
     this.writeIndex = 0;
     this.ratio = ${downsampleRatio}; 
-    this.readIndex = 0;
+    this.inputSampleCount = 0;
   }
   process(inputs, outputs, parameters) {
     const input = inputs[0];
     if (!input || input.length === 0) return true;
     const channelData = input[0];
-    
-    let i = 0;
-    while (this.readIndex < channelData.length) {
-       const idx = Math.floor(this.readIndex);
-       const frac = this.readIndex - idx;
-       const v1 = channelData[idx];
-       const v2 = (idx + 1 < channelData.length) ? channelData[idx + 1] : v1;
-       
-       let value = v1 * (1 - frac) + v2 * frac;
-       const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
-       
-       if (this.writeIndex < this.bufferSize) {
-         this.buffer[this.writeIndex++] = int16Value;
-       }
-       this.readIndex += this.ratio;
-       if (this.writeIndex >= this.bufferSize) { this.flush(); }
+    for (let i = 0; i < channelData.length; i++) {
+      this.inputSampleCount++;
+      if (this.inputSampleCount >= this.ratio) {
+        this.inputSampleCount -= this.ratio;
+        if (this.writeIndex < this.bufferSize) {
+          const s = Math.max(-1, Math.min(1, channelData[i]));
+          const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          this.buffer[this.writeIndex++] = int16Value;
+        }
+        if (this.writeIndex >= this.bufferSize) { this.flush(); }
+      }
     }
-    this.readIndex -= channelData.length;
     return true;
   }
   flush() {
@@ -663,7 +668,7 @@ registerProcessor('audio-processor', AudioProcessor);
             audioWorkletNode.connect(globalAudioContext.destination);
         }
         
-        // ★★★ VAD (共通) ★★★
+        // ★ VAD (共通)
         analyser = globalAudioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser); 
@@ -1016,22 +1021,6 @@ registerProcessor('audio-processor', AudioProcessor);
       }
     }
 
-    async function toggleRecording() {
-      enableAudioPlayback();
-      userInput.value = '';
-      stopCurrentAudio();
-      if (isRecording) { 
-        stopAllActivities();
-        return; 
-      }
-      if (isStreamingSTT) { 
-        await new Promise(r => setTimeout(r, 100));
-        await startStreamingSTT(); 
-      } else { 
-        await startLegacyRecording();
-      }
-    }
-
     function toggleTTS() {
       if (!isUserInteracted) { enableAudioPlayback(); return; }
       enableAudioPlayback();
@@ -1104,7 +1093,6 @@ registerProcessor('audio-processor', AudioProcessor);
     speakerBtn.addEventListener('click', toggleTTS);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
-    
     stopBtn.addEventListener('click', () => { stopAllActivities(); });
     
     // ソフトキーボード検知
