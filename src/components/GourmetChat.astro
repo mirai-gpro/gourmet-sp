@@ -54,7 +54,7 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
-  /* GourmetChat.astro のオリジナルスタイル */
+  /* スタイル定義 */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -94,6 +94,7 @@ const { apiBaseUrl = '' } = Astro.props;
   .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
+  
   .splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
   .splash-overlay.fade-out { opacity: 0; pointer-events: none; }
   .splash-overlay.hidden { display: none; }
@@ -182,14 +183,10 @@ const { apiBaseUrl = '' } = Astro.props;
     
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
-    // AudioContext (Global)
     let globalAudioContext: AudioContext | null = null;
     let audioWorkletNode: AudioWorkletNode | null = null;
-    
-    // ★★★ [移植1] iPhone用の変数（ScriptProcessor & MuteGain）
     let scriptProcessor: ScriptProcessorNode | null = null; 
     let muteGainNode: GainNode | null = null; 
-    
     let mediaStream: MediaStream | null = null;
     let socket: any = null;
     let streamingTranscript = '';
@@ -198,7 +195,6 @@ const { apiBaseUrl = '' } = Astro.props;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    // ★★★ [復活] VAD変数 (iPhone版で削除されていたものを復元)
     let analyser: AnalyserNode | null = null;
     let vadCheckInterval: number | null = null;
     let silenceTimer: number | null = null;
@@ -206,12 +202,9 @@ const { apiBaseUrl = '' } = Astro.props;
     let recordingStartTime = 0;
 
     const ttsPlayer = new Audio();
-    
-    // デバイス判定
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
     
-    // VAD設定
     const SILENCE_THRESHOLD = 30; 
     const SILENCE_DURATION = 3000;
     const MIN_RECORDING_TIME = 3000;
@@ -505,15 +498,14 @@ const { apiBaseUrl = '' } = Astro.props;
         if (waitVideo) { waitVideo.pause(); }
         if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
         
-        // クリーンアップ (iPhone版の変数も考慮)
+        // クリーンアップ
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
         if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
         
-        // ★★★ [移植2] AudioContext設定（iPhone版から）
         if (!globalAudioContext) {
           try {
-            globalAudioContext = new AudioContext({ latencyHint: 'playback' }); 
+            globalAudioContext = new AudioContext({ latencyHint: isIOS ? 'interactive' : 'playback' });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
             throw e;
@@ -527,7 +519,7 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // ★★★ [移植3] マイク制約（iPhone版から: EchoCancellation=false for iOS）
+          // iOSはAGC ON、それ以外はOFF（感度確保優先）
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: isIOS ? false : true,
@@ -546,12 +538,12 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ [移植4] iOS用 ScriptProcessorロジック ★★★
+        // ★★★ iOS: ScriptProcessorNode (メインスレッド処理で音飛び回避) ★★★
         if (isIOS) {
             const bufferSize = 4096;
             scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
             
-            // ハウリング防止
+            // ハウリング防止用ミュートノード
             muteGainNode = globalAudioContext.createGain();
             muteGainNode.gain.value = 0;
             
@@ -566,14 +558,14 @@ const { apiBaseUrl = '' } = Astro.props;
                 
                 let writeIndex = 0;
                 
-                // ★ [移植5] シンプル間引き + 5倍増幅（iPhone版の実績ある処理）
+                // ★ シンプルな間引き + 5倍増幅（iPhone安定ロジック）
                 for (let i = 0; i < channelData.length; i++) {
                     inputSampleCount++;
                     if (inputSampleCount >= downsampleRatio) {
                         inputSampleCount -= downsampleRatio;
                         
                         if (writeIndex < bufferSize) {
-                            // 5倍増幅
+                            // 5倍増幅（重要）
                             let value = channelData[i] * 5.0;
                             value = Math.max(-1, Math.min(1, value));
                             
@@ -600,7 +592,8 @@ const { apiBaseUrl = '' } = Astro.props;
             muteGainNode.connect(globalAudioContext.destination);
             
         } else {
-            [cite_start]// Android/PC用: AudioWorklet (シンプル間引き) [cite: 455]
+            // ★ PC/Android: AudioWorklet (シンプル間引きロジック)
+            // 文字列内に引用タグを一切含めない（エラー原因排除）
             const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -616,7 +609,6 @@ class AudioProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     if (!input || input.length === 0) return true;
     const channelData = input[0];
-    if (!channelData || channelData.length === 0) return true;
     
     for (let i = 0; i < channelData.length; i++) {
       this.inputSampleCount++;
@@ -675,13 +667,12 @@ registerProcessor('audio-processor', AudioProcessor);
             
             source.connect(audioWorkletNode);
             audioWorkletNode.connect(globalAudioContext.destination);
-        } // End of iOS/Android Branch
+        }
         
-        // ★★★ [復活] VAD (無音検知) ★★★
-        // iPhone版ではコメントアウトされていた部分を、Sourceから直接分岐させて有効化
+        // ★★★ VAD (無音検知) の復活 ★★★
         analyser = globalAudioContext.createAnalyser();
         analyser.fftSize = 512;
-        source.connect(analyser); // マイク直結
+        source.connect(analyser); // マイク直結で分析
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         hasSpoken = false; recordingStartTime = Date.now();
         
@@ -731,18 +722,18 @@ registerProcessor('audio-processor', AudioProcessor);
     }
 
     function stopStreamingSTT() {
-      // VAD関連の停止処理も確実に行う
+      // VAD停止処理
       if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if (analyser) { analyser.disconnect(); analyser = null; }
 
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       
-      // iOS用
+      // iOS用クリーンアップ
       if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
       if (muteGainNode) { muteGainNode.disconnect(); muteGainNode = null; }
       
-      // Android/PC用
+      // Android/PC用クリーンアップ
       if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
       
       if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
@@ -750,7 +741,7 @@ registerProcessor('audio-processor', AudioProcessor);
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
-    // --- Legacy Recording (バックアップ用) ---
+    // --- Legacy Recordingは省略 ---
     async function startLegacyRecording() { /* ... */ }
     async function transcribeAudio(audioBlob: Blob) { /* ... */ }
 
@@ -1034,90 +1025,6 @@ registerProcessor('audio-processor', AudioProcessor);
       finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
       userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
       }
-    }
-
-    // イベントリスナー
-    function openReservationModal() {
-      if (currentShops.length === 0) { showError(t('searchError'));
-      return; }
-      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
-    }
-
-    async function toggleRecording() {
-      enableAudioPlayback();
-      userInput.value = '';
-      stopCurrentAudio();
-      if (isRecording) { 
-        stopAllActivities();
-        return;
-      }
-      if (isStreamingSTT) { 
-        await new Promise(r => setTimeout(r, 100));
-        await startStreamingSTT(); 
-      } else { 
-        await startLegacyRecording();
-      }
-    }
-
-    function toggleTTS() {
-      if (!isUserInteracted) { enableAudioPlayback();
-      return; }
-      enableAudioPlayback();
-      isTTSEnabled = !isTTSEnabled;
-      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
-      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
-      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
-      if (!isTTSEnabled) stopCurrentAudio();
-    }
-
-    function stopAllActivities() {
-      if (isProcessing) {
-        fetch(`${apiBase}/api/cancel`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
-        }).catch(err => console.error('中止リクエスト失敗:', err));
-      }
-      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null;
-      }
-      if (isRecording) stopStreamingSTT();
-      stopCurrentAudio();
-      waitOverlay.classList.add('hidden');
-      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null;
-      }
-      isProcessing = false;
-      isAISpeaking = false;
-      voiceStatus.innerHTML = t('voiceStatusStopped');
-      voiceStatus.className = 'voice-status stopped';
-      userInput.value = '';
-      userInput.focus();
-      if (window.innerWidth < 1024) {
-        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
-      }
-    }
-
-    // 初期化関数
-    async function initialize() {
-        try {
-            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
-            const data = await response.json(); sessionId = data.session_id;
-            addMessage('assistant', t('initialGreeting'), null, true);
-            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
-            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
-            const ackPromises = ackTexts.map(async (text) => {
-              try {
-                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
-                const ackData = await ackResponse.json();
-                if 
-                (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
-              } catch (e) {}
-            });
-            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
-            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
-            if (splashOverlay) hideSplash();
-            initializeWebSocketSTT();
-            updateUILanguage();
-        } catch(e) { console.error(e); }
     }
 
     // イベントリスナー登録
