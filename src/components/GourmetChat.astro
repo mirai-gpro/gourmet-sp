@@ -39,13 +39,18 @@ const { apiBaseUrl = '' } = Astro.props;
   <div class="input-area">
     <div class="input-group">
       <input type="text" id="userInput" placeholder="メッセージを入力..." disabled />
-      <button class="btn btn-icon btn-mic" id="micBtn" title="音声入力" disabled>🎤</button>
       <button class="btn btn-icon btn-speaker" id="speakerBtn" title="音声読み上げON" disabled>🔊</button>
       <button class="btn" id="sendBtn" disabled>送信</button>
     </div>
     <div class="input-actions">
       <button class="btn btn-reservation" id="reservationBtn" disabled>📞 予約依頼する</button>
     </div>
+  </div>
+  
+  <!-- フローティングボタン（右下固定） -->
+  <div class="floating-buttons">
+    <button class="btn-floating btn-stop" id="stopBtn" title="中止"></button>
+    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="音声入力" disabled></button>
   </div>
 </div>
 
@@ -118,6 +123,101 @@ const { apiBaseUrl = '' } = Astro.props;
   .wait-content { text-align: center; width: 80%; max-width: 400px; }
   .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
   .wait-text { color: #667eea; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
+  
+  /* フローティングボタン */
+  .floating-buttons {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 12px;
+    z-index: 1000;
+    transition: bottom 0.3s ease;
+  }
+  
+  /* ソフトキーボード表示時に上に移動 */
+  .floating-buttons.keyboard-active {
+    bottom: 320px;
+  }
+  
+  @media (max-width: 768px) {
+    .floating-buttons.keyboard-active {
+      bottom: 280px;
+    }
+  }
+  
+  .btn-floating {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  .btn-floating:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  }
+  
+  .btn-floating:active {
+    transform: translateY(0);
+  }
+  
+  .btn-stop {
+    background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%);
+    color: white;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .btn-stop::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: url('/stop.svg') center/60% no-repeat;
+  }
+  
+  .btn-mic-float {
+    background: transparent;
+    color: white;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    box-shadow: none;
+  }
+  
+  .btn-mic-float::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: url('/mic-off.svg') center/100% no-repeat;
+  }
+  
+  .btn-mic-float:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  
+  .btn-mic-float:disabled::before {
+    opacity: 0.5;
+  }
+  
+  .btn-mic-float.recording {
+    background: transparent;
+  }
+  
+  .btn-mic-float.recording::before {
+    background: url('/mic-on.svg') center/100% no-repeat;
+  }
 </style>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -152,7 +252,8 @@ const { apiBaseUrl = '' } = Astro.props;
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
-    const micBtn = document.getElementById('micBtn') as HTMLButtonElement;
+    const micBtnFloat = document.getElementById('micBtnFloat') as HTMLButtonElement;
+    const stopBtn = document.getElementById('stopBtn') as HTMLButtonElement;
     const speakerBtn = document.getElementById('speakerBtn') as HTMLButtonElement;
     const reservationBtn = document.getElementById('reservationBtn') as HTMLButtonElement;
     const voiceStatus = document.getElementById('voiceStatus')!;
@@ -343,7 +444,7 @@ const { apiBaseUrl = '' } = Astro.props;
     function updateUILanguage() {
       voiceStatus.innerHTML = t('voiceStatusStopped');
       userInput.placeholder = t('inputPlaceholder');
-      micBtn.title = t('btnVoiceInput');
+      micBtnFloat.title = t('btnVoiceInput');
       speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
       sendBtn.textContent = t('btnSend');
       reservationBtn.innerHTML = t('btnReservation');
@@ -441,7 +542,7 @@ const { apiBaseUrl = '' } = Astro.props;
       console.log('VAD Stop'); stopVAD();
       if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
       if (recordingTimer) clearTimeout(recordingTimer);
-      isRecording = false; micBtn.classList.remove('recording'); micBtn.innerHTML = '🎤';
+      isRecording = false; micBtnFloat.classList.remove('recording'); micBtnFloat.innerHTML = '🎤';
     }
 
     async function toggleRecording() {
@@ -500,8 +601,8 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         
         isRecording = true;
-        micBtn.classList.add('recording');
-        micBtn.innerHTML = '⏹';
+        micBtnFloat.classList.add('recording');
+        micBtnFloat.innerHTML = '⏹';
         voiceStatus.innerHTML = t('voiceStatusListening');
         
         recordingTimer = window.setTimeout(() => { 
@@ -759,8 +860,8 @@ const { apiBaseUrl = '' } = Astro.props;
       }
       
       isRecording = false;
-      micBtn.classList.remove('recording');
-      micBtn.innerHTML = '🎤';
+      micBtnFloat.classList.remove('recording');
+      micBtnFloat.innerHTML = '🎤';
     }
 
     async function startLegacyRecording() {
@@ -789,8 +890,8 @@ const { apiBaseUrl = '' } = Astro.props;
           if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob); }
         };
         mediaRecorder.start();
-        isRecording = true; micBtn.classList.add('recording'); micBtn.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
-        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtn.classList.remove('recording'); micBtn.innerHTML = '🎤'; addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
+        isRecording = true; micBtnFloat.classList.add('recording'); micBtnFloat.innerHTML = '⏹'; voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); micBtnFloat.innerHTML = '🎤'; addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
       } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
     }
 
@@ -974,7 +1075,7 @@ const { apiBaseUrl = '' } = Astro.props;
       unlockAudioParams();
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
-      isProcessing = true; sendBtn.disabled = true; micBtn.disabled = true; userInput.disabled = true;
+      isProcessing = true; sendBtn.disabled = true; micBtnFloat.disabled = true; userInput.disabled = true;
 
       if (!isFromVoiceInput) {
         addMessage('user', message);
@@ -983,7 +1084,7 @@ const { apiBaseUrl = '' } = Astro.props;
              const msg = t('dateWarningMsg');
              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
              addMessage('assistant', msg);
-             userInput.value = ''; isProcessing = false; sendBtn.disabled = false; micBtn.disabled = false; userInput.disabled = false; userInput.focus();
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
              return;
         }
         const textLength = message.trim().replace(/\s+/g, '').length;
@@ -991,7 +1092,7 @@ const { apiBaseUrl = '' } = Astro.props;
              const msg = t('shortMsgWarning');
              addMessage('assistant', msg);
              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
-             userInput.value = ''; isProcessing = false; sendBtn.disabled = false; micBtn.disabled = false; userInput.disabled = false; userInput.focus();
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
              return;
         }
         userInput.value = '';
@@ -1112,7 +1213,7 @@ const { apiBaseUrl = '' } = Astro.props;
           }
         }
       } catch (error) { console.error('送信エラー:', error); hideWaitOverlay(); showError('メッセージの送信に失敗しました。'); }
-      finally { isProcessing = false; sendBtn.disabled = false; micBtn.disabled = false; userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur(); }
+      finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false; userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur(); }
     }
 
     // イベントリスナー
@@ -1137,17 +1238,35 @@ const { apiBaseUrl = '' } = Astro.props;
               } catch (e) {}
             });
             await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
-            userInput.disabled = false; sendBtn.disabled = false; micBtn.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
             if (splashOverlay) hideSplash();
             initializeWebSocketSTT();
             updateUILanguage();
+            
+            // ★★★ ソフトキーボード対応（フローティングボタン位置調整） ★★★
+            const floatingButtons = document.querySelector('.floating-buttons');
+            if (floatingButtons) {
+              userInput.addEventListener('focus', () => {
+                floatingButtons.classList.add('keyboard-active');
+              });
+              userInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                  floatingButtons.classList.remove('keyboard-active');
+                }, 300);
+              });
+            }
         } catch(e) { console.error(e); }
     }
 
     // イベントリスナー登録
     languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
-    micBtn.addEventListener('click', toggleRecording);
+    micBtnFloat.addEventListener('click', toggleRecording);
+    stopBtn.addEventListener('click', () => {
+      if (isRecording) {
+        stopStreamingSTT();
+      }
+    });
     speakerBtn.addEventListener('click', toggleTTS);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
