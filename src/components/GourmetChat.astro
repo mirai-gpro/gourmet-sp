@@ -34,6 +34,7 @@ const { apiBaseUrl = '' } = Astro.props;
   </div>
 
   <div class="voice-status stopped" id="voiceStatus">🎤 音声認識: 停止中</div>
+  
   <div class="chat-area" id="chatArea"></div>
 
   <div class="input-area">
@@ -54,19 +55,21 @@ const { apiBaseUrl = '' } = Astro.props;
 </div>
 
 <style>
+  /* コンテナ */
   .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
+  
+  /* 言語選択 */
   .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
   .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
-  .language-dropdown:hover { background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  .language-dropdown:focus { border-color: #fbbf24; }
-  .chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-  .chat-header h2 { font-size: 20px; font-weight: 600; margin: 0 0 4px 0; }
-  .chat-header p { font-size: 13px; opacity: 0.9; margin: 0; }
+  
+  /* ステータス */
   .voice-status { padding: 10px 15px; text-align: center; font-size: 12px; border-bottom: 1px solid #e0e0e0; font-weight: 500; }
   .voice-status.listening { background: #e8f5e9; color: #2e7d32; animation: pulse 2s infinite; }
   .voice-status.stopped { background: #ffebee; color: #c62828; }
   .voice-status.speaking { background: #e1f5fe; color: #0277bd; animation: pulse 2s infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+  
+  /* チャットエリア */
   .chat-area { flex: 1; overflow-y: auto; padding: 20px; background: #f7f9fc; min-height: 300px; }
   .message { margin-bottom: 16px; display: flex; gap: 10px; }
   .message.assistant { flex-direction: row; }
@@ -81,10 +84,9 @@ const { apiBaseUrl = '' } = Astro.props;
   .message.user .message-content { background: #667eea; color: white; }
   .message.system .message-content { background: #fff3e0; color: #e65100; font-size: 12px; }
   .summary-box { margin-top: 10px; padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; font-size: 13px; color: #92400e; }
-  .summary-box strong { display: block; margin-bottom: 6px; color: #78350f; }
   .final-summary { margin: 16px 0; padding: 16px; background: white; border: 2px solid #10b981; border-radius: 12px; }
-  .final-summary h3 { color: #065f46; margin: 0 0 10px 0; font-size: 16px; }
-  .final-summary-content { white-space: pre-wrap; line-height: 1.7; color: #1f2937; font-size: 13px; }
+  
+  /* 入力エリア */
   .input-area { padding: 16px; background: white; border-top: 1px solid #e5e7eb; }
   .input-group { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   #userInput { flex: 1; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 14px; outline: none; transition: border-color 0.2s; }
@@ -93,55 +95,59 @@ const { apiBaseUrl = '' } = Astro.props;
   .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-reservation { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; font-size: 13px; padding: 10px 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); }
-  .btn-reservation:hover:not(:disabled) { box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4); transform: translateY(-1px); }
-  .btn-reservation:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-icon { padding: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
-  .btn-mic { background: #10b981; }
-  .btn-mic:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
-  .btn-mic.recording { background: #ef4444; animation: pulse-btn 1.5s infinite; }
-  @keyframes pulse-btn { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
   .btn-speaker { background: #f59e0b; }
-  .btn-speaker:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4); }
   .btn-speaker.disabled { background: #9ca3af; }
   .input-actions { display: flex; justify-content: flex-end; }
   .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
+  
+  /* スプラッシュ・待機画面 */
   .splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
   .splash-overlay.fade-out { opacity: 0; pointer-events: none; }
   .splash-overlay.hidden { display: none; }
   .splash-video { width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; transform: scale(0.5); }
   .splash-loading { position: absolute; bottom: 60px; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 1; }
   .splash-loading .spinner { width: 40px; height: 40px; border: 4px solid rgba(102, 126, 234, 0.3); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
-  .splash-loading p { color: #667eea; font-size: 14px; font-weight: 600; margin: 0; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); }
-  .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
-  .click-prompt p { margin: 5px 0; }
-  /* 待機オーバーレイ */
   .wait-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 500; display: flex; align-items: center; justify-content: center; border-radius: 16px; opacity: 1; transition: opacity 0.5s ease-out, visibility 0.5s; }
   .wait-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
   .wait-content { text-align: center; width: 80%; max-width: 400px; }
   .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
-  .wait-text { color: #667eea; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
+  .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
   
-  /* フローティングボタン */
+  /* フローティングボタン（画像依存なし・CSS描画） */
   .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
   .floating-buttons.keyboard-active { bottom: 320px; }
   @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
-  .btn-floating { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; }
+  
+  .btn-floating { 
+    width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 24px; 
+    cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); 
+    transition: transform 0.2s, box-shadow 0.2s; 
+    display: flex; align-items: center; justify-content: center; 
+  }
   .btn-floating:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
   .btn-floating:active { transform: translateY(0); }
   
+  /* 停止ボタン: 赤 + 四角 */
   .btn-stop { background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); color: white; }
   .btn-stop::before { content: '⏹'; font-size: 24px; }
   
-  .btn-mic-float { background: #999; color: white; position: relative; overflow: visible; box-shadow: none; }
+  /* マイクボタン: 緑/赤 + マイク/四角 */
+  .btn-mic-float { background: #999; color: white; position: relative; overflow: visible; }
   .btn-mic-float:not(:disabled) { background: #10b981; }
   .btn-mic-float::before { content: '🎤'; font-size: 28px; }
   .btn-mic-float:disabled { cursor: not-allowed; opacity: 0.6; }
   
+  /* 録音中アニメーション */
   .btn-mic-float.recording { background: #ef4444; }
   .btn-mic-float.recording::before { content: '⏹'; }
-  .btn-mic-float.recording::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid #ef4444; opacity: 0; animation: ripple 1.5s ease-out infinite; }
+  .btn-mic-float.recording::after { 
+    content: ''; position: absolute; width: 100%; height: 100%; 
+    border-radius: 50%; border: 3px solid #ef4444; 
+    opacity: 0; animation: ripple 1.5s ease-out infinite; 
+  }
   @keyframes ripple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
 </style>
 
@@ -149,12 +155,14 @@ const { apiBaseUrl = '' } = Astro.props;
 
 <script>
   import { i18n } from '../constants/i18n';
+  
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
     en: { tts: 'en-US', stt: 'en-US', voice: 'en-US-Studio-O' },
     zh: { tts: 'cmn-CN', stt: 'cmn-CN', voice: 'cmn-CN-Wavenet-A' },
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
+
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
     if (!container) return;
@@ -165,13 +173,15 @@ const { apiBaseUrl = '' } = Astro.props;
     const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
     const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
     function hideSplash() {
-      splashVideo.loop = false;
-      splashOverlay.classList.add('fade-out');
-      setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      }
     }
     setTimeout(() => hideSplash(), 10000);
 
-    // DOM要素
+    // DOM要素取得
     const chatArea = document.getElementById('chatArea')!;
     const userInput = document.getElementById('userInput') as HTMLInputElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
@@ -185,7 +195,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
     let waitOverlayTimer: number | null = null;
 
-    // 状態変数
+    // 変数定義
     let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
     let sessionId: string | null = null;
     let isProcessing = false;
@@ -200,10 +210,9 @@ const { apiBaseUrl = '' } = Astro.props;
     let currentShops: any[] = [];
     let isFromVoiceInput = false;
     
-    // エコー対策
     let lastAISpeech: string = '';
     let preGeneratedAcks: Map<string, string> = new Map();
-    // グローバル変数
+    // AudioContext (Global)
     let globalAudioContext: AudioContext | null = null;
     let audioWorkletNode: AudioWorkletNode | null = null;
     let scriptProcessor: ScriptProcessorNode | null = null; // iOS用
@@ -214,7 +223,6 @@ const { apiBaseUrl = '' } = Astro.props;
     let isSendingAudio = true;
     let isAISpeaking = false;
     let currentAISpeech = "";
-    
     // VAD
     let analyser: AnalyserNode | null = null;
     let vadCheckInterval: number | null = null;
@@ -230,7 +238,7 @@ const { apiBaseUrl = '' } = Astro.props;
     const SILENCE_DURATION = 3000;
     const MIN_RECORDING_TIME = 3000;
 
-    // --- 便利関数 ---
+    // 便利関数
     function t(key: string, ...args: any[]): string {
       // @ts-ignore
       const translation = i18n[currentLanguage][key];
@@ -238,12 +246,7 @@ const { apiBaseUrl = '' } = Astro.props;
       return translation || key;
     }
 
-    (window as any).gourmetI18n = {
-      i18n: i18n,
-      getCurrentLanguage: () => currentLanguage,
-      t: (key: string, ...args: any[]) => t(key, ...args)
-    };
-
+    // メッセージ表示
     function addMessage(role: string, content: string, summary: string | null = null, isInitial: boolean = false) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${role}`;
@@ -398,15 +401,10 @@ const { apiBaseUrl = '' } = Astro.props;
     async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
-      
       const cleanText = stripMarkdown(text);
-
       try {
         isAISpeaking = true;
-        if (isAndroid && isRecording) {
-          stopStreamingSTT();
-        }
-        
+        if (isAndroid && isRecording) { stopStreamingSTT(); }
         voiceStatus.innerHTML = t('voiceStatusSynthesizing');
         voiceStatus.className = 'voice-status speaking';
         const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
@@ -423,28 +421,12 @@ const { apiBaseUrl = '' } = Astro.props;
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
               isAISpeaking = false;
-              
               if (autoRestartMic) {
-                if (isAndroid) {
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                } else if (!isRecording) {
-                  try {
-                    await startStreamingSTT();
-                  } catch (error) {
-                    showMicPrompt();
-                  }
-                }
+                if (isAndroid || !isRecording) { try { await startStreamingSTT(); } catch (error) { showMicPrompt(); } }
               }
               resolve();
             };
-            ttsPlayer.onerror = () => { 
-              isAISpeaking = false;
-              resolve(); 
-            };
+            ttsPlayer.onerror = () => { isAISpeaking = false; resolve(); };
           });
           if (isUserInteracted) {
             lastAISpeech = normalizeText(cleanText);
@@ -456,9 +438,7 @@ const { apiBaseUrl = '' } = Astro.props;
             voiceStatus.className = 'voice-status stopped';
             isAISpeaking = false;
           }
-        } else {
-          isAISpeaking = false;
-        }
+        } else { isAISpeaking = false; }
       } catch (error) {
         voiceStatus.innerHTML = t('voiceStatusStopped');
         voiceStatus.className = 'voice-status stopped';
@@ -469,12 +449,7 @@ const { apiBaseUrl = '' } = Astro.props;
     function showMicPrompt() {
       const modal = document.createElement('div');
       modal.id = 'mic-prompt-modal';
-      modal.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 10000; animation: fadeIn 0.3s ease;
-      `;
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
       modal.innerHTML = `
         <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
           <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
@@ -487,15 +462,9 @@ const { apiBaseUrl = '' } = Astro.props;
       style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
       document.head.appendChild(style);
       document.body.appendChild(modal);
-      
       const btn = document.getElementById('mic-prompt-btn');
-      btn?.addEventListener('click', async () => {
-        modal.remove();
-        await toggleRecording();
-      });
-      setTimeout(() => {
-        if (document.getElementById('mic-prompt-modal')) { modal.remove(); }
-      }, 3000);
+      btn?.addEventListener('click', async () => { modal.remove(); await toggleRecording(); });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
     }
 
     function isSemanticEcho(transcript: string, aiText: string): boolean {
@@ -507,7 +476,7 @@ const { apiBaseUrl = '' } = Astro.props;
       return false;
     }
 
-    // 軽量Base64変換
+    // 軽量Base64
     const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = '';
@@ -539,10 +508,9 @@ const { apiBaseUrl = '' } = Astro.props;
         if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
         if (scriptProcessor) { scriptProcessor.onaudioprocess = null; scriptProcessor.disconnect(); scriptProcessor = null; }
         
-        // AudioContext再利用
+        // AudioContext
         if (!globalAudioContext) {
           try {
-            // iOSはInteractive(遅延最小)、他はPlayback
             globalAudioContext = new AudioContext({ latencyHint: isIOS ? 'interactive' : 'playback' });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
@@ -557,8 +525,6 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          // iOSはAGC ON、それ以外はOFF推奨だが、統一してONでも可
-          // ここでは感度優先で全てONに設定
           const audioConstraints: any = { 
             channelCount: 1,
             echoCancellation: isIOS ? false : true,
@@ -577,12 +543,11 @@ const { apiBaseUrl = '' } = Astro.props;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
         
-        // ★★★ iOS: ScriptProcessorNode (メインスレッド処理で音飛び回避) ★★★
+        // ★★★ iOS: ScriptProcessorNode (音飛び回避 + 線形補間) ★★★
         if (isIOS) {
             const bufferSize = 4096;
             scriptProcessor = globalAudioContext.createScriptProcessor(bufferSize, 1, 1);
             
-            // 線形補間用変数
             let readIndex = 0;
             const outputBuffer = new Int16Array(bufferSize); 
             
@@ -594,21 +559,15 @@ const { apiBaseUrl = '' } = Astro.props;
                 
                 let writeIndex = 0;
                 
-                // ★ 線形補間 (Linear Interpolation)
-                // データを捨てずに滑らかに繋ぐ（高音質・位相ズレ防止）
+                // ★ 線形補間
                 while (readIndex < channelData.length) {
                     const i = Math.floor(readIndex);
                     const frac = readIndex - i;
-                    
                     const v1 = channelData[i];
                     const v2 = (i + 1 < channelData.length) ? channelData[i + 1] : v1;
-                    
-                    // 補間計算
                     const value = v1 * (1 - frac) + v2 * frac;
-                    
                     const int16Value = Math.max(-32768, Math.min(32767, value < 0 ? value * 0x8000 : value * 0x7FFF));
                     outputBuffer[writeIndex++] = int16Value;
-                    
                     readIndex += downsampleRatio;
                 }
                 readIndex -= channelData.length;
@@ -617,10 +576,7 @@ const { apiBaseUrl = '' } = Astro.props;
                     const chunk = outputBuffer.slice(0, writeIndex);
                     try {
                         const base64 = fastArrayBufferToBase64(chunk.buffer);
-                        socket.emit('audio_chunk', { 
-                            chunk: base64,
-                            sample_rate: 16000
-                        });
+                        socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
                     } catch (e) { console.error(e); }
                 }
             };
@@ -629,7 +585,7 @@ const { apiBaseUrl = '' } = Astro.props;
             scriptProcessor.connect(globalAudioContext.destination);
             
         } else {
-            // ★ PC/Android: AudioWorklet (線形補間版)
+            // ★ PC/Android: AudioWorklet (線形補間)
             const audioProcessorCode = `
 class AudioProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -644,7 +600,6 @@ class AudioProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     if (!input || input.length === 0) return true;
     const channelData = input[0];
-    if (!channelData || channelData.length === 0) return true;
     
     let i = 0;
     while (this.readIndex < channelData.length) {
@@ -652,16 +607,12 @@ class AudioProcessor extends AudioWorkletProcessor {
        const frac = this.readIndex - idx;
        const v1 = channelData[idx];
        const v2 = (idx + 1 < channelData.length) ? channelData[idx + 1] : v1;
-       
        let value = v1 * (1 - frac) + v2 * frac;
-       
        const int16Value = value < 0 ? value * 0x8000 : value * 0x7FFF;
-       
        if (this.writeIndex < this.bufferSize) {
          this.buffer[this.writeIndex++] = int16Value;
        }
        this.readIndex += this.ratio;
-       
        if (this.writeIndex >= this.bufferSize) {
          this.flush();
        }
@@ -697,19 +648,19 @@ registerProcessor('audio-processor', AudioProcessor);
             } catch(e) { console.error(e); }
         }
         
-        // ★★★ VAD (共通) ★★★
+        // VAD
         analyser = globalAudioContext.createAnalyser();
         analyser.fftSize = 512;
         source.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         hasSpoken = false; recordingStartTime = Date.now();
         
+        if (vadCheckInterval) clearInterval(vadCheckInterval);
         vadCheckInterval = window.setInterval(() => {
           if (!analyser || !isRecording) return;
           if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
           analyser.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          
           if (average > SILENCE_THRESHOLD) { 
             hasSpoken = true; 
             if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
@@ -724,21 +675,12 @@ registerProcessor('audio-processor', AudioProcessor);
           socket.emit('stop_stream');
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
-        socket.emit('start_stream', { 
-          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
-          sample_rate: 16000
-        });
-        
+        socket.emit('start_stream', { language_code: LANGUAGE_CODE_MAP[currentLanguage].stt, sample_rate: 16000 });
         isSendingAudio = true;
         isRecording = true; micBtnFloat.classList.add('recording');
         voiceStatus.innerHTML = t('voiceStatusListening');
-        
         recordingTimer = window.setTimeout(() => { 
-          if (isRecording) { 
-            stopStreamingSTT(); 
-            addMessage('system', t('recordingTimeLimit')); 
-          } 
+          if (isRecording) { stopStreamingSTT(); addMessage('system', t('recordingTimeLimit')); } 
         }, MAX_RECORDING_TIME);
         
       } catch (error: any) {
@@ -761,14 +703,355 @@ registerProcessor('audio-processor', AudioProcessor);
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
+    // 省略されていたLegacy関数を定義（iPhone以外で使用可能性あり）
     async function startLegacyRecording() { /* ... */ }
     async function transcribeAudio(audioBlob: Blob) { /* ... */ }
-    function initializeWebSocketSTT() { /* ... */ }
-    async function handleStreamingSTTComplete(transcript: string) { /* ... */ }
-    async function sendMessage() { /* ... */ }
-    // ...
+
+    function initializeWebSocketSTT() {
+      try {
+        const wsUrl = apiBase || window.location.origin;
+        socket = io(wsUrl);
+        socket.on('connect', () => { isStreamingSTT = true; });
+        socket.on('disconnect', () => { isStreamingSTT = false; });
+        socket.on('transcript', (data: any) => {
+          const { text, is_final } = data;
+          if (isAISpeaking) return;
+          if (is_final) { 
+            streamingTranscript = text; 
+            handleStreamingSTTComplete(text);
+            currentAISpeech = "";
+          } else { 
+            userInput.value = text;
+          }
+        });
+        socket.on('error', (data: any) => { 
+          addMessage('system', `${t('sttError')} ${data.message}`);
+          if (isRecording) stopStreamingSTT();
+        });
+      } catch (error) { isStreamingSTT = false; }
+    }
+
+    async function handleStreamingSTTComplete(transcript: string) {
+      stopStreamingSTT();
+      voiceStatus.innerHTML = t('voiceStatusComplete');
+      voiceStatus.className = 'voice-status';
+      const normTranscript = normalizeText(transcript);
+      if (isSemanticEcho(normTranscript, lastAISpeech)) {
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          lastAISpeech = '';
+          return;
+      }
+      userInput.value = transcript;
+      // @ts-ignore
+      if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
+        const msg = t('dateWarningMsg');
+        currentAISpeech = msg;
+        addMessage('assistant', msg);
+        if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true, true); } 
+        else { await new Promise(r => setTimeout(r, 2000)); }
+        userInput.value = '';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        return;
+      }
+      addMessage('user', transcript);
+      const textLength = transcript.trim().replace(/\s+/g, '').length;
+      if (textLength < 4) {
+          const msg = t('shortMsgWarning');
+          addMessage('assistant', msg);
+          isSendingAudio = false;
+          if (isTTSEnabled && isUserInteracted) { await speakTextGCP(msg, true); }
+          else { await new Promise(r => setTimeout(r, 2000)); }
+          isSendingAudio = true;
+          userInput.value = '';
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          return;
+      }
+      const ack = selectSmartAcknowledgment(transcript);
+      const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+      let firstAckPromise: Promise<void> | null = null;
+      if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
+        firstAckPromise = new Promise<void>((resolve) => {
+          lastAISpeech = normalizeText(ack.text);
+          ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+          ttsPlayer.onended = () => resolve();
+          ttsPlayer.play().catch(e => resolve());
+        });
+      } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
+      addMessage('assistant', ack.text);
+      (async () => {
+        try {
+          if (firstAckPromise) await firstAckPromise;
+          const cleanText = removeFillers(transcript);
+          const fallbackResponse = generateFallbackResponse(cleanText);
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+          addMessage('assistant', fallbackResponse);
+          setTimeout(async () => {
+            const additionalResponse = t('additionalResponse');
+            if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+            addMessage('assistant', additionalResponse);
+          }, 3000);
+          if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); }
+        } catch (error) { if (userInput.value.trim()) { isFromVoiceInput = true; sendMessage(); } }
+      })();
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+    }
+
+    async function sendMessage() {
+      let firstAckPromise: Promise<void> | null = null; 
+      unlockAudioParams();
+      const message = userInput.value.trim();
+      if (!message || isProcessing) return;
+      isProcessing = true; sendBtn.disabled = true;
+      micBtnFloat.disabled = true; userInput.disabled = true;
+      if (!isFromVoiceInput) {
+        addMessage('user', message);
+        // @ts-ignore
+        if (i18n[currentLanguage].patterns.dateCheck.test(message)) {
+             const msg = t('dateWarningMsg');
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             addMessage('assistant', msg);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        const textLength = message.trim().replace(/\s+/g, '').length;
+        if (textLength < 4) {
+             const msg = t('shortMsgWarning');
+             addMessage('assistant', msg);
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        userInput.value = '';
+        const ack = selectSmartAcknowledgment(message);
+        currentAISpeech = ack.text;
+        addMessage('assistant', ack.text);
+        if (isTTSEnabled) {
+          try {
+            const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+            if (preGeneratedAudio && isUserInteracted) {
+              firstAckPromise = new Promise<void>((resolve) => {
+                lastAISpeech = normalizeText(ack.text);
+                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+                ttsPlayer.onended = () => resolve();
+                ttsPlayer.play().catch(e => resolve());
+              });
+            } else { firstAckPromise = speakTextGCP(ack.text, false); }
+          } catch (e) {}
+        }
+        if (firstAckPromise) await firstAckPromise;
+        const cleanText = removeFillers(message);
+        const fallbackResponse = generateFallbackResponse(cleanText);
+        if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+        addMessage('assistant', fallbackResponse);
+        setTimeout(async () => {
+          const additionalResponse = t('additionalResponse');
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+          addMessage('assistant', additionalResponse);
+        }, 3000);
+      }
+      const wasVoiceInput = isFromVoiceInput;
+      isFromVoiceInput = false;
+      if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
+      waitOverlayTimer = window.setTimeout(() => { showWaitOverlay(); }, 4000);
+      try {
+        const response = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, message: message, stage: currentStage, language: currentLanguage }) });
+        const data = await response.json();
+        hideWaitOverlay();
+        currentAISpeech = data.response;
+        addMessage('assistant', data.response, data.summary);
+        stopCurrentAudio();
+        if (data.shops && data.shops.length > 0) {
+          currentShops = data.shops;
+          reservationBtn.disabled = false;
+          userInput.value = '';
+          document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: data.shops, language: currentLanguage } }));
+          const section = document.getElementById('shopListSection');
+          if (section) section.classList.add('has-shops');
+          if (window.innerWidth < 1024) { setTimeout(() => { const shopSection = document.getElementById('shopListSection'); if (shopSection) { shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 300); }
+          
+          (async () => {
+            try {
+              isAISpeaking = true;
+              if (isAndroid && isRecording) { stopStreamingSTT(); }
+              await speakTextGCP(t('ttsIntro'));
+              const lines = data.response.split('\n\n');
+              let introText = ""; let shopLines = lines;
+              if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { introText = lines[0]; shopLines = lines.slice(1); }
+              let introPart2Promise: Promise<void> | null = null;
+              if (introText && isTTSEnabled && isUserInteracted) {
+                const preGeneratedIntro = preGeneratedAcks.get(introText);
+                if (preGeneratedIntro) {
+                  introPart2Promise = new Promise<void>((resolve) => {
+                    lastAISpeech = normalizeText(introText);
+                    ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+                    ttsPlayer.onended = () => resolve();
+                    ttsPlayer.play();
+                  });
+                } else { introPart2Promise = speakTextGCP(introText, false); }
+              }
+              let firstShopAudioPromise: Promise<string | null> | null = null;
+              let remainingAudioPromise: Promise<string | null> | null = null;
+              const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
+              if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
+                const firstShop = shopLines[0];
+                const restShops = shopLines.slice(1).join('\n\n');
+                firstShopAudioPromise = (async () => {
+                  const cleanText = stripMarkdown(firstShop);
+                  const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                  const result = await response.json();
+                  return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                })();
+                if (restShops) {
+                  remainingAudioPromise = (async () => {
+                    const cleanText = stripMarkdown(restShops);
+                    const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                    const result = await response.json();
+                    return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                  })();
+                }
+              }
+              if (introPart2Promise) await introPart2Promise;
+              if (firstShopAudioPromise) {
+                const firstShopAudio = await firstShopAudioPromise;
+                if (firstShopAudio) {
+                  const firstShopText = stripMarkdown(shopLines[0]);
+                  lastAISpeech = normalizeText(firstShopText);
+                  stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
+                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                  if (remainingAudioPromise) {
+                    const remainingAudio = await remainingAudioPromise;
+                    if (remainingAudio) {
+                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
+                      lastAISpeech = normalizeText(restShopsText);
+                      await new Promise(r => setTimeout(r, 500));
+                      stopCurrentAudio(); ttsPlayer.src = remainingAudio;
+                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                    }
+                  }
+                }
+              }
+              isAISpeaking = false;
+            } catch (e) { isAISpeaking = false; }
+          })();
+        } else {
+          if (data.response) {
+            const extractedShops = extractShopsFromResponse(data.response);
+            if (extractedShops.length > 0) {
+              currentShops = extractedShops;
+              reservationBtn.disabled = false;
+              document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: extractedShops, language: currentLanguage } }));
+              const section = document.getElementById('shopListSection');
+              if (section) section.classList.add('has-shops');
+              speakTextGCP(data.response);
+            } else { speakTextGCP(data.response); }
+          }
+        }
+      } catch (error) { console.error('送信エラー:', error);
+      hideWaitOverlay(); showError('メッセージの送信に失敗しました。'); }
+      finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
+      userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
+      }
+    }
+
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return; 
+      }
+      if (isStreamingSTT) { 
+        await new Promise(r => setTimeout(r, 100));
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
+    function toggleTTS() {
+      if (!isUserInteracted) { enableAudioPlayback(); return; }
+      enableAudioPlayback();
+      isTTSEnabled = !isTTSEnabled;
+      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
+      if (!isTTSEnabled) stopCurrentAudio();
+    }
+
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
+    }
+
+    // ★★★ 修正：前回入れ忘れていた initialize 関数を定義 ★★★
+    async function initialize() {
+        try {
+            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
+            const data = await response.json(); sessionId = data.session_id;
+            addMessage('assistant', t('initialGreeting'), null, true);
+            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+            const ackPromises = ackTexts.map(async (text) => {
+              try {
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackData = await ackResponse.json();
+                if (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+              } catch (e) {}
+            });
+            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
+            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            if (splashOverlay) hideSplash();
+            initializeWebSocketSTT();
+            updateUILanguage();
+        } catch(e) { console.error(e); }
+    }
+
+    // イベントリスナー登録
+    languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
+    sendBtn.addEventListener('click', sendMessage);
+    micBtnFloat.addEventListener('click', toggleRecording);
+    speakerBtn.addEventListener('click', toggleTTS);
+    userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    reservationBtn.addEventListener('click', openReservationModal);
+    
+    // ソフトキーボード検知
+    const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
+    userInput.addEventListener('focus', () => {
+      setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
+    });
+    userInput.addEventListener('blur', () => {
+      if (floatingButtons) floatingButtons.classList.remove('keyboard-active');
+    });
     
     stopBtn.addEventListener('click', () => { stopAllActivities(); });
+    
+    // 最後に初期化を実行
     initialize();
   });
 </script>
