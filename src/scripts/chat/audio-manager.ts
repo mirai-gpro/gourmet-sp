@@ -38,6 +38,9 @@ export class AudioManager {
   private recordingStartTime = 0;
   private recordingTimer: number | null = null;
   
+  // ★追加: iOS用の状態管理
+  private isRecordingActive = false;
+  
   private readonly SILENCE_THRESHOLD = 35;
   private readonly SILENCE_DURATION = 2000;
   private readonly MIN_RECORDING_TIME = 3000;
@@ -120,9 +123,14 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  // --- iOS用実装 (緊急修正版・オリジナルに戻す) ---
+  // --- iOS用実装 (停止処理改善版) ---
   private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
+      // ★修正1: 録音中フラグをチェック
+      if (this.isRecordingActive) {
+        throw new Error('Already recording');
+      }
+      
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
       
       // Workletクリーンアップ
@@ -146,25 +154,35 @@ export class AudioManager {
         await this.globalAudioContext.resume();
       }
 
-      // ★修正: MediaStream再利用ロジック（オリジナル通り）
+      // ★修正2: MediaStreamの状態を厳密にチェック
+      const audioConstraints = { 
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000
+      };
+      
+      let needNewStream = false;
+      
       if (this.mediaStream) {
         const tracks = this.mediaStream.getAudioTracks();
-        if (tracks.length > 0 && tracks[0].readyState === 'live' && tracks[0].enabled) {
-          // 既存のストリームを再利用
-        } else {
+        // ★修正: より厳密な判定
+        if (tracks.length === 0 || 
+            tracks[0].readyState !== 'live' || 
+            !tracks[0].enabled ||
+            tracks[0].muted) {
+          needNewStream = true;
+        }
+      } else {
+        needNewStream = true;
+      }
+      
+      if (needNewStream) {
+        if (this.mediaStream) {
           this.mediaStream.getTracks().forEach(track => track.stop());
           this.mediaStream = null;
         }
-      }
-      
-      if (!this.mediaStream) {
-        const audioConstraints = { 
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 48000
-        };
         this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       }
       
@@ -228,7 +246,7 @@ export class AudioManager {
       this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext, processorName);
       this.audioWorkletNode.port.onmessage = (event) => {
         const { audioChunk } = event.data;
-        if (socket && socket.connected) {
+        if (socket && socket.connected && this.isRecordingActive) {
           try {
             const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
@@ -251,12 +269,17 @@ export class AudioManager {
       source.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.globalAudioContext.destination);
       
+      // ★修正3: 録音中フラグをON
+      this.isRecordingActive = true;
+      
       this.recordingTimer = window.setTimeout(() => { 
         this.stopStreaming_iOS();
         onStopCallback();
       }, this.MAX_RECORDING_TIME);
 
     } catch (error) {
+      // ★修正4: エラー時にフラグをリセット
+      this.isRecordingActive = false;
       if (this.audioWorkletNode) { 
         this.audioWorkletNode.port.onmessage = null;
         this.audioWorkletNode.disconnect(); 
@@ -267,13 +290,32 @@ export class AudioManager {
   }
 
   private stopStreaming_iOS() {
+    // ★修正5: 録音中フラグをOFF
+    this.isRecordingActive = false;
+    
     if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
-    if (this.audioWorkletNode) { 
-      this.audioWorkletNode.port.onmessage = null;
-      this.audioWorkletNode.disconnect(); 
-      this.audioWorkletNode = null; 
+    
+    // ★修正6: Workletを完全に切断してから破棄
+    if (this.audioWorkletNode) {
+      try {
+        this.audioWorkletNode.port.onmessage = null;
+        this.audioWorkletNode.disconnect();
+      } catch (e) {
+        // 切断エラーは無視
+      }
+      this.audioWorkletNode = null;
     }
-    // ★オリジナル通り: MediaStreamは停止しない（再利用のため）
+    
+    // ★修正7: MediaStreamの状態を確認してから処理
+    if (this.mediaStream) {
+      const tracks = this.mediaStream.getAudioTracks();
+      // トラックが無効な場合のみ停止
+      if (tracks.length === 0 || tracks[0].readyState === 'ended') {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream = null;
+      }
+      // それ以外は再利用のため残す
+    }
   }
 
   // --- PC / Android用実装 ---
