@@ -6,7 +6,6 @@ export class AudioManager {
   private audioWorkletNode: AudioWorkletNode | null = null;
   private mediaStream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
-  // private ttsPlayer: HTMLAudioElement; // ★削除: 内部で持たない
 
   // レガシー録音用
   private mediaRecorder: MediaRecorder | null = null;
@@ -26,12 +25,13 @@ export class AudioManager {
   private readonly MAX_RECORDING_TIME = 55000;
 
   private isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  
+  // 元コードのBase64用文字セット
+  private readonly b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
   constructor() {
-    // コンストラクタでのAudio生成を削除
   }
 
-  // ★修正: 実際に音を出すプレイヤー(element)を引数で受け取る
   public unlockAudioParams(elementToUnlock: HTMLAudioElement) {
     if (this.globalAudioContext && this.globalAudioContext.state === 'suspended') {
       this.globalAudioContext.resume();
@@ -40,7 +40,6 @@ export class AudioManager {
       this.audioContext.resume();
     }
     
-    // 引数で渡された「本物のプレイヤー」を空再生してロック解除
     if (elementToUnlock) {
         elementToUnlock.play().then(() => {
             elementToUnlock.pause();
@@ -77,6 +76,27 @@ export class AudioManager {
     throw new Error('マイク機能が見つかりません。HTTPS(鍵マーク)のURLでアクセスしているか確認してください。');
   }
 
+  // 元の GourmetChat.astro にあった高速変換ロジックをそのまま移植
+  private fastArrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i += 3) {
+      const c1 = bytes[i];
+      const c2 = bytes[i + 1];
+      const c3 = bytes[i + 2];
+      const enc1 = c1 >> 2;
+      const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
+      const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
+      const enc4 = c3 & 63;
+      binary += this.b64chars[enc1] + this.b64chars[enc2];
+      if (Number.isNaN(c2)) { binary += '=='; } 
+      else if (Number.isNaN(c3)) { binary += this.b64chars[enc3] + '='; } 
+      else { binary += this.b64chars[enc3] + this.b64chars[enc4]; }
+    }
+    return binary;
+  }
+
   public async startStreaming(
     socket: any, 
     languageCode: string, 
@@ -102,92 +122,166 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  public async startLegacyRecording(
-    onStopCallback: (audioBlob: Blob) => void,
-    onSpeechStart?: () => void
-  ) {
+  // --- iOS用実装 (GourmetChat.astro の startStreamingSTT_iOS を完全移植) ---
+  private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
-
-      const stream = await this.getUserMediaSafe({ 
-        audio: { 
-          channelCount: 1, 
-          sampleRate: 16000, 
-          echoCancellation: true, 
-          noiseSuppression: true 
-        } 
-      });
-      this.mediaStream = stream;
-
-      // @ts-ignore
-      this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      this.audioChunks = [];
-      this.hasSpoken = false;
-      this.recordingStartTime = Date.now();
-
-      // @ts-ignore
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      // @ts-ignore
-      this.audioContext = new AudioContextClass();
       
-      const source = this.audioContext!.createMediaStreamSource(stream);
-      this.analyser = this.audioContext!.createAnalyser();
-      this.analyser.fftSize = 512;
-      source.connect(this.analyser);
-      const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      // Workletの完全クリーンアップ
+      if (this.audioWorkletNode) { 
+        this.audioWorkletNode.port.onmessage = null;
+        this.audioWorkletNode.disconnect(); 
+        this.audioWorkletNode = null; 
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
 
-      this.vadCheckInterval = window.setInterval(() => {
-        if (!this.analyser) return;
-        if (Date.now() - this.recordingStartTime < this.MIN_RECORDING_TIME) return;
-        
-        this.analyser.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        
-        if (average > this.SILENCE_THRESHOLD) { 
-           this.hasSpoken = true; 
-           if (this.silenceTimer) clearTimeout(this.silenceTimer);
-           if (onSpeechStart) onSpeechStart(); 
-        } else if (this.hasSpoken && !this.silenceTimer) { 
-           this.silenceTimer = window.setTimeout(() => { 
-             if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-                this.mediaRecorder.stop();
-             }
-           }, this.SILENCE_DURATION); 
+      // AudioContext作成 (GourmetChat.astro 160-163行目の設定を厳守)
+      if (!this.globalAudioContext) {
+        // @ts-ignore
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.globalAudioContext = new AudioContextClass({ 
+          latencyHint: 'interactive', 
+          sampleRate: 48000 
+        });
+      }
+      
+      if (this.globalAudioContext.state === 'suspended') {
+        await this.globalAudioContext.resume();
+      }
+
+      // MediaStreamの再利用ロジック
+      if (this.mediaStream) {
+        const tracks = this.mediaStream.getAudioTracks();
+        if (tracks.length > 0 && tracks[0].readyState === 'live') {
+          // reuse
+        } else {
+          this.mediaStream.getTracks().forEach(track => track.stop());
+          this.mediaStream = null;
         }
-      }, 100);
+      }
+      
+      if (!this.mediaStream) {
+        // GourmetChat.astro 167-168行目の設定を厳守
+        const audioConstraints = { 
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000
+        };
+        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
+      }
+      
+      const targetSampleRate = 16000;
+      const nativeSampleRate = this.globalAudioContext.sampleRate;
+      const downsampleRatio = nativeSampleRate / targetSampleRate;
+      
+      const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
+      const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // @ts-ignore
-      this.mediaRecorder.ondataavailable = (event) => { 
-        if (event.data.size > 0) this.audioChunks.push(event.data); 
+      // GourmetChat.astro 174-187行目のWorkletコードを完全移植
+      // (bufferSize 8192, flush 500ms, Int16変換ロジックなど全て同じに)
+      const audioProcessorCode = `
+      class AudioProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.bufferSize = 8192;
+          this.buffer = new Int16Array(this.bufferSize); 
+          this.writeIndex = 0;
+          this.ratio = ${downsampleRatio}; 
+          this.inputSampleCount = 0;
+          this.lastFlushTime = Date.now();
+        }
+        process(inputs, outputs, parameters) {
+          const input = inputs[0];
+          if (!input || input.length === 0) return true;
+          const channelData = input[0];
+          if (!channelData || channelData.length === 0) return true;
+          for (let i = 0; i < channelData.length; i++) {
+            this.inputSampleCount++;
+            if (this.inputSampleCount >= this.ratio) {
+              this.inputSampleCount -= this.ratio;
+              if (this.writeIndex < this.bufferSize) {
+                const s = Math.max(-1, Math.min(1, channelData[i]));
+                const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                this.buffer[this.writeIndex++] = int16Value;
+              }
+              if (this.writeIndex >= this.bufferSize || (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
+                this.flush();
+              }
+            }
+          }
+          return true;
+        }
+        flush() {
+          if (this.writeIndex === 0) return;
+          const chunk = this.buffer.slice(0, this.writeIndex);
+          this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
+          this.writeIndex = 0;
+          this.lastFlushTime = Date.now();
+        }
+      }
+      registerProcessor('${processorName}', AudioProcessor);
+      `;
+
+      const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+      const processorUrl = URL.createObjectURL(blob);
+      await this.globalAudioContext.audioWorklet.addModule(processorUrl);
+      URL.revokeObjectURL(processorUrl);
+      
+      this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext, processorName);
+      
+      this.audioWorkletNode.port.onmessage = (event) => {
+        const { audioChunk } = event.data;
+        if (socket && socket.connected) {
+          try {
+            // 元コードの fastArrayBufferToBase64 を使用
+            const base64 = this.fastArrayBufferToBase64(audioChunk.buffer);
+            socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
+          } catch (e) { }
+        }
       };
+      
+      // GourmetChat.astro 195-196行目: 200ms待機
+      if (socket && socket.connected) {
+        socket.emit('stop_stream');
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      socket.emit('start_stream', { 
+        language_code: languageCode,
+        sample_rate: 16000
+      });
 
-      // @ts-ignore
-      this.mediaRecorder.onstop = async () => {
-        this.stopVAD_Default();
-        stream.getTracks().forEach(track => track.stop());
-        if (this.recordingTimer) clearTimeout(this.recordingTimer);
-        
-        if (this.audioChunks.length > 0) {
-           const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-           onStopCallback(audioBlob);
-        }
-      };
-
-      // @ts-ignore
-      this.mediaRecorder.start();
-
-      this.recordingTimer = window.setTimeout(() => {
-        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-          this.mediaRecorder.stop();
-        }
+      // マイクとWorkletを接続
+      source.connect(this.audioWorkletNode);
+      this.audioWorkletNode.connect(this.globalAudioContext.destination);
+      
+      this.recordingTimer = window.setTimeout(() => { 
+        this.stopStreaming_iOS();
+        onStopCallback();
       }, this.MAX_RECORDING_TIME);
 
     } catch (error) {
-      console.error('Legacy recording error:', error);
+      if (this.audioWorkletNode) { 
+        this.audioWorkletNode.port.onmessage = null;
+        this.audioWorkletNode.disconnect(); 
+        this.audioWorkletNode = null; 
+      }
       throw error;
     }
   }
 
+  private stopStreaming_iOS() {
+    if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
+    if (this.audioWorkletNode) { 
+      this.audioWorkletNode.port.onmessage = null;
+      this.audioWorkletNode.disconnect(); 
+      this.audioWorkletNode = null; 
+    }
+  }
+
+  // --- PC / Android (Default) ---
   private async startStreaming_Default(
     socket: any, 
     languageCode: string, 
@@ -378,188 +472,97 @@ export class AudioManager {
     this.hasSpoken = false;
   }
 
-  private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
+  // --- レガシー録音 (Androidフォールバック等) ---
+  public async startLegacyRecording(
+    onStopCallback: (audioBlob: Blob) => void,
+    onSpeechStart?: () => void
+  ) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
-      
-      if (this.audioWorkletNode) { 
-        this.audioWorkletNode.port.onmessage = null;
-        this.audioWorkletNode.disconnect(); 
-        this.audioWorkletNode = null; 
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
 
-      if (!this.globalAudioContext) {
-        // @ts-ignore
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        this.globalAudioContext = new AudioContextClass({ 
-          latencyHint: 'interactive',
-          sampleRate: 48000
-        });
-      }
-      
-      if (this.globalAudioContext!.state === 'suspended') {
-        await this.globalAudioContext!.resume();
-      }
+      const stream = await this.getUserMediaSafe({ 
+        audio: { 
+          channelCount: 1, 
+          sampleRate: 16000, 
+          echoCancellation: true, 
+          noiseSuppression: true 
+        } 
+      });
+      this.mediaStream = stream;
 
-      if (this.mediaStream) {
-        const tracks = this.mediaStream.getAudioTracks();
-        if (tracks.length > 0 && tracks[0].readyState === 'live') {
-          // reuse
-        } else {
-          this.mediaStream.getTracks().forEach(track => track.stop());
-          this.mediaStream = null;
-        }
-      }
-      
-      if (!this.mediaStream) {
-        const audioConstraints = { 
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 48000
-        };
-        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
-      }
-      
-      const targetSampleRate = 16000;
-      const nativeSampleRate = this.globalAudioContext!.sampleRate;
-      const downsampleRatio = nativeSampleRate / targetSampleRate;
-      
-      const source = this.globalAudioContext!.createMediaStreamSource(this.mediaStream);
-      const processorName = 'audio-processor-ios-' + Date.now(); 
+      // @ts-ignore
+      this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      this.audioChunks = [];
+      this.hasSpoken = false;
+      this.recordingStartTime = Date.now();
 
-      // オリジナル値: Buffer 8192, Flush 500ms
-      const audioProcessorCode = `
-      class AudioProcessor extends AudioWorkletProcessor {
-        constructor() {
-          super();
-          this.bufferSize = 8192; 
-          this.buffer = new Int16Array(this.bufferSize); 
-          this.writeIndex = 0;
-          this.ratio = ${downsampleRatio}; 
-          this.inputSampleCount = 0;
-          this.lastFlushTime = Date.now();
-        }
-        process(inputs, outputs, parameters) {
-          const input = inputs[0];
-          if (!input || input.length === 0) return true;
-          const channelData = input[0];
-          for (let i = 0; i < channelData.length; i++) {
-            this.inputSampleCount++;
-            if (this.inputSampleCount >= this.ratio) {
-              this.inputSampleCount -= this.ratio;
-              if (this.writeIndex < this.bufferSize) {
-                const s = Math.max(-1, Math.min(1, channelData[i]));
-                const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                this.buffer[this.writeIndex++] = int16Value;
-              }
-              if (this.writeIndex >= this.bufferSize || (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
-                this.flush();
-              }
-            }
-          }
-          return true;
-        }
-        flush() {
-          if (this.writeIndex === 0) return;
-          const chunk = this.buffer.slice(0, this.writeIndex);
-          this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
-          this.writeIndex = 0;
-          this.lastFlushTime = Date.now();
-        }
-      }
-      registerProcessor('${processorName}', AudioProcessor);
-      `;
-
-      const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
-      const processorUrl = URL.createObjectURL(blob);
-      await this.globalAudioContext!.audioWorklet.addModule(processorUrl);
-      URL.revokeObjectURL(processorUrl);
+      // @ts-ignore
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      // @ts-ignore
+      this.audioContext = new AudioContextClass();
       
-      this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext!, processorName);
-      this.audioWorkletNode.port.onmessage = (event) => {
-        const { audioChunk } = event.data;
-        if (socket && socket.connected) {
-          try {
-            const base64 = this.arrayBufferToBase64(audioChunk.buffer);
-            socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
-          } catch (e) { }
+      const source = this.audioContext!.createMediaStreamSource(stream);
+      this.analyser = this.audioContext!.createAnalyser();
+      this.analyser.fftSize = 512;
+      source.connect(this.analyser);
+      const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+      this.vadCheckInterval = window.setInterval(() => {
+        if (!this.analyser) return;
+        if (Date.now() - this.recordingStartTime < this.MIN_RECORDING_TIME) return;
+        
+        this.analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        
+        if (average > this.SILENCE_THRESHOLD) { 
+           this.hasSpoken = true; 
+           if (this.silenceTimer) clearTimeout(this.silenceTimer);
+           if (onSpeechStart) onSpeechStart(); 
+        } else if (this.hasSpoken && !this.silenceTimer) { 
+           this.silenceTimer = window.setTimeout(() => { 
+             if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+             }
+           }, this.SILENCE_DURATION); 
+        }
+      }, 100);
+
+      // @ts-ignore
+      this.mediaRecorder.ondataavailable = (event) => { 
+        if (event.data.size > 0) this.audioChunks.push(event.data); 
+      };
+
+      // @ts-ignore
+      this.mediaRecorder.onstop = async () => {
+        this.stopVAD_Default();
+        stream.getTracks().forEach(track => track.stop());
+        if (this.recordingTimer) clearTimeout(this.recordingTimer);
+        
+        if (this.audioChunks.length > 0) {
+           const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+           onStopCallback(audioBlob);
         }
       };
-      
-      if (socket && socket.connected) {
-        socket.emit('stop_stream');
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      
-      socket.emit('start_stream', { 
-        language_code: languageCode,
-        sample_rate: 16000
-      });
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // @ts-ignore
+      this.mediaRecorder.start();
 
-      source.connect(this.audioWorkletNode);
-      this.audioWorkletNode.connect(this.globalAudioContext!.destination);
-      
-      this.recordingTimer = window.setTimeout(() => { 
-        this.stopStreaming_iOS();
-        onStopCallback();
+      this.recordingTimer = window.setTimeout(() => {
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+          this.mediaRecorder.stop();
+        }
       }, this.MAX_RECORDING_TIME);
 
     } catch (error) {
-      if (this.audioWorkletNode) { 
-        this.audioWorkletNode.port.onmessage = null;
-        this.audioWorkletNode.disconnect(); 
-        this.audioWorkletNode = null; 
-      }
+      console.error('Legacy recording error:', error);
       throw error;
     }
   }
 
-  private stopStreaming_iOS() {
-    if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
-    if (this.audioWorkletNode) { 
-      this.audioWorkletNode.port.onmessage = null;
-      this.audioWorkletNode.disconnect(); 
-      this.audioWorkletNode = null; 
-    }
-  }
-
-  // --- 共通ユーティリティ ---
-
-  public async playTTS(audioBase64: string): Promise<void> {
-    // 互換性のため残すが、基本Controller側のPlayerを使うので未使用になる
+  // 互換性維持
+  public async playTTS(_audioBase64: string): Promise<void> {
     return Promise.resolve();
   }
 
-  public stopTTS() {
-     // 同上
-  }
-
-  private arrayBufferToBase64(buffer: ArrayBuffer): string {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    for (let i = 0; i < len; i += 3) {
-      const c1 = bytes[i];
-      const c2 = bytes[i + 1];
-      const c3 = bytes[i + 2];
-      const enc1 = c1 >> 2;
-      const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
-      const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
-      const enc4 = c3 & 63;
-      if (Number.isNaN(c2)) {
-        binary += chars[enc1] + chars[enc2] + "==";
-      } else if (Number.isNaN(c3)) {
-        binary += chars[enc1] + chars[enc2] + chars[enc3] + "=";
-      } else {
-        binary += chars[enc1] + chars[enc2] + chars[enc3] + chars[enc4];
-      }
-    }
-    return binary;
-  }
+  public stopTTS() {}
 }
