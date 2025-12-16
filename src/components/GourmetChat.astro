@@ -1,10 +1,39 @@
 ---
-// GourmetChat.astro - iPhone音声認識改善版 (音飛び・語尾切れ対策済み)
+// GourmetChat.astro - iPhone対応・保守性重視・i18n外部ファイル維持版
+import { i18n as sourceI18n } from '../constants/i18n';
+
 export interface Props {
   apiBaseUrl?: string;
 }
 
 const { apiBaseUrl = '' } = Astro.props;
+
+// 【サーバーサイド処理】
+// クライアント（ブラウザ）に渡すためにデータを整形します。
+// define:varsで渡す際、正規表現(RegExp)や関数は消えてしまうため、文字列に変換して渡します。
+const clientI18n = {};
+
+// 言語ごとにループして処理
+Object.keys(sourceI18n).forEach(lang => {
+  const source = sourceI18n[lang];
+  // 必要なプロパティだけをコピー
+  clientI18n[lang] = {
+    ...source,
+    // 関数は渡せないのでnullにしておく（クライアント側で再定義する）
+    fallbackResponse: null, 
+    patterns: {}
+  };
+
+  // 正規表現(RegExp)を文字列(.source)に変換して格納
+  // これによりJSON化されても正規表現のパターン情報が維持されます
+  if (source.patterns) {
+    Object.keys(source.patterns).forEach(key => {
+      const regex = source.patterns[key];
+      // 正規表現オブジェクトならsource（文字列）を、そうでなければそのまま渡す
+      clientI18n[lang].patterns[key] = regex instanceof RegExp ? regex.source : regex;
+    });
+  }
+});
 ---
 
 <div class="gourmet-chat-container" data-api-base={apiBaseUrl}>
@@ -125,11 +154,31 @@ const { apiBaseUrl = '' } = Astro.props;
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-<script lang="ts">
-  import { i18n } from '../constants/i18n';
+<script define:vars={{ clientI18n }}>
+  // サーバーから渡されたi18nデータを復元・セットアップ
+  const i18nData = clientI18n;
+
+  // 文字列化されてしまった正規表現を、本物の正規表現オブジェクトに戻す処理
+  // これにより「正規表現のロジック」と「データの外部化」を両立させます
+  function restoreRegExp() {
+    Object.keys(i18nData).forEach(lang => {
+      const patterns = i18nData[lang].patterns;
+      if (patterns) {
+        Object.keys(patterns).forEach(key => {
+          // サーバー側で .source に変換した文字列を、ここで new RegExp() で復元
+          // フラグ 'i' (大文字小文字無視) や 'g' (グローバル) は用途に合わせて設定
+          // 既存コードに合わせて調整
+          patterns[key] = new RegExp(patterns[key], key === 'fillers' ? 'g' : 'i');
+        });
+      }
+    });
+  }
   
-  // 型定義
-  declare const io: any;
+  // 初期化時に復元を実行
+  restoreRegExp();
+
+  // アプリケーション全体で使う変数に代入
+  const i18n = i18nData;
 
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
@@ -138,7 +187,7 @@ const { apiBaseUrl = '' } = Astro.props;
     ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
   };
   const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  function fastArrayBufferToBase64(buffer: ArrayBuffer) {
+  function fastArrayBufferToBase64(buffer) {
       let binary = '';
       const bytes = new Uint8Array(buffer);
       const len = bytes.byteLength;
@@ -159,15 +208,15 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
+    const container = document.querySelector('.gourmet-chat-container');
     if (!container) return;
 
     const apiBase = container.dataset.apiBase || '';
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
 
-    const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
-    const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
+    const splashOverlay = document.getElementById('splashOverlay');
+    const splashVideo = document.getElementById('splashVideo');
     function hideSplash() {
       if (splashVideo) splashVideo.loop = false;
       if (splashOverlay) {
@@ -177,50 +226,50 @@ const { apiBaseUrl = '' } = Astro.props;
     }
     setTimeout(() => hideSplash(), 10000);
 
-    const chatArea = document.getElementById('chatArea')!;
-    const userInput = document.getElementById('userInput') as HTMLInputElement;
-    const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
-    const speakerBtn = document.getElementById('speakerBtn') as HTMLButtonElement;
-    const reservationBtn = document.getElementById('reservationBtn') as HTMLButtonElement;
-    const voiceStatus = document.getElementById('voiceStatus')!;
-    const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
-    const stopBtn = document.getElementById('stopBtn') as HTMLButtonElement;
-    const micBtnFloat = document.getElementById('micBtnFloat') as HTMLButtonElement;
-    const waitOverlay = document.getElementById('waitOverlay') as HTMLDivElement;
-    const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
-    let waitOverlayTimer: number | null = null;
-    let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
-    let sessionId: string | null = null;
+    const chatArea = document.getElementById('chatArea');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const speakerBtn = document.getElementById('speakerBtn');
+    const reservationBtn = document.getElementById('reservationBtn');
+    const voiceStatus = document.getElementById('voiceStatus');
+    const languageSelect = document.getElementById('languageSelect');
+    const stopBtn = document.getElementById('stopBtn');
+    const micBtnFloat = document.getElementById('micBtnFloat');
+    const waitOverlay = document.getElementById('waitOverlay');
+    const waitVideo = document.getElementById('waitVideo');
+    let waitOverlayTimer = null;
+    let currentLanguage = 'ja';
+    let sessionId = null;
     let isProcessing = false;
     let currentStage = 'conversation';
     let isRecording = false;
-    let mediaRecorder: MediaRecorder | null = null;
-    let audioChunks: Blob[] = [];
-    let recordingTimer: number | null = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordingTimer = null;
     const MAX_RECORDING_TIME = 55000;
     let isTTSEnabled = true;
     let isUserInteracted = false;
-    let currentShops: any[] = [];
+    let currentShops = [];
     let isFromVoiceInput = false;
     
-    let lastAISpeech: string = '';
-    let preGeneratedAcks: Map<string, string> = new Map();
+    let lastAISpeech = '';
+    let preGeneratedAcks = new Map();
     
-    let globalAudioContext: AudioContext | null = null;
-    let audioContext: AudioContext | null = null;
+    let globalAudioContext = null;
+    let audioContext = null;
     
-    let audioWorkletNode: AudioWorkletNode | null = null;
-    let mediaStream: MediaStream | null = null;
-    let socket: any = null;
+    let audioWorkletNode = null;
+    let mediaStream = null;
+    let socket = null;
     let streamingTranscript = '';
     let isStreamingSTT = false;
     let isSendingAudio = true;
     let isAISpeaking = false;
     let currentAISpeech = "";
     
-    let analyser: AnalyserNode | null = null;
-    let silenceTimer: number | null = null;
-    let vadCheckInterval: number | null = null;
+    let analyser = null;
+    let silenceTimer = null;
+    let vadCheckInterval = null;
     let hasSpoken = false;
     let recordingStartTime = 0;
     const SILENCE_THRESHOLD = 35; 
@@ -228,14 +277,26 @@ const { apiBaseUrl = '' } = Astro.props;
     const MIN_RECORDING_TIME = 3000;
 
     const ttsPlayer = new Audio();
-    function t(key: string, ...args: any[]): string {
-      // @ts-ignore
+    
+    // fallbackResponse関数はJSONで渡せないため、クライアント側で再定義
+    function generateFallbackResponse(text) {
+      if (currentLanguage === 'ja') return `「${text}」ですね、わかりました。\n少しお待ちください...`;
+      if (currentLanguage === 'en') return `I heard "${text}".\nPlease wait a moment...`;
+      if (currentLanguage === 'zh') return `我听到了“${text}”。\n请稍等...`;
+      if (currentLanguage === 'ko') return `"${text}"라고 하셨군요.\n잠시만 기다려 주세요...`;
+      return text;
+    }
+
+    function t(key, ...args) {
       const translation = i18n[currentLanguage][key];
+      // fallbackResponseキーが来たら特別処理
+      if (key === 'fallbackResponse') return generateFallbackResponse(args[0]);
+      
       if (typeof translation === 'function') return translation(...args);
       return translation || key;
     }
 
-    function addMessage(role: string, content: string, summary: string | null = null, isInitial: boolean = false) {
+    function addMessage(role, content, summary = null, isInitial = false) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${role}`;
       if (isInitial) messageDiv.setAttribute('data-initial', 'true');
@@ -262,7 +323,7 @@ const { apiBaseUrl = '' } = Astro.props;
       chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    function showError(message: string) {
+    function showError(message) {
       const errorDiv = document.createElement('div');
       errorDiv.className = 'error-message';
       errorDiv.textContent = message;
@@ -312,27 +373,21 @@ const { apiBaseUrl = '' } = Astro.props;
       ttsPlayer.currentTime = 0;
     }
 
-    function stripMarkdown(text: string): string {
+    function stripMarkdown(text) {
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
 
-    function normalizeText(text: string): string {
+    function normalizeText(text) {
       return text.replace(/\s+/g, '').replace(/[、。！？,.!?]/g, '').toLowerCase();
     }
 
-    function removeFillers(text: string): string {
-      // @ts-ignore
+    function removeFillers(text) {
       const pattern = i18n[currentLanguage].patterns.fillers;
       return text.replace(pattern, '');
     }
 
-    function generateFallbackResponse(text: string): string {
-      return t('fallbackResponse', text);
-    }
-
-    function selectSmartAcknowledgment(userMessage: string): { text: string, logText: string } {
+    function selectSmartAcknowledgment(userMessage) {
       const messageLower = userMessage.trim();
-      // @ts-ignore
       const p = i18n[currentLanguage].patterns;
       if (p.ackQuestions.test(messageLower)) return { text: t('ackConfirm'), logText: `質問形式` };
       if (p.ackLocation.test(messageLower)) return { text: t('ackSearch'), logText: `場所` };
@@ -340,8 +395,8 @@ const { apiBaseUrl = '' } = Astro.props;
       return { text: t('ackYes'), logText: `デフォルト` };
     }
 
-    function extractShopsFromResponse(text: string): any[] {
-      const shops: any[] = [];
+    function extractShopsFromResponse(text) {
+      const shops = [];
       const pattern = /(\d+)\.\s*\*\*([^*]+)\*\*[::\s]*([^\n]+)/g;
       let match;
       while ((match = pattern.exec(text)) !== null) {
@@ -386,7 +441,7 @@ const { apiBaseUrl = '' } = Astro.props;
       document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
-    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
+    async function speakTextGCP(text, stopPrevious = true, autoRestartMic = false) {
       if (!isTTSEnabled || !text) return;
       if (stopPrevious) ttsPlayer.pause();
       
@@ -409,7 +464,7 @@ const { apiBaseUrl = '' } = Astro.props;
         const data = await response.json();
         if (data.success && data.audio) {
           ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
-          const playPromise = new Promise<void>((resolve) => {
+          const playPromise = new Promise((resolve) => {
             ttsPlayer.onended = async () => {
               voiceStatus.innerHTML = t('voiceStatusStopped');
               voiceStatus.className = 'voice-status stopped';
@@ -484,7 +539,7 @@ const { apiBaseUrl = '' } = Astro.props;
       setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
     }
 
-    function isSemanticEcho(transcript: string, aiText: string): boolean {
+    function isSemanticEcho(transcript, aiText) {
       if (!aiText || !transcript) return false;
       const normTranscript = normalizeText(transcript);
       const normAI = normalizeText(aiText);
@@ -528,7 +583,7 @@ const { apiBaseUrl = '' } = Astro.props;
         // AudioContext作成（初回のみ）
         if (!globalAudioContext) {
           try {
-            // ★修正: sampleRate指定を削除（OSのネイティブに従う）
+            // sampleRate指定を削除（OSのネイティブに従う）
             globalAudioContext = new AudioContext({ 
               latencyHint: 'interactive'
             });
@@ -562,15 +617,15 @@ const { apiBaseUrl = '' } = Astro.props;
         
         if (!mediaStream) {
           try {
-            // ★修正: sampleRate指定を削除
-            const audioConstraints: any = { 
+            // sampleRate指定を削除
+            const audioConstraints = { 
               channelCount: 1,
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true
             };
             mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-          } catch (micError: any) {
+          } catch (micError) {
             addMessage('system', `マイクエラー: ${micError.message}`);
             throw micError;
           }
@@ -585,7 +640,7 @@ const { apiBaseUrl = '' } = Astro.props;
         try {
           audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
         } catch (e) {
-          // ★修正: bufferSizeを4096に縮小し、flush判定を200msに短縮（語尾切れ防止）
+          // bufferSizeを4096に縮小し、flush判定を200msに短縮（語尾切れ防止）
           const audioProcessorCode = `
           class AudioProcessor extends AudioWorkletProcessor {
             constructor() {
@@ -639,7 +694,7 @@ const { apiBaseUrl = '' } = Astro.props;
             const processorUrl = URL.createObjectURL(blob);
             await globalAudioContext.audioWorklet.addModule(processorUrl);
             URL.revokeObjectURL(processorUrl);
-          } catch (workletError: any) {
+          } catch (workletError) {
             addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
             throw workletError;
           }
@@ -688,7 +743,7 @@ const { apiBaseUrl = '' } = Astro.props;
             addMessage('system', t('recordingTimeLimit')); 
           } 
         }, MAX_RECORDING_TIME);
-      } catch (error: any) {
+      } catch (error) {
         if (audioWorkletNode) { 
           audioWorkletNode.port.onmessage = null;
           audioWorkletNode.disconnect(); 
@@ -700,7 +755,7 @@ const { apiBaseUrl = '' } = Astro.props;
       }
     }
 
-    // ★修正: MediaStreamを保持
+    // MediaStreamを保持
     function stopStreamingSTT_iOS() {
       if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
       if (audioWorkletNode) { 
@@ -737,14 +792,14 @@ const { apiBaseUrl = '' } = Astro.props;
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         
         try {
-          const audioConstraints: any = { 
+          const audioConstraints = { 
             channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true 
           };
           mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-        } catch (micError: any) {
+        } catch (micError) {
           addMessage('system', `マイクエラー: ${micError.message}`);
           throw micError;
         }
@@ -803,7 +858,7 @@ const { apiBaseUrl = '' } = Astro.props;
           const processorUrl = URL.createObjectURL(blob);
           await audioContext.audioWorklet.addModule(processorUrl);
           URL.revokeObjectURL(processorUrl);
-        } catch (workletError: any) {
+        } catch (workletError) {
           addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
           throw workletError;
         }
@@ -869,7 +924,7 @@ const { apiBaseUrl = '' } = Astro.props;
             addMessage('system', t('recordingTimeLimit')); 
           } 
         }, MAX_RECORDING_TIME);
-      } catch (error: any) {
+      } catch (error) {
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         if (!error.message?.includes('マイク')) { addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); }
       }
@@ -885,7 +940,7 @@ const { apiBaseUrl = '' } = Astro.props;
       isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
     }
 
-    // ★追加: 完全リセット関数
+    // 完全リセット関数
     function fullResetAudioResources() {
       if (audioWorkletNode) { 
         audioWorkletNode.port.onmessage = null;
@@ -941,10 +996,10 @@ const { apiBaseUrl = '' } = Astro.props;
         mediaRecorder.start();
         isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
         recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD_Default(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
-      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
+      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error.message || error)}`); }
     }
 
-    async function transcribeAudio(audioBlob: Blob) { }
+    async function transcribeAudio(audioBlob) { }
 
     function initializeWebSocketSTT() {
       try {
@@ -952,7 +1007,7 @@ const { apiBaseUrl = '' } = Astro.props;
         socket = io(wsUrl);
         socket.on('connect', () => { isStreamingSTT = true; });
         socket.on('disconnect', () => { isStreamingSTT = false; });
-        socket.on('transcript', (data: any) => {
+        socket.on('transcript', (data) => {
           const { text, is_final } = data;
           if (isAISpeaking) return;
           if (is_final) { 
@@ -963,14 +1018,14 @@ const { apiBaseUrl = '' } = Astro.props;
             userInput.value = text;
           }
         });
-        socket.on('error', (data: any) => { 
+        socket.on('error', (data) => { 
           addMessage('system', `${t('sttError')} ${data.message}`);
           if (isRecording) stopStreamingSTT();
         });
       } catch (error) { isStreamingSTT = false; }
     }
 
-    async function handleStreamingSTTComplete(transcript: string) {
+    async function handleStreamingSTTComplete(transcript) {
       stopStreamingSTT();
       voiceStatus.innerHTML = t('voiceStatusComplete');
       voiceStatus.className = 'voice-status';
@@ -984,7 +1039,6 @@ const { apiBaseUrl = '' } = Astro.props;
       }
 
       userInput.value = transcript;
-      // @ts-ignore
       if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
         const msg = t('dateWarningMsg');
         currentAISpeech = msg;
@@ -1016,9 +1070,9 @@ const { apiBaseUrl = '' } = Astro.props;
 
       const ack = selectSmartAcknowledgment(transcript);
       const preGeneratedAudio = preGeneratedAcks.get(ack.text);
-      let firstAckPromise: Promise<void> | null = null;
+      let firstAckPromise = null;
       if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
-        firstAckPromise = new Promise<void>((resolve) => {
+        firstAckPromise = new Promise((resolve) => {
           lastAISpeech = normalizeText(ack.text);
           ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
           ttsPlayer.onended = () => resolve();
@@ -1054,7 +1108,7 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     async function sendMessage() {
-      let firstAckPromise: Promise<void> | null = null; 
+      let firstAckPromise = null; 
       unlockAudioParams();
       const message = userInput.value.trim();
       if (!message || isProcessing) return;
@@ -1063,7 +1117,6 @@ const { apiBaseUrl = '' } = Astro.props;
 
       if (!isFromVoiceInput) {
         addMessage('user', message);
-        // @ts-ignore
         if (i18n[currentLanguage].patterns.dateCheck.test(message)) {
              const msg = t('dateWarningMsg');
              if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
@@ -1089,7 +1142,7 @@ const { apiBaseUrl = '' } = Astro.props;
           try {
             const preGeneratedAudio = preGeneratedAcks.get(ack.text);
             if (preGeneratedAudio && isUserInteracted) {
-              firstAckPromise = new Promise<void>((resolve) => {
+              firstAckPromise = new Promise((resolve) => {
                 lastAISpeech = normalizeText(ack.text);
                 ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
                 ttsPlayer.onended = () => resolve();
@@ -1147,11 +1200,11 @@ const { apiBaseUrl = '' } = Astro.props;
               const lines = data.response.split('\n\n');
               let introText = ""; let shopLines = lines;
               if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { introText = lines[0]; shopLines = lines.slice(1); }
-              let introPart2Promise: Promise<void> | null = null;
+              let introPart2Promise = null;
               if (introText && isTTSEnabled && isUserInteracted) {
                 const preGeneratedIntro = preGeneratedAcks.get(introText);
                 if (preGeneratedIntro) {
-                  introPart2Promise = new Promise<void>((resolve) => {
+                  introPart2Promise = new Promise((resolve) => {
                     lastAISpeech = normalizeText(introText);
                     ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
                     ttsPlayer.onended = () => resolve();
@@ -1160,8 +1213,8 @@ const { apiBaseUrl = '' } = Astro.props;
                 } else { introPart2Promise = speakTextGCP(introText, false); }
               }
 
-              let firstShopAudioPromise: Promise<string | null> | null = null;
-              let remainingAudioPromise: Promise<string | null> | null = null;
+              let firstShopAudioPromise = null;
+              let remainingAudioPromise = null;
               const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
               if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
                 const firstShop = shopLines[0];
@@ -1189,7 +1242,7 @@ const { apiBaseUrl = '' } = Astro.props;
                   const firstShopText = stripMarkdown(shopLines[0]);
                   lastAISpeech = normalizeText(firstShopText);
                   stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
-                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                  await new Promise((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                   if (remainingAudioPromise) {
                     const remainingAudio = await remainingAudioPromise;
                     if (remainingAudio) {
@@ -1197,7 +1250,7 @@ const { apiBaseUrl = '' } = Astro.props;
                       lastAISpeech = normalizeText(restShopsText);
                       await new Promise(r => setTimeout(r, 500));
                       stopCurrentAudio(); ttsPlayer.src = remainingAudio;
-                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                      await new Promise((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
                     }
                   }
                 }
@@ -1305,14 +1358,14 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     // イベントリスナー登録
-    languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
+    languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value; updateUILanguage(); });
     sendBtn.addEventListener('click', sendMessage);
     micBtnFloat.addEventListener('click', toggleRecording);
     speakerBtn.addEventListener('click', toggleTTS);
     userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
     reservationBtn.addEventListener('click', openReservationModal);
     // ソフトキーボード検知
-    const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
+    const floatingButtons = document.querySelector('.floating-buttons');
     userInput.addEventListener('focus', () => {
       setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
     });
