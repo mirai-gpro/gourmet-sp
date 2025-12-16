@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - Split refactored version (SVG file support)
+// GourmetChat.astro - Split refactored version2 (SVG file support)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -113,13 +113,12 @@ const { apiBaseUrl = '' } = Astro.props;
 /* Mobile: Default position above input area */
 @media (max-width: 768px) { 
   .floating-buttons { 
-    position: fixed;
-    bottom: 100px; /* Default: above input area */
+    bottom: 140px; /* Default: well above input area to avoid overlap */
   }
   
   /* Move to very bottom when shop card is displayed */
   .floating-buttons.shop-card-active { 
-    bottom: 20px; 
+    bottom: 0px; 
   } 
 }
 
