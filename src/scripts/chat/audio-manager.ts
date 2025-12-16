@@ -127,31 +127,6 @@ export class AudioManager {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
       
-      // 【最優先】マイク権限の取得 (getUserMedia) - 関数の一番最初に実行
-      const audioConstraints = { 
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000 // ★重要: 推奨設定として含める
-      };
-      
-      // MediaStream再利用ロジック
-      if (this.mediaStream) {
-        const tracks = this.mediaStream.getAudioTracks();
-        if (tracks.length > 0 && tracks[0].readyState === 'live' && tracks[0].enabled) {
-          console.log('既存のMediaStreamを再利用');
-        } else {
-          this.mediaStream.getTracks().forEach(track => track.stop());
-          this.mediaStream = null;
-        }
-      }
-      
-      if (!this.mediaStream) {
-        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
-      }
-      
-      // AudioContext と Worklet の準備 - マイク取得後に実行
       // Worklet cleanup 
       if (this.audioWorkletNode) { 
         this.audioWorkletNode.port.onmessage = null;
@@ -173,6 +148,29 @@ export class AudioManager {
       if (this.globalAudioContext.state === 'suspended') {
         await this.globalAudioContext.resume();
       }
+
+      // MediaStream再利用ロジック（改善版）
+      if (this.mediaStream) {
+        const tracks = this.mediaStream.getAudioTracks();
+        if (tracks.length > 0 && tracks[0].readyState === 'live' && tracks[0].enabled) {
+          console.log('既存のMediaStreamを再利用');
+        } else {
+          this.mediaStream.getTracks().forEach(track => track.stop());
+          this.mediaStream = null;
+        }
+      }
+      
+      if (!this.mediaStream) {
+        // マイク設定 
+        const audioConstraints = { 
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000 // ★重要: オリジナル通り
+        };
+        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
+      }
       
       const targetSampleRate = 16000;
       const nativeSampleRate = this.globalAudioContext.sampleRate;
@@ -181,17 +179,17 @@ export class AudioManager {
       const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // Workletコード（bufferSize 8192を維持）
+      // Workletコード（★修正版：バッファサイズ8192に戻し、タイムアウトフラッシュ追加）
       const audioProcessorCode = `
       class AudioProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
-          this.bufferSize = 8192; // ★重要: 8192のまま維持
+          this.bufferSize = 8192; // ★修正: 16000→8192（オリジナル値）
           this.buffer = new Int16Array(this.bufferSize); 
           this.writeIndex = 0;
           this.ratio = ${downsampleRatio}; 
           this.inputSampleCount = 0;
-          this.lastFlushTime = Date.now();
+          this.lastFlushTime = Date.now(); // ★追加: タイムアウト管理
         }
         process(inputs, outputs, parameters) {
           const input = inputs[0];
@@ -207,7 +205,7 @@ export class AudioManager {
                 const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
                 this.buffer[this.writeIndex++] = int16Value;
               }
-              // ★重要: Date.now() を使用したフラッシュ判定ロジックは完全に維持
+              // ★修正: タイムアウトフラッシュを復活（オリジナル通り）
               if (this.writeIndex >= this.bufferSize || 
                   (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
                 this.flush();
@@ -221,7 +219,7 @@ export class AudioManager {
           const chunk = this.buffer.slice(0, this.writeIndex);
           this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
           this.writeIndex = 0;
-          this.lastFlushTime = Date.now();
+          this.lastFlushTime = Date.now(); // ★追加: フラッシュ時刻更新
         }
       }
       registerProcessor('${processorName}', AudioProcessor);
@@ -237,7 +235,7 @@ export class AudioManager {
         const { audioChunk } = event.data;
         if (socket && socket.connected) {
           try {
-            // ★重要: オリジナルの fastArrayBufferToBase64 をそのまま使用
+            // ★重要: ここでオリジナルの fastArrayBufferToBase64 を使う
             const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
           } catch (e) { 
@@ -246,10 +244,10 @@ export class AudioManager {
         }
       };
       
-      // 【重要】サーバー通信と待機処理 (Wait) - マイクとWorkletの準備完了後に実行
+      // 送信開始前の待機（★修正: 200ms→300msに延長してより安全に） 
       if (socket && socket.connected) {
         socket.emit('stop_stream');
-        await new Promise(resolve => setTimeout(resolve, 500)); // 必ずここで500ms待機
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       socket.emit('start_stream', { 
@@ -257,7 +255,7 @@ export class AudioManager {
         sample_rate: 16000
       });
 
-      // ノード接続 (connect) - 最後に実行
+      // 接続
       source.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.globalAudioContext.destination);
       
@@ -573,3 +571,4 @@ export class AudioManager {
 
   public stopTTS() {}
 }
+
