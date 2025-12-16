@@ -110,9 +110,18 @@ const { apiBaseUrl = '' } = Astro.props;
   } 
 }
 
-/* Mobile: Move to very bottom when shop card is displayed */
+/* Mobile: Default position above input area */
 @media (max-width: 768px) { 
+  .floating-buttons { 
+    position: absolute;
+    bottom: auto;
+    top: calc(100% - 180px); /* Position above input area */
+  }
+  
+  /* Move to very bottom when shop card is displayed */
   .floating-buttons.shop-card-active { 
+    position: fixed;
+    top: auto;
     bottom: 0px; 
   } 
 }
