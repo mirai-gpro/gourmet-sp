@@ -26,6 +26,8 @@ export class ChatController {
   private isAISpeaking = false;
   private currentAISpeech = "";
   
+  // 修正: iOS判定プロパティを追加
+  private isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   private isAndroid = /Android/i.test(navigator.userAgent);
 
   private els: any = {};
@@ -41,7 +43,8 @@ export class ChatController {
   constructor(container: HTMLElement, apiBase: string) {
     this.container = container;
     this.apiBase = apiBase;
-    this.audioManager = new AudioManager();
+    // 修正: isIOSフラグをAudioManagerに渡す
+    this.audioManager = new AudioManager(this.isIOS);
     this.ttsPlayer = new Audio(); 
 
     // DOM要素取得
@@ -633,7 +636,9 @@ export class ChatController {
 
     try {
       this.isAISpeaking = true;
-      if (this.isAndroid && this.isRecording) {
+      
+      // 修正: iOSまたはAndroid録音中の場合のハンドリングを強化
+      if (this.isIOS || (this.isAndroid && this.isRecording)) {
          this.stopStreamingSTT();
       }
       
