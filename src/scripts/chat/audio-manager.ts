@@ -1,6 +1,6 @@
 // src/scripts/chat/audio-manager.ts
 
-// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元
+// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元　2
 // （標準のbtoaや他ライブラリとはパディング処理などが異なるため、ここを変えるとデータが壊れます）
 const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function fastArrayBufferToBase64(buffer: ArrayBuffer) {
@@ -571,3 +571,4 @@ export class AudioManager {
 
   public stopTTS() {}
 }
+
