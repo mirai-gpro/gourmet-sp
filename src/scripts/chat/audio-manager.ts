@@ -127,45 +127,45 @@ export class AudioManager {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
       
-    // ★修正1: Workletクリーンアップを先に実行（同期的に）
-    if (this.audioWorkletNode) { 
-      this.audioWorkletNode.port.onmessage = null;
-      this.audioWorkletNode.disconnect(); 
-      this.audioWorkletNode = null; 
-    }
+      // ★修正1: Workletクリーンアップを先に実行（同期的に）
+      if (this.audioWorkletNode) { 
+        this.audioWorkletNode.port.onmessage = null;
+        this.audioWorkletNode.disconnect(); 
+        this.audioWorkletNode = null; 
+      }
 
-      // AudioContext作成 
-    // AudioContext作成/再開
-    if (!this.globalAudioContext) {
-      // @ts-ignore
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      this.globalAudioContext = new AudioContextClass({ 
-        latencyHint: 'interactive',
-        sampleRate: 48000
-      });
-    }
-    
-    if (this.globalAudioContext.state === 'suspended') {
-      await this.globalAudioContext.resume();
-    }
-    
-    const targetSampleRate = 16000;
-    const nativeSampleRate = this.globalAudioContext.sampleRate;
-    const downsampleRatio = nativeSampleRate / targetSampleRate;
-    
-    const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
-    const processorName = 'audio-processor-ios-' + Date.now(); 
-
-      // MediaStream再利用ロジック（改善版）
-      if (!this.mediaStream) {
-           this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
-      } else {
-          this.mediaStream.getTracks().forEach(track => track.stop());
-          this.mediaStream = null;
-        }
+      // AudioContext作成/再開
+      if (!this.globalAudioContext) {
+        // @ts-ignore
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.globalAudioContext = new AudioContextClass({ 
+          latencyHint: 'interactive',
+          sampleRate: 48000
+        });
       }
       
-     
+      if (this.globalAudioContext.state === 'suspended') {
+        await this.globalAudioContext.resume();
+      }
+      
+      // ★修正: audioConstraintsを定義
+      const audioConstraints = { 
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000
+      };
+      
+      // MediaStream再利用ロジック（改善版）
+      if (!this.mediaStream) {
+        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
+      } else {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream = null;
+        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
+      }
+      
       const targetSampleRate = 16000;
       const nativeSampleRate = this.globalAudioContext.sampleRate;
       const downsampleRatio = nativeSampleRate / targetSampleRate;
@@ -174,113 +174,113 @@ export class AudioManager {
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
       // Workletコード（★修正版：バッファサイズ8192に戻し、タイムアウトフラッシュ追加）
-    const audioProcessorCode = `
-    class AudioProcessor extends AudioWorkletProcessor {
-      constructor() {
-        super();
-        this.bufferSize = 8192;
-        this.buffer = new Int16Array(this.bufferSize); 
-        this.writeIndex = 0;
-        this.ratio = ${downsampleRatio}; 
-        this.inputSampleCount = 0;
-        this.lastFlushTime = Date.now();
-      }
-      process(inputs, outputs, parameters) {
-        const input = inputs[0];
-        if (!input || input.length === 0) return true;
-        const channelData = input[0];
-        if (!channelData || channelData.length === 0) return true;
-        for (let i = 0; i < channelData.length; i++) {
-          this.inputSampleCount++;
-          if (this.inputSampleCount >= this.ratio) {
-            this.inputSampleCount -= this.ratio;
-            if (this.writeIndex < this.bufferSize) {
-              const s = Math.max(-1, Math.min(1, channelData[i]));
-              const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
-              this.buffer[this.writeIndex++] = int16Value;
-            }
-            if (this.writeIndex >= this.bufferSize || 
-                (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
-              this.flush();
+      const audioProcessorCode = `
+      class AudioProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.bufferSize = 8192;
+          this.buffer = new Int16Array(this.bufferSize); 
+          this.writeIndex = 0;
+          this.ratio = ${downsampleRatio}; 
+          this.inputSampleCount = 0;
+          this.lastFlushTime = Date.now();
+        }
+        process(inputs, outputs, parameters) {
+          const input = inputs[0];
+          if (!input || input.length === 0) return true;
+          const channelData = input[0];
+          if (!channelData || channelData.length === 0) return true;
+          for (let i = 0; i < channelData.length; i++) {
+            this.inputSampleCount++;
+            if (this.inputSampleCount >= this.ratio) {
+              this.inputSampleCount -= this.ratio;
+              if (this.writeIndex < this.bufferSize) {
+                const s = Math.max(-1, Math.min(1, channelData[i]));
+                const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                this.buffer[this.writeIndex++] = int16Value;
+              }
+              if (this.writeIndex >= this.bufferSize || 
+                  (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
+                this.flush();
+              }
             }
           }
+          return true;
         }
-        return true;
+        flush() {
+          if (this.writeIndex === 0) return;
+          const chunk = this.buffer.slice(0, this.writeIndex);
+          this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
+          this.writeIndex = 0;
+          this.lastFlushTime = Date.now();
+        }
       }
-      flush() {
-        if (this.writeIndex === 0) return;
-        const chunk = this.buffer.slice(0, this.writeIndex);
-        this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
-        this.writeIndex = 0;
-        this.lastFlushTime = Date.now();
-      }
-    }
-    registerProcessor('${processorName}', AudioProcessor);
-    `;
+      registerProcessor('${processorName}', AudioProcessor);
+      `;
 
-    const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
-    const processorUrl = URL.createObjectURL(blob);
-    
-    try {
-      await this.globalAudioContext.audioWorklet.addModule(processorUrl);
-    } catch (workletError) {
-      URL.revokeObjectURL(processorUrl);
-      throw new Error(`Worklet登録エラー: ${(workletError as Error).message}`);
-    }
-    URL.revokeObjectURL(processorUrl);
-    
-    this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext, processorName);
-    this.audioWorkletNode.port.onmessage = (event) => {
-      const { audioChunk } = event.data;
-      if (socket && socket.connected) {
-        try {
-          const base64 = fastArrayBufferToBase64(audioChunk.buffer);
-          socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
-        } catch (e) { 
-          console.error('Audio chunk conversion error:', e);
-        }
+      const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+      const processorUrl = URL.createObjectURL(blob);
+      
+      try {
+        await this.globalAudioContext.audioWorklet.addModule(processorUrl);
+      } catch (workletError) {
+        URL.revokeObjectURL(processorUrl);
+        throw new Error(`Worklet登録エラー: ${(workletError as Error).message}`);
       }
-    };
+      URL.revokeObjectURL(processorUrl);
+      
+      this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext, processorName);
+      this.audioWorkletNode.port.onmessage = (event) => {
+        const { audioChunk } = event.data;
+        if (socket && socket.connected) {
+          try {
+            const base64 = fastArrayBufferToBase64(audioChunk.buffer);
+            socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
+          } catch (e) { 
+            console.error('Audio chunk conversion error:', e);
+          }
+        }
+      };
       
       // 送信開始前の待機（★修正: 200ms→300msに延長してより安全に） 
-    if (socket && socket.connected) {
-      socket.emit('stop_stream');
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    socket.emit('start_stream', { 
-      language_code: languageCode,
-      sample_rate: 16000
-    });
+      if (socket && socket.connected) {
+        socket.emit('stop_stream');
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      socket.emit('start_stream', { 
+        language_code: languageCode,
+        sample_rate: 16000
+      });
 
       // 接続
-    source.connect(this.audioWorkletNode);
-    this.audioWorkletNode.connect(this.globalAudioContext.destination);
-    
-    this.recordingTimer = window.setTimeout(() => { 
-      this.stopStreaming_iOS();
-      onStopCallback();
-    }, this.MAX_RECORDING_TIME);
+      source.connect(this.audioWorkletNode);
+      this.audioWorkletNode.connect(this.globalAudioContext.destination);
+      
+      this.recordingTimer = window.setTimeout(() => { 
+        this.stopStreaming_iOS();
+        onStopCallback();
+      }, this.MAX_RECORDING_TIME);
 
-  } catch (error) {
-    // クリーンアップ
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(track => track.stop());
-      this.mediaStream = null;
+    } catch (error) {
+      // クリーンアップ
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream = null;
+      }
+      
+      console.error('iOS streaming error:', error);
+      throw error;
     }
-    
-    console.error('iOS streaming error:', error);
-    throw error;
   }
-}
 
-private stopStreaming_iOS() {
-  if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
-  if (this.audioWorkletNode) { 
-    this.audioWorkletNode.port.onmessage = null;
-    this.audioWorkletNode.disconnect(); 
-    this.audioWorkletNode = null; 
-  }
+  private stopStreaming_iOS() {
+    if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
+    if (this.audioWorkletNode) { 
+      this.audioWorkletNode.port.onmessage = null;
+      this.audioWorkletNode.disconnect(); 
+      this.audioWorkletNode = null; 
+    }
     // ★注意: MediaStreamは再利用のため停止しない
   }
 
@@ -310,8 +310,8 @@ private stopStreaming_iOS() {
         await this.audioContext!.resume();
       }
       
-    // ★修正2: MediaStreamは常に再取得（iOS 17+の制約に対応）
-    // 理由: 前回のAudioContextとの紐付けをリセットするため
+      // ★修正2: MediaStreamは常に再取得（iOS 17+の制約に対応）
+      // 理由: 前回のAudioContextとの紐付けをリセットするため
       if (this.mediaStream) {
        this.mediaStream.getTracks().forEach(track => track.stop());
        this.mediaStream = null;
@@ -472,12 +472,12 @@ private stopStreaming_iOS() {
       this.audioWorkletNode.disconnect(); 
       this.audioWorkletNode = null; 
     }
-  // ★修正5: MediaStreamを停止（次回は新規取得）
-  if (this.mediaStream) {
-    this.mediaStream.getTracks().forEach(track => track.stop());
-    this.mediaStream = null;
+    // ★修正5: MediaStreamを停止（次回は新規取得）
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+    }
   }
-}
 
   // --- レガシー録音 ---
   public async startLegacyRecording(
@@ -573,4 +573,3 @@ private stopStreaming_iOS() {
 
   public stopTTS() {}
 }
-
