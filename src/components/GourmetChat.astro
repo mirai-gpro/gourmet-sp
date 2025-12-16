@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - iPhone完全対応版 (Pure JS・i18n統合・音声認識修正済み)３
+// GourmetChat.astro - iPhone完全対応版 (Pure JS・i18n統合・音声認識修正済み)
 import { i18n as sourceI18n } from '../constants/i18n';
 
 export interface Props {
@@ -846,7 +846,7 @@ Object.keys(sourceI18n).forEach(lang => {
             const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
             const reader = new FileReader();
             reader.onload = () => {
-                const result = reader.result as string;
+                const result = reader.result;
                 const base64 = result.split(',')[1];
                 socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
             };
