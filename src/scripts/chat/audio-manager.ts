@@ -1,5 +1,29 @@
 // src/scripts/chat/audio-manager.ts
 
+// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元
+// （標準のbtoaや他ライブラリとはパディング処理などが異なるため、ここを変えるとデータが壊れます）
+const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function fastArrayBufferToBase64(buffer: ArrayBuffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i += 3) {
+      const c1 = bytes[i];
+      const c2 = bytes[i + 1];
+      const c3 = bytes[i + 2];
+      const enc1 = c1 >> 2;
+      const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
+      const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
+      const enc4 = c3 & 63;
+      binary += b64chars[enc1] + b64chars[enc2];
+      // オリジナルコードのロジックそのまま（undefined時の挙動含む）
+      if (Number.isNaN(c2)) { binary += '=='; } 
+      else if (Number.isNaN(c3)) { binary += b64chars[enc3] + '='; } 
+      else { binary += b64chars[enc3] + b64chars[enc4]; }
+    }
+    return binary;
+}
+
 export class AudioManager {
   private audioContext: AudioContext | null = null;
   private globalAudioContext: AudioContext | null = null; // iOS用
@@ -25,9 +49,6 @@ export class AudioManager {
   private readonly MAX_RECORDING_TIME = 55000;
 
   private isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  
-  // 元コードのBase64用文字セット
-  private readonly b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
   constructor() {
   }
@@ -76,27 +97,6 @@ export class AudioManager {
     throw new Error('マイク機能が見つかりません。HTTPS(鍵マーク)のURLでアクセスしているか確認してください。');
   }
 
-  // 元の GourmetChat.astro にあった高速変換ロジックをそのまま移植
-  private fastArrayBufferToBase64(buffer: ArrayBuffer): string {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i += 3) {
-      const c1 = bytes[i];
-      const c2 = bytes[i + 1];
-      const c3 = bytes[i + 2];
-      const enc1 = c1 >> 2;
-      const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
-      const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
-      const enc4 = c3 & 63;
-      binary += this.b64chars[enc1] + this.b64chars[enc2];
-      if (Number.isNaN(c2)) { binary += '=='; } 
-      else if (Number.isNaN(c3)) { binary += this.b64chars[enc3] + '='; } 
-      else { binary += this.b64chars[enc3] + this.b64chars[enc4]; }
-    }
-    return binary;
-  }
-
   public async startStreaming(
     socket: any, 
     languageCode: string, 
@@ -122,12 +122,12 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  // --- iOS用実装 (GourmetChat.astro の startStreamingSTT_iOS を完全移植) ---
+  // --- iOS用実装 (GourmetChat (1).astro から完全移植) ---
   private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
       
-      // Workletの完全クリーンアップ
+      // Worklet cleanup 
       if (this.audioWorkletNode) { 
         this.audioWorkletNode.port.onmessage = null;
         this.audioWorkletNode.disconnect(); 
@@ -135,13 +135,13 @@ export class AudioManager {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      // AudioContext作成 (GourmetChat.astro 160-163行目の設定を厳守)
+      // AudioContext作成 
       if (!this.globalAudioContext) {
         // @ts-ignore
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.globalAudioContext = new AudioContextClass({ 
-          latencyHint: 'interactive', 
-          sampleRate: 48000 
+          latencyHint: 'interactive', // ★重要: オリジナル通り
+          sampleRate: 48000           // ★重要: オリジナル通り
         });
       }
       
@@ -149,7 +149,7 @@ export class AudioManager {
         await this.globalAudioContext.resume();
       }
 
-      // MediaStreamの再利用ロジック
+      // MediaStream再利用ロジック 
       if (this.mediaStream) {
         const tracks = this.mediaStream.getAudioTracks();
         if (tracks.length > 0 && tracks[0].readyState === 'live') {
@@ -161,13 +161,13 @@ export class AudioManager {
       }
       
       if (!this.mediaStream) {
-        // GourmetChat.astro 167-168行目の設定を厳守
+        // マイク設定 
         const audioConstraints = { 
             channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: 48000
+            sampleRate: 48000 // ★重要: オリジナル通り
         };
         this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       }
@@ -179,13 +179,13 @@ export class AudioManager {
       const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // GourmetChat.astro 174-187行目のWorkletコードを完全移植
-      // (bufferSize 8192, flush 500ms, Int16変換ロジックなど全て同じに)
+      // Workletコード 
+      // バッファ8192, フラッシュ500msなど完全に元通りにする
       const audioProcessorCode = `
       class AudioProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
-          this.bufferSize = 8192;
+          this.bufferSize = 8192; // ★オリジナル値
           this.buffer = new Int16Array(this.bufferSize); 
           this.writeIndex = 0;
           this.ratio = ${downsampleRatio}; 
@@ -230,19 +230,18 @@ export class AudioManager {
       URL.revokeObjectURL(processorUrl);
       
       this.audioWorkletNode = new AudioWorkletNode(this.globalAudioContext, processorName);
-      
       this.audioWorkletNode.port.onmessage = (event) => {
         const { audioChunk } = event.data;
         if (socket && socket.connected) {
           try {
-            // 元コードの fastArrayBufferToBase64 を使用
-            const base64 = this.fastArrayBufferToBase64(audioChunk.buffer);
+            // ★重要: ここでオリジナルの fastArrayBufferToBase64 を使う
+            const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
           } catch (e) { }
         }
       };
       
-      // GourmetChat.astro 195-196行目: 200ms待機
+      // 送信開始前の待機 
       if (socket && socket.connected) {
         socket.emit('stop_stream');
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -253,7 +252,7 @@ export class AudioManager {
         sample_rate: 16000
       });
 
-      // マイクとWorkletを接続
+      // 接続
       source.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.globalAudioContext.destination);
       
@@ -472,7 +471,7 @@ export class AudioManager {
     this.hasSpoken = false;
   }
 
-  // --- レガシー録音 (Androidフォールバック等) ---
+  // --- レガシー録音 ---
   public async startLegacyRecording(
     onStopCallback: (audioBlob: Blob) => void,
     onSpeechStart?: () => void
