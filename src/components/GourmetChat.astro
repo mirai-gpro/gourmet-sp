@@ -1308,108 +1308,6 @@ function stopStreamingSTT_iOS() {
     }
 
     // 初期化関数
-// ========================================
-// ロゴクリックでリセット機能
-// ========================================
-function setupResetOnLogoClick() {
-  const pageTitle = document.getElementById('pageTitle');
-  const appLogo = document.querySelector('.app-logo');
-  
-  const handleReset = async (e: Event) => {
-    e.preventDefault();
-    
-    const confirmReset = confirm(t('confirmReset'));
-    if (!confirmReset) return;
-    
-    console.log('🔄 [Reset] 初期画面にリセット開始');
-    
-    try {
-      stopAllActivities();
-      fullResetAudioResources();
-      chatArea.innerHTML = '';
-      userInput.value = '';
-      
-      currentShops = [];
-      reservationBtn.disabled = true;
-      document.dispatchEvent(new CustomEvent('clearShops'));
-      const shopSection = document.getElementById('shopListSection');
-      if (shopSection) {
-        shopSection.classList.remove('has-shops');
-      }
-      
-      sessionId = null;
-      currentStage = 'conversation';
-      
-      isProcessing = false;
-      isRecording = false;
-      isAISpeaking = false;
-      isTTSEnabled = true;
-      lastAISpeech = '';
-      preGeneratedAcks.clear();
-      
-      sendBtn.disabled = true;
-      micBtnFloat.disabled = true;
-      speakerBtn.disabled = true;
-      userInput.disabled = true;
-      
-      voiceStatus.innerHTML = t('voiceStatusStopped');
-      voiceStatus.className = 'voice-status stopped';
-      
-      speakerBtn.innerHTML = '🔊';
-      speakerBtn.title = t('btnTTSOn');
-      speakerBtn.className = 'btn btn-icon btn-speaker';
-      
-      const resetMessageDiv = document.createElement('div');
-      resetMessageDiv.className = 'message system';
-      resetMessageDiv.innerHTML = `
-        <div class="message-avatar">🔄</div>
-        <div>
-          <div class="message-content">${t('resetSuccess')}</div>
-        </div>
-      `;
-      chatArea.appendChild(resetMessageDiv);
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await initialize();
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      
-      console.log('✅ [Reset] 初期画面にリセット完了');
-      
-    } catch (error) {
-      console.error('❌ [Reset] リセットエラー:', error);
-      showError('リセット中にエラーが発生しました');
-    }
-  };
-  
-  if (pageTitle) {
-    pageTitle.style.cursor = 'pointer';
-    pageTitle.style.transition = 'opacity 0.2s';
-    pageTitle.addEventListener('click', handleReset);
-    
-    pageTitle.addEventListener('mouseenter', () => {
-      pageTitle.style.opacity = '0.8';
-    });
-    pageTitle.addEventListener('mouseleave', () => {
-      pageTitle.style.opacity = '1';
-    });
-  }
-  
-  if (appLogo) {
-    appLogo.style.cursor = 'pointer';
-    appLogo.style.transition = 'transform 0.2s';
-    appLogo.addEventListener('click', handleReset);
-    
-    appLogo.addEventListener('mouseenter', () => {
-      (appLogo as HTMLElement).style.transform = 'scale(1.1)';
-    });
-    appLogo.addEventListener('mouseleave', () => {
-      (appLogo as HTMLElement).style.transform = 'scale(1)';
-    });
-  }
-  
-  console.log('✅ [Reset] ロゴクリック機能を有効化');
-}
     async function initialize() {
         try {
             const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
@@ -1429,7 +1327,6 @@ function setupResetOnLogoClick() {
             if (splashOverlay) hideSplash();
             initializeWebSocketSTT();
             updateUILanguage();
-            setupResetOnLogoClick();
         } catch(e) { console.error(e); }
     }
 
