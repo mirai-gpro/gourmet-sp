@@ -8,7 +8,7 @@ const { apiBaseUrl = '' } = Astro.props;
 ---
 
 <div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
-  </div>
+</div>
 
 <style>
   .shop-card-list {
@@ -174,11 +174,35 @@ const { apiBaseUrl = '' } = Astro.props;
     padding: 16px;
   }
 
+  /* ★店名と評価を包むリンクのスタイル */
+  .shop-card-list :global(.shop-header-link) {
+    text-decoration: none;
+    display: flex;
+    gap: 12px; /* アイコンとテキストの間隔 */
+    align-items: flex-start;
+    color: inherit;
+    transition: opacity 0.2s;
+    margin-bottom: 10px; /* 下の要素との余白 */
+  }
+
+  .shop-card-list :global(.shop-header-link:hover) {
+    opacity: 0.7;
+  }
+  
+  /* ★Google Mapアイコンのスタイル */
+  .shop-card-list :global(.google-map-icon-svg) {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    margin-top: 2px; /* テキストとの位置合わせ */
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
+  }
+
   .shop-card-list :global(.shop-name) {
     font-size: 18px;
     font-weight: 900;
     color: #1f2937;
-    margin: 0 0 10px 0;
+    margin: 0 0 6px 0;
     line-height: 1.3;
   }
 
@@ -187,7 +211,7 @@ const { apiBaseUrl = '' } = Astro.props;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 4px; /* 見出しリンク内に移動したので調整 */
   }
 
   .shop-card-list :global(.rating) {
@@ -380,10 +404,16 @@ const { apiBaseUrl = '' } = Astro.props;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); /* ロゴ自体に少し影をつけて立体感を出す */
   }
 
+  /* ★変更: ホットペッパーボタン（白背景・オレンジ枠） */
   .shop-card-list :global(.link-btn.hotpepper) {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+    background: white; /* 白背景に変更 */
+    border: 2px solid #ea580c; /* オレンジの枠線 */
+    color: #1f2937; /* 文字色は濃いグレー */
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+  }
+
+  .shop-card-list :global(.link-btn.hotpepper:hover) {
+    background-color: #fff7ed; /* ホバー時は薄いオレンジ背景 */
   }
 
   .shop-card-list :global(.link-btn.maps) {
@@ -437,8 +467,10 @@ const { apiBaseUrl = '' } = Astro.props;
     height: 16px;
   }
 
+  /* ホットペッパーのアイコン色調整 */
   .shop-card-list :global(.link-btn.hotpepper .link-icon) {
-    background: rgba(255, 255, 255, 0.2);
+    background: #ea580c; /* アイコン背景はオレンジ */
+    color: white; /* アイコン自体は白 */
   }
 
   .shop-card-list :global(.link-btn.gnavi .link-icon) {
@@ -526,7 +558,7 @@ const { apiBaseUrl = '' } = Astro.props;
   // デバイス判定
   const isMobile = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           (window.innerWidth <= 768);
+    (window.innerWidth <= 768);
   };
 
   // PC版: ポップアップで開く / モバイル版: 別タブで開く
@@ -596,7 +628,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
   class ShopCardManager {
     private container: HTMLElement;
-    private currentLanguage: string = 'ja'; // デフォルトは日本語
+    private currentLanguage: string = 'ja';
+    // デフォルトは日本語
     private i18n = {
       ja: {
         instagramTitle: 'Instagram',       
@@ -647,7 +680,6 @@ const { apiBaseUrl = '' } = Astro.props;
         gnaviSubtitle: '음식점 정보'
       }
     };
-
     constructor(containerId: string) {
       this.container = document.getElementById(containerId)!;
     }
@@ -660,7 +692,8 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // 翻訳ヘルパー
     private t(key: string): string {
-      const langData = this.i18n[this.currentLanguage as keyof typeof this.i18n] || this.i18n.en;
+      const langData = this.i18n[this.currentLanguage as keyof typeof this.i18n] ||
+      this.i18n.en;
       return langData[key as keyof typeof langData] || key;
     }
 
@@ -712,7 +745,6 @@ const { apiBaseUrl = '' } = Astro.props;
       const tipsHtml = shop.tips ? this.createTipsHtml(shop.tips) : '';
       // リンクボタンの生成
       const linksHtml = this.createLinksHtml(shop);
-
       // Google Map URLの生成
       let mapsUrl = '#';
       if (shop.maps_url) {
@@ -743,14 +775,26 @@ const { apiBaseUrl = '' } = Astro.props;
         mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
       }
 
+      // ★ Google MapsのカラーアイコンSVG
+      const googleMapsIconSvg = `
+        <svg class="google-map-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 4C14.0589 4 6 12.0589 6 22C6 33.5 24 44 24 44C24 44 42 33.5 42 22C42 12.0589 33.9411 4 24 4Z" fill="#EA4335"/>
+          <path d="M24 44C24 44 42 33.5 42 22C42 17.0294 39.9853 12.5294 36.7279 9.27208L24 22L11.2721 9.27208C8.01472 12.5294 6 17.0294 6 22C6 33.5 24 44 24 44Z" fill="#34A853" fill-opacity="0.2"/>
+          <circle cx="24" cy="22" r="10" fill="#1976D2"/>
+          <path d="M24 4C14.0589 4 6 12.0589 6 22H24V4Z" fill="#EA4335"/>
+          <path d="M24 4V22H42C42 12.0589 33.9411 4 24 4Z" fill="#34A853"/>
+          <path d="M24 22V44C24 44 42 33.5 42 22H24Z" fill="#FBBC04"/>
+          <path d="M6 22C6 33.5 24 44 24 44V22H6Z" fill="#1976D2"/>
+          <circle cx="24" cy="22" r="5" fill="white"/>
+        </svg>
+      `;
+
       card.innerHTML = `
         <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" data-maps-url="${mapsUrl}">
           <div class="hero-image">
             <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
-            ${shop.category ?
-              `<span class="category-badge">${shop.category}</span>` : ''}
-            ${shop.location ?
-              `
+            ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
+            ${shop.location ? `
               <div class="location-badge">
                 <svg fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
@@ -761,30 +805,32 @@ const { apiBaseUrl = '' } = Astro.props;
           </div>
         </a>
         <div class="card-body">
-          <h3 class="shop-name">${shop.name}</h3>
           
-          <div class="meta-info">
-            ${shop.rating ? `
-              <div class="rating">
-                <div class="stars">${starsHtml}</div>
-                <span class="rating-value">${shop.rating}</span>
-                ${shop.reviewCount ?
-                  `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
+          <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="shop-header-link">
+            ${googleMapsIconSvg}
+            <div class="shop-header-content">
+              <h3 class="shop-name">${shop.name}</h3>
+              <div class="meta-info">
+                ${shop.rating ? `
+                  <div class="rating">
+                    <div class="stars">${starsHtml}</div>
+                    <span class="rating-value">${shop.rating}</span>
+                    ${shop.reviewCount ? `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
+                  </div>
+                ` : ''}
+                ${shop.priceRange ? `
+                  <div class="price-range">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>${shop.priceRange}</span>
+                  </div>
+                ` : ''}
               </div>
-            ` : ''}
-            ${shop.priceRange ?
-              `
-              <div class="price-range">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span>${shop.priceRange}</span>
-              </div>
-            ` : ''}
-          </div>
+            </div>
+          </a>
 
-          ${shop.description ?
-            `<p class="description">${shop.description}</p>` : ''}
+          ${shop.description ? `<p class="description">${shop.description}</p>` : ''}
           
           ${highlightsHtml}
           
@@ -892,14 +938,12 @@ const { apiBaseUrl = '' } = Astro.props;
     // リンクボタンの生成（URLの有無に基づいて表示）
     private createLinksHtml(shop: ShopData): string {
       const links: string[] = [];
-
       // 0. Instagram検索 (★修正: スマホ対応のためハッシュタグ検索URLに変更)
       if (shop.name) {
         // ハッシュタグではスペースが使えないため削除する
         const tagName = shop.name.replace(/\s+/g, '');
         // URL形式: /explore/tags/店名/ (これならアプリでも開く)
         const instaUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(tagName)}/`;
-        
         links.push(`
           <a href="${instaUrl}" target="_blank" rel="noopener noreferrer" class="link-btn instagram" onclick="return openLinkPopup(event, '${instaUrl}')">
             <div class="link-btn-content">
@@ -956,7 +1000,6 @@ const { apiBaseUrl = '' } = Astro.props;
         const onclickAttr = isGoogleSearch
           ? `onclick="return handleTabelogSearch(event, '${escapedUrl}')"`
           : `onclick="return openLinkPopup(event, '${escapedUrl}')"`;
-
         links.push(`
           <a href="${shop.tabelog_url}" target="_blank" rel="noopener noreferrer" class="link-btn tabelog" ${onclickAttr}>
             <div class="link-btn-content">
@@ -1034,7 +1077,6 @@ const { apiBaseUrl = '' } = Astro.props;
 
   // グローバルに公開
   (window as any).ShopCardManager = ShopCardManager;
-
   // 初期化
   document.addEventListener('DOMContentLoaded', () => {
     const manager = new ShopCardManager('shopCardList');
