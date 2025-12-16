@@ -1,3 +1,4 @@
+
 // src/scripts/chat/chat-controller.ts
 import { i18n } from '../../constants/i18n'; 
 import { AudioManager } from './audio-manager';
@@ -287,6 +288,8 @@ export class ChatController {
 
     this.els.userInput.value = transcript;
     
+// ▼▼▼ 日にちチェック無効化 (1/2) ▼▼▼
+    /*
     // @ts-ignore
     if (i18n[this.currentLanguage].patterns.dateCheck.test(transcript)) {
       const msg = this.t('dateWarningMsg');
@@ -302,6 +305,8 @@ export class ChatController {
       this.els.voiceStatus.className = 'voice-status stopped';
       return;
     }
+    */
+    // ▲▲▲ 日にちチェック無効化 (1/2) ▲▲▲
 
     this.addMessage('user', transcript);
     const textLength = transcript.trim().replace(/\s+/g, '').length;
@@ -381,6 +386,8 @@ export class ChatController {
     if (!this.isFromVoiceInput) {
       this.addMessage('user', message);
       
+// ▼▼▼ 日にちチェック無効化 (2/2) ▼▼▼
+      /*
       // @ts-ignore
       if (i18n[this.currentLanguage].patterns.dateCheck.test(message)) {
            const msg = this.t('dateWarningMsg');
@@ -389,6 +396,8 @@ export class ChatController {
            this.resetInputState();
            return;
       }
+      */
+      // ▲▲▲ 日にちチェック無効化 (2/2) ▲▲▲
       
       const textLength = message.trim().replace(/\s+/g, '').length;
       if (textLength < 4) {
