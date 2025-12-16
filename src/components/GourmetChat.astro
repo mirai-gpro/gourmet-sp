@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - iPhone完全対応版 (構文エラー修正・: any除去・i18n統合済み)
+// GourmetChat.astro - iPhone完全対応版 (関数順序整理・i18n統合・Pure JS)
 import { i18n as sourceI18n } from '../constants/i18n';
 
 export interface Props {
@@ -9,9 +9,7 @@ export interface Props {
 const { apiBaseUrl = '' } = Astro.props;
 
 // 【サーバーサイド処理】
-// define:varsでクライアントに渡すため、i18nデータを整形
 const clientI18n = {};
-
 Object.keys(sourceI18n).forEach(lang => {
   const source = sourceI18n[lang];
   clientI18n[lang] = {
@@ -19,7 +17,6 @@ Object.keys(sourceI18n).forEach(lang => {
     fallbackResponse: null,
     patterns: {}
   };
-
   if (source.patterns) {
     Object.keys(source.patterns).forEach(key => {
       const regex = source.patterns[key];
@@ -200,17 +197,9 @@ Object.keys(sourceI18n).forEach(lang => {
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
 
+    // 変数定義
     const splashOverlay = document.getElementById('splashOverlay');
     const splashVideo = document.getElementById('splashVideo');
-    function hideSplash() {
-      if (splashVideo) splashVideo.loop = false;
-      if (splashOverlay) {
-        splashOverlay.classList.add('fade-out');
-        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
-      }
-    }
-    setTimeout(() => hideSplash(), 10000);
-
     const chatArea = document.getElementById('chatArea');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -222,6 +211,7 @@ Object.keys(sourceI18n).forEach(lang => {
     const micBtnFloat = document.getElementById('micBtnFloat');
     const waitOverlay = document.getElementById('waitOverlay');
     const waitVideo = document.getElementById('waitVideo');
+    
     let waitOverlayTimer = null;
     let currentLanguage = 'ja';
     let sessionId = null;
@@ -263,69 +253,14 @@ Object.keys(sourceI18n).forEach(lang => {
 
     const ttsPlayer = new Audio();
 
-    async function toggleRecording() {
-      enableAudioPlayback();
-      userInput.value = '';
-      stopCurrentAudio();
-      if (isRecording) { 
-        stopAllActivities();
-        return;
-      }
-      if (isStreamingSTT) { 
-        await startStreamingSTT(); 
-      } else { 
-        await startLegacyRecording();
-      }
-    }
+    // ★重要: エラー回避のため、よく使う関数を先に定義します
     
-    function generateFallbackResponse(text) {
-      if (currentLanguage === 'ja') return `「${text}」ですね、わかりました。\n少しお待ちください...`;
-      if (currentLanguage === 'en') return `I heard "${text}".\nPlease wait a moment...`;
-      if (currentLanguage === 'zh') return `我听到了“${text}”。\n请稍等...`;
-      if (currentLanguage === 'ko') return `"${text}"라고 하셨군요.\n잠시만 기다려 주세요...`;
-      return text;
-    }
-
-    function t(key, ...args) {
-      const translation = i18n[currentLanguage][key];
-      if (key === 'fallbackResponse') return generateFallbackResponse(args[0]);
-      if (typeof translation === 'function') return translation(...args);
-      return translation || key;
-    }
-
-    function addMessage(role, content, summary = null, isInitial = false) {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${role}`;
-      if (isInitial) messageDiv.setAttribute('data-initial', 'true');
-      const avatar = document.createElement('div');
-      avatar.className = 'message-avatar';
-      avatar.innerHTML = role === 'assistant' ? '🍽' : role === 'user' ? '👤' : '⚠';
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      const messageText = document.createElement('span');
-      messageText.className = 'message-text';
-      messageText.textContent = content;
-      contentDiv.appendChild(messageText);
-      messageDiv.appendChild(avatar);
-      const wrapper = document.createElement('div');
-      wrapper.appendChild(contentDiv);
-      if (summary) {
-        const summaryDiv = document.createElement('div');
-        summaryDiv.className = 'summary-box';
-        summaryDiv.innerHTML = `<strong>🔍 内容確認</strong>${summary}`;
-        wrapper.appendChild(summaryDiv);
+    function hideSplash() {
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
       }
-      messageDiv.appendChild(wrapper);
-      chatArea.appendChild(messageDiv);
-      chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    function showError(message) {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-message';
-      errorDiv.textContent = message;
-      chatArea.appendChild(errorDiv);
-      chatArea.scrollTop = chatArea.scrollHeight;
     }
 
     function showWaitOverlay() {
@@ -370,6 +305,141 @@ Object.keys(sourceI18n).forEach(lang => {
       ttsPlayer.currentTime = 0;
     }
 
+    function generateFallbackResponse(text) {
+      if (currentLanguage === 'ja') return `「${text}」ですね、わかりました。\n少しお待ちください...`;
+      if (currentLanguage === 'en') return `I heard "${text}".\nPlease wait a moment...`;
+      if (currentLanguage === 'zh') return `我听到了“${text}”。\n请稍等...`;
+      if (currentLanguage === 'ko') return `"${text}"라고 하셨군요.\n잠시만 기다려 주세요...`;
+      return text;
+    }
+
+    function t(key, ...args) {
+      const translation = i18n[currentLanguage][key];
+      if (key === 'fallbackResponse') return generateFallbackResponse(args[0]);
+      if (typeof translation === 'function') return translation(...args);
+      return translation || key;
+    }
+
+    function updateUILanguage() {
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      userInput.placeholder = t('inputPlaceholder');
+      micBtnFloat.title = t('btnVoiceInput');
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      sendBtn.textContent = t('btnSend');
+      reservationBtn.innerHTML = t('btnReservation');
+      const waitText = document.querySelector('.wait-text');
+      if (waitText) waitText.textContent = t('waitMessage');
+
+      const pageTitle = document.getElementById('pageTitle');
+      if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
+      const pageSubtitle = document.getElementById('pageSubtitle');
+      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
+      const shopListTitle = document.getElementById('shopListTitle');
+      if (shopListTitle) shopListTitle.innerHTML = `🍽 ${t('shopListTitle')}`;
+      const shopListEmpty = document.getElementById('shopListEmpty');
+      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
+      const pageFooter = document.getElementById('pageFooter');
+      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} ✨`;
+
+      const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
+      if (initialMessage) {
+        const messageText = initialMessage.querySelector('.message-text');
+        if (messageText) messageText.textContent = t('initialGreeting');
+      }
+
+      document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
+    }
+
+    function addMessage(role, content, summary = null, isInitial = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+      if (isInitial) messageDiv.setAttribute('data-initial', 'true');
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.innerHTML = role === 'assistant' ? '🍽' : role === 'user' ? '👤' : '⚠';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'message-content';
+      const messageText = document.createElement('span');
+      messageText.className = 'message-text';
+      messageText.textContent = content;
+      contentDiv.appendChild(messageText);
+      messageDiv.appendChild(avatar);
+      const wrapper = document.createElement('div');
+      wrapper.appendChild(contentDiv);
+      if (summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'summary-box';
+        summaryDiv.innerHTML = `<strong>🔍 内容確認</strong>${summary}`;
+        wrapper.appendChild(summaryDiv);
+      }
+      messageDiv.appendChild(wrapper);
+      chatArea.appendChild(messageDiv);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function showError(message) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = message;
+      chatArea.appendChild(errorDiv);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    // ★toggle系の関数をここに配置します
+    function toggleTTS() {
+      if (!isUserInteracted) { enableAudioPlayback(); return; }
+      enableAudioPlayback();
+      isTTSEnabled = !isTTSEnabled;
+      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
+      if (!isTTSEnabled) stopCurrentAudio();
+    }
+
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return;
+      }
+      if (isStreamingSTT) { 
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
+    }
+
+    function openReservationModal() {
+      if (currentShops.length === 0) { showError(t('searchError')); return; }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    }
+
     function stripMarkdown(text) {
       return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
     }
@@ -406,36 +476,6 @@ Object.keys(sourceI18n).forEach(lang => {
         shops.push({ name: name, description: description, category: 'イタリアン', hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, maps_url: `https://www.google.com/maps/search/${encodedName}`, tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` });
       }
       return shops;
-    }
-
-    function updateUILanguage() {
-      voiceStatus.innerHTML = t('voiceStatusStopped');
-      userInput.placeholder = t('inputPlaceholder');
-      micBtnFloat.title = t('btnVoiceInput');
-      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
-      sendBtn.textContent = t('btnSend');
-      reservationBtn.innerHTML = t('btnReservation');
-      const waitText = document.querySelector('.wait-text');
-      if (waitText) waitText.textContent = t('waitMessage');
-
-      const pageTitle = document.getElementById('pageTitle');
-      if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
-      const pageSubtitle = document.getElementById('pageSubtitle');
-      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
-      const shopListTitle = document.getElementById('shopListTitle');
-      if (shopListTitle) shopListTitle.innerHTML = `🍽 ${t('shopListTitle')}`;
-      const shopListEmpty = document.getElementById('shopListEmpty');
-      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
-      const pageFooter = document.getElementById('pageFooter');
-      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} ✨`;
-
-      const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
-      if (initialMessage) {
-        const messageText = initialMessage.querySelector('.message-text');
-        if (messageText) messageText.textContent = t('initialGreeting');
-      }
-
-      document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
     }
 
     async function speakTextGCP(text, stopPrevious = true, autoRestartMic = false) {
@@ -728,7 +768,7 @@ Object.keys(sourceI18n).forEach(lang => {
             addMessage('system', t('recordingTimeLimit')); 
           } 
         }, MAX_RECORDING_TIME);
-      } catch (error) { // ★修正: : any を削除
+      } catch (error) {
         if (audioWorkletNode) { 
           audioWorkletNode.port.onmessage = null;
           audioWorkletNode.disconnect(); 
@@ -907,7 +947,7 @@ Object.keys(sourceI18n).forEach(lang => {
             addMessage('system', t('recordingTimeLimit')); 
           } 
         }, MAX_RECORDING_TIME);
-      } catch (error) { // ★修正: : any を削除
+      } catch (error) {
         if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
         if (!error.message?.includes('マイク')) { addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); }
       }
