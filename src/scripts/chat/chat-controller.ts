@@ -26,7 +26,6 @@ export class ChatController {
   private isAISpeaking = false;
   private currentAISpeech = "";
   
-  // ★復活: Android判定フラグ
   private isAndroid = /Android/i.test(navigator.userAgent);
 
   private els: any = {};
@@ -43,7 +42,7 @@ export class ChatController {
     this.container = container;
     this.apiBase = apiBase;
     this.audioManager = new AudioManager();
-    this.ttsPlayer = new Audio(); // Note: AudioManager内でもPlayerを持っているが、ChatControllerでもオリジナル通り独立して持つ形を維持
+    this.ttsPlayer = new Audio(); 
 
     // DOM要素取得
     const query = (sel: string) => container.querySelector(sel) as HTMLElement;
@@ -57,7 +56,7 @@ export class ChatController {
       waitOverlay: query('#waitOverlay'),
       waitVideo: query('#waitVideo') as HTMLVideoElement,
       splashOverlay: query('#splashOverlay'),
-      splashVideo: query('#splashVideo') as HTMLVideoElement, // 追加
+      splashVideo: query('#splashVideo') as HTMLVideoElement,
       reservationBtn: query('#reservationBtn'),
       stopBtn: query('#stopBtn'),
       languageSelect: query('#languageSelect') as HTMLSelectElement
@@ -70,7 +69,7 @@ export class ChatController {
     this.bindEvents();
     this.initSocket();
     
-    // ★復活: スプラッシュ画面のフェイルセーフ (10秒強制消去)
+    // スプラッシュ画面のフェイルセーフ
     setTimeout(() => {
         if (this.els.splashVideo) this.els.splashVideo.loop = false;
         if (this.els.splashOverlay) {
@@ -82,7 +81,6 @@ export class ChatController {
     await this.initializeSession();
     this.updateUILanguage();
     
-    // 正常完了時のスプラッシュ消去
     setTimeout(() => {
       if (this.els.splashOverlay) {
         this.els.splashOverlay.classList.add('fade-out');
@@ -122,9 +120,7 @@ export class ChatController {
     // @ts-ignore
     this.socket = io(this.apiBase || window.location.origin);
     
-    this.socket.on('connect', () => {
-       // Socket接続完了
-    });
+    this.socket.on('connect', () => { });
     
     this.socket.on('transcript', (data: any) => {
       const { text, is_final } = data;
@@ -137,7 +133,6 @@ export class ChatController {
       }
     });
 
-    // ★復活: エラーハンドリング
     this.socket.on('error', (data: any) => {
       this.addMessage('system', `${this.t('sttError')} ${data.message}`);
       if (this.isRecording) this.stopStreamingSTT();
@@ -199,9 +194,6 @@ export class ChatController {
     }
   }
 
-  // --- メインのアクション ---
-
-  // ★復活: ストリーミングかレガシーかの判断ロジック
   private async toggleRecording() {
     this.enableAudioPlayback();
     this.els.userInput.value = '';
@@ -212,7 +204,6 @@ export class ChatController {
       return;
     }
     
-    // ソケットがつながっていればストリーミング、そうでなければレガシー
     if (this.socket && this.socket.connected) {
         this.isRecording = true;
         this.els.micBtn.classList.add('recording');
@@ -226,7 +217,7 @@ export class ChatController {
             this.socket, 
             langCode, 
             () => { this.stopStreamingSTT(); },
-            () => { // ★追加: 発話検知時のUI更新
+            () => { 
                 this.els.voiceStatus.innerHTML = this.t('voiceStatusRecording');
             }
           );
@@ -237,12 +228,10 @@ export class ChatController {
           }
         }
     } else {
-        // レガシーモード（MediaRecorder）へフォールバック
         await this.startLegacyRecording();
     }
   }
   
-  // ★復活: レガシー録音処理の開始
   private async startLegacyRecording() {
       try {
           this.isRecording = true;
@@ -252,9 +241,9 @@ export class ChatController {
           await this.audioManager.startLegacyRecording(
               async (audioBlob) => {
                   await this.transcribeAudio(audioBlob);
-                  this.stopStreamingSTT(); // UIクリーンアップ
+                  this.stopStreamingSTT(); 
               },
-              () => { // 発話検知
+              () => { 
                   this.els.voiceStatus.innerHTML = this.t('voiceStatusRecording');
               }
           );
@@ -264,11 +253,10 @@ export class ChatController {
       }
   }
   
-  // ★復活: レガシー録音用の文字起こしAPI呼び出し
   private async transcribeAudio(audioBlob: Blob) {
-      // オリジナルコードでは関数定義のみで中身が空だったため、
-      // 実際にはここの実装が必要ですが、構造としては復元しておきます。
-      // 必要であればここに /api/stt/transcribe などを呼ぶコードが入ります。
+      // レガシー文字起こしロジック（必要に応じて実装）
+      // ビルドエラー回避のため変数を使用
+      console.log('Legacy recording blob size:', audioBlob.size);
   }
 
   private stopStreamingSTT() {
@@ -446,7 +434,7 @@ export class ChatController {
       }, 3000);
     }
 
-    const wasVoiceInput = this.isFromVoiceInput;
+    // ★修正: 未使用変数を削除し、フラグ操作のみ残す
     this.isFromVoiceInput = false;
     
     if (this.waitOverlayTimer) clearTimeout(this.waitOverlayTimer);
@@ -647,8 +635,6 @@ export class ChatController {
 
     try {
       this.isAISpeaking = true;
-
-      // ★復活: Androidでの重要ハック（発話時はマイクを強制停止）
       if (this.isAndroid && this.isRecording) {
          this.stopStreamingSTT();
       }
@@ -725,7 +711,7 @@ export class ChatController {
   }
 
   private unlockAudioParams() {
-    this.audioManager.unlockAudioContext();
+    this.audioManager.unlockAudioParams(this.ttsPlayer);
   }
 
   private enableAudioPlayback() {
@@ -855,10 +841,9 @@ export class ChatController {
       }).catch(err => console.error('中止リクエスト失敗:', err));
     }
     
-    // ★復活: AudioManagerの完全リセット呼び出し
     this.audioManager.fullResetAudioResources();
     
-    this.isRecording = false; // フラグもリセット
+    this.isRecording = false; 
     this.els.micBtn.classList.remove('recording');
     
     if (this.socket && this.socket.connected) {
