@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - 分割リファクタリング版
+// GourmetChat.astro - 分割リファクタリング版 (SVGファイル対応)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -48,13 +48,19 @@ const { apiBaseUrl = '' } = Astro.props;
   </div>
   
   <div class="floating-buttons">
-    <button class="btn-floating btn-stop" id="stopBtn" title="Stop"></button>
-    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="Mic"></button>
+    <button class="btn-floating btn-stop" id="stopBtn" title="Stop">
+      <img src="/mic-off.svg" alt="Stop" />
+    </button>
+
+    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="Mic">
+      <img src="/mic-on.svg" alt="Mic On" class="icon-mic" />
+      <img src="/mic-off.svg" alt="Mic Off" class="icon-stop" />
+    </button>
   </div>
 </div>
 
 <style>
-/* 既存のCSSをそのまま維持します */
+/* 既存のCSSレイアウト */
 .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
 .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
 .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
@@ -98,17 +104,47 @@ const { apiBaseUrl = '' } = Astro.props;
 .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
 .floating-buttons.keyboard-active { bottom: 320px; }
 @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
+
+/* === アイコン画像のスタイル === */
 .btn-floating { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; }
 .btn-floating:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+
+/* 停止ボタン */
 .btn-stop { background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); color: white; }
-.btn-stop::before { content: '⏹'; font-size: 24px; }
+.btn-stop img { width: 24px; height: 24px; }
+
+/* マイクボタン (コンテナ) */
 .btn-mic-float { background: #999; color: white; position: relative; overflow: visible; }
 .btn-mic-float:not(:disabled) { background: #10b981; }
-.btn-mic-float::before { content: '🎤'; font-size: 28px; }
 .btn-mic-float:disabled { cursor: not-allowed; opacity: 0.6; }
+
+/* アイコン画像共通設定 */
+.btn-mic-float img { width: 28px; height: 28px; transition: transform 0.2s; }
+
+/* --- アイコン切り替えロジック --- */
+
+/* 通常時: mic-on.svg を表示し、mic-off.svg を隠す */
+.btn-mic-float .icon-mic { display: block; }
+.btn-mic-float .icon-stop { display: none; }
+
+/* 録音中 (.recordingクラス付与時): mic-on.svg を隠し、mic-off.svg を表示 */
 .btn-mic-float.recording { background: #ef4444; }
-.btn-mic-float.recording::before { content: '⏹'; }
-.btn-mic-float.recording::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid #ef4444; opacity: 0; animation: ripple 1.5s ease-out infinite; }
+.btn-mic-float.recording .icon-mic { display: none; }
+.btn-mic-float.recording .icon-stop { display: block; }
+
+/* 録音中の波紋アニメーション */
+.btn-mic-float.recording::after { 
+  content: ''; 
+  position: absolute; 
+  width: 100%; 
+  height: 100%; 
+  border-radius: 50%; 
+  border: 3px solid #ef4444; 
+  opacity: 0; 
+  animation: ripple 1.5s ease-out infinite; 
+  top: 0; left: 0; box-sizing: border-box; 
+}
+
 @keyframes ripple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
 </style>
 
@@ -116,7 +152,6 @@ const { apiBaseUrl = '' } = Astro.props;
 
 <script>
   import { ChatController } from '../scripts/chat/chat-controller';
-
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
     if (container) {
