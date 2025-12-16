@@ -175,7 +175,7 @@ export class ChatController {
           if (ackData.success && ackData.audio) {
             this.preGeneratedAcks.set(text, ackData.audio);
           }
-        } catch (e) {}
+        } catch (_e) { /* エラー無視 */ }
       });
 
       await Promise.all([
@@ -254,9 +254,8 @@ export class ChatController {
   }
   
   private async transcribeAudio(audioBlob: Blob) {
-      // レガシー文字起こしロジック（必要に応じて実装）
-      // ビルドエラー回避のため変数を使用
-      console.log('Legacy recording blob size:', audioBlob.size);
+      // 未使用変数のエラー回避のためログ出力
+      console.log('Legacy audio blob size:', audioBlob.size);
   }
 
   private stopStreamingSTT() {
@@ -326,7 +325,7 @@ export class ChatController {
         this.lastAISpeech = this.normalizeText(ack.text);
         this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
         this.ttsPlayer.onended = () => resolve();
-        this.ttsPlayer.play().catch(e => resolve());
+        this.ttsPlayer.play().catch(_e => resolve());
       });
     } else if (this.isTTSEnabled) { 
       firstAckPromise = this.speakTextGCP(ack.text, false); 
@@ -353,7 +352,7 @@ export class ChatController {
           this.isFromVoiceInput = true;
           this.sendMessage();
         }
-      } catch (error) { 
+      } catch (_error) { // 変数名を_errorに変更して未使用エラーを回避
         if (this.els.userInput.value.trim()) {
           this.isFromVoiceInput = true;
           this.sendMessage();
@@ -411,12 +410,12 @@ export class ChatController {
               this.lastAISpeech = this.normalizeText(ack.text);
               this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
               this.ttsPlayer.onended = () => resolve();
-              this.ttsPlayer.play().catch(e => resolve());
+              this.ttsPlayer.play().catch(_e => resolve());
             });
           } else { 
             firstAckPromise = this.speakTextGCP(ack.text, false); 
           }
-        } catch (e) {}
+        } catch (_e) {}
       }
       
       if (firstAckPromise) await firstAckPromise;
@@ -434,7 +433,6 @@ export class ChatController {
       }, 3000);
     }
 
-    // ★修正: 未使用変数を削除し、フラグ操作のみ残す
     this.isFromVoiceInput = false;
     
     if (this.waitOverlayTimer) clearTimeout(this.waitOverlayTimer);
@@ -595,7 +593,7 @@ export class ChatController {
               }
             }
             this.isAISpeaking = false;
-          } catch (e) { this.isAISpeaking = false; }
+          } catch (_e) { this.isAISpeaking = false; }
         })();
       } else {
         if (data.response) {
@@ -665,7 +663,7 @@ export class ChatController {
               if (!this.isRecording) {
                 try {
                   await this.toggleRecording();
-                } catch (error) {
+                } catch (_error) { // 未使用変数回避
                   this.showMicPrompt();
                 }
               }
@@ -691,7 +689,7 @@ export class ChatController {
       } else {
         this.isAISpeaking = false;
       }
-    } catch (error) {
+    } catch (_error) {
       this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped');
       this.els.voiceStatus.className = 'voice-status stopped';
       this.isAISpeaking = false;
