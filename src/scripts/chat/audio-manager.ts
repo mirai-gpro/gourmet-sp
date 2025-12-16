@@ -1,6 +1,6 @@
 // src/scripts/chat/audio-manager.ts
 
-// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元　2
+// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元
 // （標準のbtoaや他ライブラリとはパディング処理などが異なるため、ここを変えるとデータが壊れます）
 const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function fastArrayBufferToBase64(buffer: ArrayBuffer) {
@@ -122,7 +122,7 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  // --- iOS用実装 (修正版) ---
+  // --- iOS用実装 (iOS 17+対応版・完全修正版) ---
   private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
@@ -148,7 +148,6 @@ export class AudioManager {
         await this.globalAudioContext.resume();
       }
       
-      // ★修正: audioConstraintsを定義
       const audioConstraints = { 
           channelCount: 1,
           echoCancellation: true,
@@ -157,14 +156,12 @@ export class AudioManager {
           sampleRate: 48000
       };
       
-      // MediaStream再利用ロジック（改善版）
-      if (!this.mediaStream) {
-        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
-      } else {
+      // ★修正2: MediaStreamは常に再取得（シンプルで確実なロジック）
+      if (this.mediaStream) {
         this.mediaStream.getTracks().forEach(track => track.stop());
         this.mediaStream = null;
-        this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       }
+      this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       
       const targetSampleRate = 16000;
       const nativeSampleRate = this.globalAudioContext.sampleRate;
@@ -173,7 +170,7 @@ export class AudioManager {
       const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // Workletコード（★修正版：バッファサイズ8192に戻し、タイムアウトフラッシュ追加）
+      // Workletコード（バッファサイズ8192、タイムアウトフラッシュ）
       const audioProcessorCode = `
       class AudioProcessor extends AudioWorkletProcessor {
         constructor() {
@@ -242,7 +239,7 @@ export class AudioManager {
         }
       };
       
-      // 送信開始前の待機（★修正: 200ms→300msに延長してより安全に） 
+      // Socket送信準備
       if (socket && socket.connected) {
         socket.emit('stop_stream');
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -263,7 +260,12 @@ export class AudioManager {
       }, this.MAX_RECORDING_TIME);
 
     } catch (error) {
-      // クリーンアップ
+      // ★修正3: クリーンアップを徹底
+      if (this.audioWorkletNode) { 
+        this.audioWorkletNode.port.onmessage = null;
+        this.audioWorkletNode.disconnect(); 
+        this.audioWorkletNode = null; 
+      }
       if (this.mediaStream) {
         this.mediaStream.getTracks().forEach(track => track.stop());
         this.mediaStream = null;
@@ -281,7 +283,11 @@ export class AudioManager {
       this.audioWorkletNode.disconnect(); 
       this.audioWorkletNode = null; 
     }
-    // ★注意: MediaStreamは再利用のため停止しない
+    // ★修正4: MediaStreamを停止（次回は新規取得）
+    if (this.mediaStream) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+    }
   }
 
   // --- PC / Android (Default) ---
@@ -310,22 +316,20 @@ export class AudioManager {
         await this.audioContext!.resume();
       }
       
-      // ★修正2: MediaStreamは常に再取得（iOS 17+の制約に対応）
-      // 理由: 前回のAudioContextとの紐付けをリセットするため
+      // ★修正5: MediaStreamは常に再取得
       if (this.mediaStream) {
-       this.mediaStream.getTracks().forEach(track => track.stop());
-       this.mediaStream = null;
+        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream = null;
       }
       
       const audioConstraints = { 
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true 
       };
-      this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
 
+      this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       
       const targetSampleRate = 16000;
       const nativeSampleRate = this.audioContext!.sampleRate;
@@ -447,7 +451,10 @@ export class AudioManager {
       }, this.MAX_RECORDING_TIME);
 
     } catch (error) {
-      if (this.mediaStream) { this.mediaStream.getTracks().forEach(track => track.stop()); this.mediaStream = null; }
+      if (this.mediaStream) { 
+        this.mediaStream.getTracks().forEach(track => track.stop()); 
+        this.mediaStream = null; 
+      }
       console.error('Default streaming error:', error);
       throw error;
     }
@@ -472,11 +479,12 @@ export class AudioManager {
       this.audioWorkletNode.disconnect(); 
       this.audioWorkletNode = null; 
     }
-    // ★修正5: MediaStreamを停止（次回は新規取得）
+    // ★修正6: MediaStreamを停止（次回は新規取得）
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
     }
+    this.hasSpoken = false;
   }
 
   // --- レガシー録音 ---
