@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - iPhone音声認識改善版２
+// GourmetChat.astro - iPhone音声認識改善版 (音飛び・語尾切れ対策済み)
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -125,8 +125,12 @@ const { apiBaseUrl = '' } = Astro.props;
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-<script>
+<script lang="ts">
   import { i18n } from '../constants/i18n';
+  
+  // 型定義
+  declare const io: any;
+
   const LANGUAGE_CODE_MAP = {
     ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
     en: { tts: 'en-US', stt: 'en-US', voice: 'en-US-Studio-O' },
@@ -513,27 +517,20 @@ const { apiBaseUrl = '' } = Astro.props;
       hasSpoken = false;
     }
 
-    // ★ iPhone実装（改善版）
+    // ★ iPhone実装（改善版 - 音飛び・語尾切れ対策済み）
     async function startStreamingSTT_iOS() {
       try {
+        // 1. AudioContextを即座に再開（これがUser Gesture必須部分）
         if (splashVideo) { splashVideo.pause(); }
         if (waitVideo) { waitVideo.pause(); }
         if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
         
-        // ★修正: Workletの完全クリーンアップ
-        if (audioWorkletNode) { 
-          audioWorkletNode.port.onmessage = null;
-          audioWorkletNode.disconnect(); 
-          audioWorkletNode = null; 
-          // iOSのマイク許可対策のため、ここにあった遅延(setTimeout)を削除
-        }
-        
         // AudioContext作成（初回のみ）
         if (!globalAudioContext) {
           try {
+            // ★修正: sampleRate指定を削除（OSのネイティブに従う）
             globalAudioContext = new AudioContext({ 
-              latencyHint: 'interactive',  // ★修正
-              sampleRate: 48000            // ★追加
+              latencyHint: 'interactive'
             });
           } catch (e) {
             addMessage('system', 'AudioContext作成エラー');
@@ -544,8 +541,15 @@ const { apiBaseUrl = '' } = Astro.props;
         if (globalAudioContext.state === 'suspended') {
           await globalAudioContext.resume();
         }
-        
-        // ★修正: MediaStreamの再利用を試みる
+
+        // Workletのクリーンアップ（遅延なし）
+        if (audioWorkletNode) { 
+          audioWorkletNode.port.onmessage = null;
+          audioWorkletNode.disconnect(); 
+          audioWorkletNode = null; 
+        }
+
+        // MediaStream取得・再利用
         if (mediaStream) {
           const tracks = mediaStream.getAudioTracks();
           if (tracks.length > 0 && tracks[0].readyState === 'live') {
@@ -556,16 +560,14 @@ const { apiBaseUrl = '' } = Astro.props;
           }
         }
         
-        // MediaStream取得（必要な場合のみ）
         if (!mediaStream) {
           try {
-            // ★修正: エコキャン/ノイズ抑制をON
+            // ★修正: sampleRate指定を削除
             const audioConstraints: any = { 
               channelCount: 1,
               echoCancellation: true,
               noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 48000
+              autoGainControl: true
             };
             mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
           } catch (micError: any) {
@@ -579,17 +581,16 @@ const { apiBaseUrl = '' } = Astro.props;
         const downsampleRatio = nativeSampleRate / targetSampleRate;
         
         const source = globalAudioContext.createMediaStreamSource(mediaStream);
-        // ★修正: プロセッサ名の重複回避
         const processorName = 'audio-processor-ios';
         try {
           audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
         } catch (e) {
-          // ★修正: バッファサイズ8192、タイムアウト対策追加
+          // ★修正: bufferSizeを4096に縮小し、flush判定を200msに短縮（語尾切れ防止）
           const audioProcessorCode = `
           class AudioProcessor extends AudioWorkletProcessor {
             constructor() {
               super();
-              this.bufferSize = 8192;
+              this.bufferSize = 4096;
               this.buffer = new Int16Array(this.bufferSize); 
               this.writeIndex = 0;
               this.ratio = ${downsampleRatio}; 
@@ -612,8 +613,9 @@ const { apiBaseUrl = '' } = Astro.props;
                     this.buffer[this.writeIndex++] = int16Value;
                   }
                   
+                  // 強制排出を200msに短縮
                   if (this.writeIndex >= this.bufferSize || 
-                      (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
+                      (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 200)) {
                     this.flush();
                   }
                 }
@@ -660,18 +662,23 @@ const { apiBaseUrl = '' } = Astro.props;
           }
         };
         
-        source.connect(audioWorkletNode);
-        audioWorkletNode.connect(globalAudioContext.destination);
-        // ★修正: Socket待機時間を延長
+        // 先にソケットの開始合図を送る（冒頭欠落対策）
         if (socket && socket.connected) {
           socket.emit('stop_stream');
-          await new Promise(resolve => setTimeout(resolve, 200));
         }
         
         socket.emit('start_stream', { 
           language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
           sample_rate: 16000
         });
+
+        // サーバー準備待ち（User Gesture内なのでOK）
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 最後にマイク音声を接続
+        source.connect(audioWorkletNode);
+        audioWorkletNode.connect(globalAudioContext.destination);
+        
         isSendingAudio = true;
         isRecording = true; micBtnFloat.classList.add('recording');
         voiceStatus.innerHTML = t('voiceStatusListening');
