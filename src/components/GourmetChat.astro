@@ -113,16 +113,13 @@ const { apiBaseUrl = '' } = Astro.props;
 /* Mobile: Default position above input area */
 @media (max-width: 768px) { 
   .floating-buttons { 
-    position: absolute;
-    bottom: auto;
-    top: calc(100% - 260px); /* Position one button height above input area */
+    position: fixed;
+    bottom: 100px; /* Default: above input area */
   }
   
   /* Move to very bottom when shop card is displayed */
   .floating-buttons.shop-card-active { 
-    position: fixed;
-    top: auto;
-    bottom: 0px; 
+    bottom: 20px; 
   } 
 }
 
