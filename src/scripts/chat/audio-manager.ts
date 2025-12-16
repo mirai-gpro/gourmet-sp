@@ -1,6 +1,6 @@
 // src/scripts/chat/audio-manager.ts
 
-// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元　2
+// ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元
 // （標準のbtoaや他ライブラリとはパディング処理などが異なるため、ここを変えるとデータが壊れます）
 const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function fastArrayBufferToBase64(buffer: ArrayBuffer) {
@@ -122,34 +122,21 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  // --- iOS用実装 (修正版) ---
+  // --- iOS用実装 (修正済み統合版) ---
   private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
       
-      // Worklet cleanup 
+      // Worklet cleanup (短い待機は許容)
       if (this.audioWorkletNode) { 
         this.audioWorkletNode.port.onmessage = null;
         this.audioWorkletNode.disconnect(); 
         this.audioWorkletNode = null; 
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 20));
       }
 
-      // AudioContext作成 
-      if (!this.globalAudioContext) {
-        // @ts-ignore
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        this.globalAudioContext = new AudioContextClass({ 
-          latencyHint: 'interactive', // ★重要: オリジナル通り
-          sampleRate: 48000           // ★重要: オリジナル通り（明示的に指定）
-        });
-      }
-      
-      if (this.globalAudioContext.state === 'suspended') {
-        await this.globalAudioContext.resume();
-      }
-
-      // MediaStream再利用ロジック（改善版）
+      // 1. マイク権限取得を最優先 (Not Allowedエラー対策)
+      // 既存MediaStream再利用判定
       if (this.mediaStream) {
         const tracks = this.mediaStream.getAudioTracks();
         if (tracks.length > 0 && tracks[0].readyState === 'live' && tracks[0].enabled) {
@@ -160,18 +147,32 @@ export class AudioManager {
         }
       }
       
+      // MediaStreamがない場合は新規取得
       if (!this.mediaStream) {
-        // マイク設定 
         const audioConstraints = { 
             channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: 48000 // ★重要: オリジナル通り
+            // iOSのgetUserMediaではsampleRateを指定しない方が安全
         };
         this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       }
+
+      // 2. AudioContext作成/再開 (マイク取得後に実施)
+      if (!this.globalAudioContext) {
+        // @ts-ignore
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.globalAudioContext = new AudioContextClass({ 
+          latencyHint: 'interactive', 
+          sampleRate: 48000 // iOS推奨値・品質保持のため明示
+        });
+      }
       
+      if (this.globalAudioContext.state === 'suspended') {
+        await this.globalAudioContext.resume();
+      }
+
       const targetSampleRate = 16000;
       const nativeSampleRate = this.globalAudioContext.sampleRate;
       const downsampleRatio = nativeSampleRate / targetSampleRate;
@@ -179,17 +180,17 @@ export class AudioManager {
       const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // Workletコード（★修正版：バッファサイズ8192に戻し、タイムアウトフラッシュ追加）
+      // 3. Workletコード (バッファサイズ8192 + タイムアウトフラッシュ復元)
       const audioProcessorCode = `
       class AudioProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
-          this.bufferSize = 8192; // ★修正: 16000→8192（オリジナル値）
+          this.bufferSize = 8192; // ★修正: 16000から8192に戻す (遅延・断片化防止)
           this.buffer = new Int16Array(this.bufferSize); 
           this.writeIndex = 0;
           this.ratio = ${downsampleRatio}; 
           this.inputSampleCount = 0;
-          this.lastFlushTime = Date.now(); // ★追加: タイムアウト管理
+          this.lastFlushTime = Date.now(); // ★復活: タイムアウト管理
         }
         process(inputs, outputs, parameters) {
           const input = inputs[0];
@@ -205,7 +206,7 @@ export class AudioManager {
                 const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
                 this.buffer[this.writeIndex++] = int16Value;
               }
-              // ★修正: タイムアウトフラッシュを復活（オリジナル通り）
+              // ★復活: バッファ満了 または 500ms経過でフラッシュ
               if (this.writeIndex >= this.bufferSize || 
                   (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
                 this.flush();
@@ -219,7 +220,7 @@ export class AudioManager {
           const chunk = this.buffer.slice(0, this.writeIndex);
           this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
           this.writeIndex = 0;
-          this.lastFlushTime = Date.now(); // ★追加: フラッシュ時刻更新
+          this.lastFlushTime = Date.now();
         }
       }
       registerProcessor('${processorName}', AudioProcessor);
@@ -235,7 +236,6 @@ export class AudioManager {
         const { audioChunk } = event.data;
         if (socket && socket.connected) {
           try {
-            // ★重要: ここでオリジナルの fastArrayBufferToBase64 を使う
             const base64 = fastArrayBufferToBase64(audioChunk.buffer);
             socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
           } catch (e) { 
@@ -244,10 +244,10 @@ export class AudioManager {
         }
       };
       
-      // 送信開始前の待機（★修正: 200ms→300msに延長してより安全に） 
+      // 4. ストリーム開始通知 (待機時間を削除して即時実行)
       if (socket && socket.connected) {
         socket.emit('stop_stream');
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // setTimeoutを削除 (User Gesture保持のため)
       }
       
       socket.emit('start_stream', { 
@@ -255,7 +255,7 @@ export class AudioManager {
         sample_rate: 16000
       });
 
-      // 接続
+      // 接続開始
       source.connect(this.audioWorkletNode);
       this.audioWorkletNode.connect(this.globalAudioContext.destination);
       
@@ -282,7 +282,7 @@ export class AudioManager {
       this.audioWorkletNode.disconnect(); 
       this.audioWorkletNode = null; 
     }
-    // ★注意: MediaStreamは再利用のため停止しない
+    // 注意: MediaStreamは再利用のため停止しない
   }
 
   // --- PC / Android (Default) ---
@@ -571,4 +571,3 @@ export class AudioManager {
 
   public stopTTS() {}
 }
-
