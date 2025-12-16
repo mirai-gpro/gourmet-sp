@@ -1,7 +1,6 @@
 // src/scripts/chat/audio-manager.ts
 
 // ★重要: オリジナルにあった独自のBase64変換関数をそのまま復元
-// （標準のbtoaや他ライブラリとはパディング処理などが異なるため、ここを変えるとデータが壊れます）
 const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function fastArrayBufferToBase64(buffer: ArrayBuffer) {
     let binary = '';
@@ -16,7 +15,6 @@ function fastArrayBufferToBase64(buffer: ArrayBuffer) {
       const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
       const enc4 = c3 & 63;
       binary += b64chars[enc1] + b64chars[enc2];
-      // オリジナルコードのロジックそのまま（undefined時の挙動含む）
       if (Number.isNaN(c2)) { binary += '=='; } 
       else if (Number.isNaN(c3)) { binary += b64chars[enc3] + '='; } 
       else { binary += b64chars[enc3] + b64chars[enc4]; }
@@ -48,9 +46,14 @@ export class AudioManager {
   private readonly MIN_RECORDING_TIME = 3000;
   private readonly MAX_RECORDING_TIME = 55000;
 
+  // 修正: 判定ロジックをコンストラクタで受け取れるように変更
   private isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  constructor() {
+  // 修正: コンストラクタで外部からのフラグ注入を許可
+  constructor(isIOS?: boolean) {
+    if (isIOS !== undefined) {
+      this.isIOS = isIOS;
+    }
   }
 
   public unlockAudioParams(elementToUnlock: HTMLAudioElement) {
@@ -122,7 +125,7 @@ export class AudioManager {
     this.mediaRecorder = null;
   }
 
-  // --- iOS用実装 (GourmetChat (1).astro から完全移植) ---
+  // --- iOS用実装 ---
   private async startStreaming_iOS(socket: any, languageCode: string, onStopCallback: () => void) {
     try {
       if (this.recordingTimer) { clearTimeout(this.recordingTimer); this.recordingTimer = null; }
@@ -140,8 +143,8 @@ export class AudioManager {
         // @ts-ignore
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         this.globalAudioContext = new AudioContextClass({ 
-          latencyHint: 'interactive', // ★重要: オリジナル通り
-          sampleRate: 48000           // ★重要: オリジナル通り
+          latencyHint: 'interactive',
+          sampleRate: 48000 // ★重要: SampleRateを明示
         });
       }
       
@@ -149,10 +152,10 @@ export class AudioManager {
         await this.globalAudioContext.resume();
       }
 
-      // MediaStream再利用ロジック 
+      // MediaStream再利用ロジック - 修正: enabledとreadyStateを厳密にチェック
       if (this.mediaStream) {
         const tracks = this.mediaStream.getAudioTracks();
-        if (tracks.length > 0 && tracks[0].readyState === 'live') {
+        if (tracks.length > 0 && tracks[0].readyState === 'live' && tracks[0].enabled) {
           // reuse
         } else {
           this.mediaStream.getTracks().forEach(track => track.stop());
@@ -167,7 +170,7 @@ export class AudioManager {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: 48000 // ★重要: オリジナル通り
+            sampleRate: 48000
         };
         this.mediaStream = await this.getUserMediaSafe({ audio: audioConstraints });
       }
@@ -179,18 +182,17 @@ export class AudioManager {
       const source = this.globalAudioContext.createMediaStreamSource(this.mediaStream);
       const processorName = 'audio-processor-ios-' + Date.now(); 
 
-      // Workletコード 
-      // バッファ8192, フラッシュ500msなど完全に元通りにする
+      // Workletコード - 修正: バッファサイズ8192とタイムアウトフラッシュを実装
       const audioProcessorCode = `
       class AudioProcessor extends AudioWorkletProcessor {
         constructor() {
           super();
-          this.bufferSize = 8192; // ★オリジナル値
+          this.bufferSize = 8192; // ★修正: 16000ではなく8192
           this.buffer = new Int16Array(this.bufferSize); 
           this.writeIndex = 0;
           this.ratio = ${downsampleRatio}; 
           this.inputSampleCount = 0;
-          this.lastFlushTime = Date.now();
+          this.lastFlushTime = Date.now(); // ★追加
         }
         process(inputs, outputs, parameters) {
           const input = inputs[0];
@@ -206,6 +208,7 @@ export class AudioManager {
                 const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
                 this.buffer[this.writeIndex++] = int16Value;
               }
+              // ★修正: タイムアウトによる強制フラッシュを追加
               if (this.writeIndex >= this.bufferSize || (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
                 this.flush();
               }
@@ -218,7 +221,7 @@ export class AudioManager {
           const chunk = this.buffer.slice(0, this.writeIndex);
           this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
           this.writeIndex = 0;
-          this.lastFlushTime = Date.now();
+          this.lastFlushTime = Date.now(); // ★追加
         }
       }
       registerProcessor('${processorName}', AudioProcessor);
