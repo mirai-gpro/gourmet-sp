@@ -7,14 +7,56 @@ export interface Props {
 const { apiBaseUrl = '' } = Astro.props;
 ---
 
-<div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
+<div class="shop-list-wrapper">
+  <div class="shop-list-header">
+    <div class="header-icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </div>
+    <span class="header-title">おすすめの店舗</span>
+  </div>
+
+  <div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
+  </div>
 </div>
 
 <style>
+  /* ★追加: 全体のラッパー */
+  .shop-list-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+
+  /* ★追加: ヘッダーのスタイル */
+  .shop-list-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    margin-bottom: 4px;
+    color: #374151;
+  }
+
+  .header-icon {
+    width: 24px;
+    height: 24px;
+    color: #ef4444; /* 赤っぽいピンの色 */
+  }
+
+  .header-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
   .shop-card-list {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    min-height: 100px; /* ★重要: 空になっても高さがつぶれないように確保 */
   }
 
   /* ProposalCard形式のショップカード */
@@ -697,7 +739,7 @@ const { apiBaseUrl = '' } = Astro.props;
       this.containerId = containerId;
     }
 
-    // ★毎回最新のDOM要素を取得するメソッド
+    // ★毎回最新のDOM要素を取得するメソッド（超重要）
     private getContainer(): HTMLElement | null {
       return document.getElementById(this.containerId);
     }
@@ -729,9 +771,9 @@ const { apiBaseUrl = '' } = Astro.props;
         this.currentLanguage = language;
         console.log('[ShopCardList] Language set to:', language);
       }
-      console.log('[ShopCardList] Current language:', this.currentLanguage);
       
-      container.innerHTML = '';
+      container.innerHTML = ''; // リストエリアのみクリア（ヘッダーは消えない）
+      
       if (!shops || shops.length === 0) {
         console.log('[ShopCardList] No shops to display');
         container.innerHTML = `
@@ -743,11 +785,9 @@ const { apiBaseUrl = '' } = Astro.props;
       }
 
       shops.forEach((shop, index) => {
-        console.log(`[ShopCardList] Creating card ${index + 1}:`, shop.name);
         const card = this.createShopCard(shop);
         container.appendChild(card);
       });
-      console.log(`[ShopCardList] ${shops.length} cards created`);
     }
 
     // ショップカードを追加
