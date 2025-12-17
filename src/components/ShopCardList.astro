@@ -8,56 +8,14 @@ export interface Props {
 const { apiBaseUrl = '' } = Astro.props;
 ---
 
-<div class="shop-list-wrapper">
-  <div class="shop-list-header">
-    <div class="header-icon">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    </div>
-    <span class="header-title">おすすめの店舗</span>
-  </div>
-
-  <div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
-  </div>
+<div class="shop-card-list" id="shopCardList" data-api-base={apiBaseUrl}>
 </div>
 
 <style>
-  /* ★追加: 全体のラッパー */
-  .shop-list-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    width: 100%;
-  }
-
-  /* ★追加: ヘッダーのスタイル */
-  .shop-list-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 8px;
-    margin-bottom: 4px;
-    color: #374151;
-  }
-
-  .header-icon {
-    width: 24px;
-    height: 24px;
-    color: #ef4444; /* 赤っぽいピンの色 */
-  }
-
-  .header-title {
-    font-size: 16px;
-    font-weight: 700;
-  }
-
   .shop-card-list {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 100px; /* ★重要: 空になっても高さがつぶれないように確保 */
   }
 
   /* ProposalCard形式のショップカード */
@@ -421,10 +379,11 @@ const { apiBaseUrl = '' } = Astro.props;
 
   /* ★Instagramボタンのスタイル */
   .shop-card-list :global(.link-btn.instagram) {
+    /* 左側は白、右に向かってInstagramのブランドカラーにグラデーション */
     background: linear-gradient(to right, #ffffff 0%, #ffffff 40%, #f09433 65%, #dc2743 85%, #bc1888 100%);
-    color: #1f2937; 
-    box-shadow: 0 4px 12px rgba(220, 39, 67, 0.15); 
-    border: 1px solid #f3f4f6; 
+    color: #1f2937; /* 背景が白くなるため文字は濃い色に変更 */
+    box-shadow: 0 4px 12px rgba(220, 39, 67, 0.15); /* 影を少し控えめに */
+    border: 1px solid #f3f4f6; /* 白背景部分の境界がわかるように薄い枠線を追加 */
   }
   
   .shop-card-list :global(.link-btn.instagram:hover) {
@@ -434,39 +393,28 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   .shop-card-list :global(.link-btn.instagram .link-icon) {
-    background: transparent; 
-    padding: 2px; 
+    background: transparent; /* 背景を透明に */
+    padding: 2px; /* 画像の余白 */
   }
 
+  /* ★Instagramロゴ画像のスタイル */
   .shop-card-list :global(.link-btn.instagram .link-icon img) {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); 
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); /* ロゴ自体に少し影をつけて立体感を出す */
   }
 
-  /* ★変更: ホットペッパーボタン（白背景・細いオレンジ枠） */
+  /* ★変更: ホットペッパーボタン（白背景・オレンジ枠） */
   .shop-card-list :global(.link-btn.hotpepper) {
-    background: white; 
-    border: 1px solid #ea580c; /* ★枠線を1pxに細くしました */
-    color: #1f2937; 
+    background: white; /* 白背景に変更 */
+    border: 2px solid #ea580c; /* オレンジの枠線 */
+    color: #1f2937; /* 文字色は濃いグレー */
     box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
   }
 
   .shop-card-list :global(.link-btn.hotpepper:hover) {
-    background-color: #fff7ed; 
-  }
-
-  /* ★追加: ぐるなびボタン（白背景・細い黄色枠） */
-  .shop-card-list :global(.link-btn.gnavi) {
-    background: white;
-    border: 1px solid #fbbf24; /* ★ホットペッパーと同じ1pxの黄色枠線 */
-    color: #1f2937;
-    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
-  }
-
-  .shop-card-list :global(.link-btn.gnavi:hover) {
-    background-color: #fffbeb; /* ホバー時は薄い黄色背景 */
+    background-color: #fff7ed; /* ホバー時は薄いオレンジ背景 */
   }
 
   .shop-card-list :global(.link-btn.maps) {
@@ -491,7 +439,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
   /* TripAdvisorボタン */
   .shop-card-list :global(.link-btn.tripadvisor) {
-    background: #34E0A1; 
+    background: #34E0A1; /* トリップアドバイザーのブランドカラー（明るい緑） */
     color: #1f2937;
     box-shadow: 0 4px 12px rgba(52, 224, 161, 0.3);
     border: none;
@@ -537,7 +485,7 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   .shop-card-list :global(.link-btn.tripadvisor .link-icon) {
-    background: white; 
+    background: white; /* ロゴが見やすいように白背景 */
     padding: 4px;
     border-radius: 50%;
   }
@@ -680,10 +628,8 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   class ShopCardManager {
-    // コンテナIDを保持
-    private containerId: string;
+    private container: HTMLElement;
     private currentLanguage: string = 'ja';
-
     // デフォルトは日本語
     private i18n = {
       ja: {
@@ -735,14 +681,8 @@ const { apiBaseUrl = '' } = Astro.props;
         gnaviSubtitle: '음식점 정보'
       }
     };
-
     constructor(containerId: string) {
-      this.containerId = containerId;
-    }
-
-    // ★毎回最新のDOM要素を取得するメソッド（超重要）
-    private getContainer(): HTMLElement | null {
-      return document.getElementById(this.containerId);
+      this.container = document.getElementById(containerId)!;
     }
 
     // 言語を設定
@@ -761,23 +701,15 @@ const { apiBaseUrl = '' } = Astro.props;
     // ショップリストを表示
     displayShops(shops: ShopData[], language?: string) {
       console.log('[ShopCardList] displayShops called with language:', language, 'shops:', shops);
-      
-      const container = this.getContainer();
-      if (!container) {
-          console.error('[ShopCardList] Container not found:', this.containerId);
-          return;
-      }
-
       if (language) {
         this.currentLanguage = language;
         console.log('[ShopCardList] Language set to:', language);
       }
-      
-      container.innerHTML = ''; // リストエリアのみクリア（ヘッダーは消えない）
-      
+      console.log('[ShopCardList] Current language:', this.currentLanguage);
+      this.container.innerHTML = '';
       if (!shops || shops.length === 0) {
         console.log('[ShopCardList] No shops to display');
-        container.innerHTML = `
+        this.container.innerHTML = `
           <div class="empty-state">
             お店が見つかりませんでした
           </div>
@@ -786,18 +718,17 @@ const { apiBaseUrl = '' } = Astro.props;
       }
 
       shops.forEach((shop, index) => {
+        console.log(`[ShopCardList] Creating card ${index + 1}:`, shop.name);
         const card = this.createShopCard(shop);
-        container.appendChild(card);
+        this.container.appendChild(card);
       });
+      console.log(`[ShopCardList] ${shops.length} cards created`);
     }
 
     // ショップカードを追加
     addShop(shop: ShopData) {
-      const container = this.getContainer();
-      if (container) {
-          const card = this.createShopCard(shop);
-          container.appendChild(card);
-      }
+      const card = this.createShopCard(shop);
+      this.container.appendChild(card);
     }
 
     // ProposalCard形式でショップカードを作成
@@ -805,112 +736,112 @@ const { apiBaseUrl = '' } = Astro.props;
       const card = document.createElement('div');
       card.className = 'shop-card';
 
-      try {
-        // デフォルト画像
-        const imageUrl = shop.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=450&fit=crop';
-        // 星の生成
-        const starsHtml = this.createStarsHtml(shop.rating || 0);
-        // おすすめポイントの生成
-        const highlightsHtml = this.createHighlightsHtml(shop.highlights || []);
-        // 来店のポイント
-        const tipsHtml = shop.tips ? this.createTipsHtml(shop.tips) : '';
-        // リンクボタンの生成
-        const linksHtml = this.createLinksHtml(shop);
-        
-        // Google Map URLの生成（安全なロジック）
-        let mapsUrl = '#';
-        if (shop.maps_url) {
-          if (shop.maps_url.includes('place_id:')) {
-            const placeIdMatch = shop.maps_url.match(/place_id:(ChIJ[\w-]+)/);
-            if (placeIdMatch) {
-              const placeId = placeIdMatch[1];
-              mapsUrl = `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${placeId}`;
-            } else {
-              mapsUrl = shop.maps_url;
-            }
+      // デフォルト画像
+      const imageUrl = shop.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=450&fit=crop';
+      // 星の生成
+      const starsHtml = this.createStarsHtml(shop.rating || 0);
+      // おすすめポイントの生成
+      const highlightsHtml = this.createHighlightsHtml(shop.highlights || []);
+      // 来店のポイント
+      const tipsHtml = shop.tips ? this.createTipsHtml(shop.tips) : '';
+      // リンクボタンの生成
+      const linksHtml = this.createLinksHtml(shop);
+      // Google Map URLの生成
+      let mapsUrl = '#';
+      if (shop.maps_url) {
+        // ★★★ place_id形式の場合、スマホアプリ対応形式に変換 ★★★
+        if (shop.maps_url.includes('place_id:')) {
+          // place_id:ChIJ... を抽出
+          const placeIdMatch = shop.maps_url.match(/place_id:(ChIJ[\w-]+)/);
+          if (placeIdMatch) {
+            const placeId = placeIdMatch[1];
+            // Google Maps アプリ対応URL
+            mapsUrl = `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${placeId}`;
           } else {
             mapsUrl = shop.maps_url;
           }
-        } else if (shop.latitude && shop.longitude) {
-          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`;
-        } else if (shop.name && shop.location) {
-          const query = encodeURIComponent(`${shop.name} ${shop.location}`);
-          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
-        } else if (shop.name) {
-          const query = encodeURIComponent(shop.name);
-          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+        } else {
+          mapsUrl = shop.maps_url;
         }
+      } else if (shop.latitude && shop.longitude) {
+        // 緯度経度がある場合
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`;
+      } else if (shop.name && shop.location) {
+        // 店名と住所がある場合
+        const query = encodeURIComponent(`${shop.name} ${shop.location}`);
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      } else if (shop.name) {
+        // 店名のみの場合
+        const query = encodeURIComponent(shop.name);
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+      }
 
-        // Google MapsのカラーアイコンSVG
-        const googleMapsIconSvg = `
-          <svg class="google-map-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M24 4C14.0589 4 6 12.0589 6 22C6 33.5 24 44 24 44C24 44 42 33.5 42 22C42 12.0589 33.9411 4 24 4Z" fill="#EA4335"/>
-            <path d="M24 44C24 44 42 33.5 42 22C42 17.0294 39.9853 12.5294 36.7279 9.27208L24 22L11.2721 9.27208C8.01472 12.5294 6 17.0294 6 22C6 33.5 24 44 24 44Z" fill="#34A853" fill-opacity="0.2"/>
-            <circle cx="24" cy="22" r="10" fill="#1976D2"/>
-            <path d="M24 4C14.0589 4 6 12.0589 6 22H24V4Z" fill="#EA4335"/>
-            <path d="M24 4V22H42C42 12.0589 33.9411 4 24 4Z" fill="#34A853"/>
-            <path d="M24 22V44C24 44 42 33.5 42 22H24Z" fill="#FBBC04"/>
-            <path d="M6 22C6 33.5 24 44 24 44V22H6Z" fill="#1976D2"/>
-            <circle cx="24" cy="22" r="5" fill="white"/>
-          </svg>
-        `;
+      // ★ Google MapsのカラーアイコンSVG
+      const googleMapsIconSvg = `
+        <svg class="google-map-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 4C14.0589 4 6 12.0589 6 22C6 33.5 24 44 24 44C24 44 42 33.5 42 22C42 12.0589 33.9411 4 24 4Z" fill="#EA4335"/>
+          <path d="M24 44C24 44 42 33.5 42 22C42 17.0294 39.9853 12.5294 36.7279 9.27208L24 22L11.2721 9.27208C8.01472 12.5294 6 17.0294 6 22C6 33.5 24 44 24 44Z" fill="#34A853" fill-opacity="0.2"/>
+          <circle cx="24" cy="22" r="10" fill="#1976D2"/>
+          <path d="M24 4C14.0589 4 6 12.0589 6 22H24V4Z" fill="#EA4335"/>
+          <path d="M24 4V22H42C42 12.0589 33.9411 4 24 4Z" fill="#34A853"/>
+          <path d="M24 22V44C24 44 42 33.5 42 22H24Z" fill="#FBBC04"/>
+          <path d="M6 22C6 33.5 24 44 24 44V22H6Z" fill="#1976D2"/>
+          <circle cx="24" cy="22" r="5" fill="white"/>
+        </svg>
+      `;
 
-        card.innerHTML = `
-          <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" data-maps-url="${mapsUrl}">
-            <div class="hero-image">
-              <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
-              ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
-              ${shop.location ? `
-                <div class="location-badge">
-                  <svg fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
-                  </svg>
-                  <span>${shop.location}</span>
-                </div>
-              ` : ''}
+      card.innerHTML = `
+        <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="hero-image-link" data-maps-url="${mapsUrl}">
+          <div class="hero-image">
+            <img src="${imageUrl}" alt="${shop.name}" loading="lazy" />
+            ${shop.category ? `<span class="category-badge">${shop.category}</span>` : ''}
+            ${shop.location ? `
+              <div class="location-badge">
+                <svg fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+                </svg>
+                <span>${shop.location}</span>
+              </div>
+            ` : ''}
+          </div>
+        </a>
+        <div class="card-body">
+          
+          <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="shop-header-link">
+            ${googleMapsIconSvg}
+            <div class="shop-header-content">
+              <h3 class="shop-name">${shop.name}</h3>
+              <div class="meta-info">
+                ${shop.rating ? `
+                  <div class="rating">
+                    <div class="stars">${starsHtml}</div>
+                    <span class="rating-value">${shop.rating}</span>
+                    ${shop.reviewCount ? `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
+                  </div>
+                ` : ''}
+                ${shop.priceRange ? `
+                  <div class="price-range">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>${shop.priceRange}</span>
+                  </div>
+                ` : ''}
+              </div>
             </div>
           </a>
-          <div class="card-body">
-            
-            <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="shop-header-link">
-              ${googleMapsIconSvg}
-              <div class="shop-header-content">
-                <h3 class="shop-name">${shop.name}</h3>
-                <div class="meta-info">
-                  ${shop.rating ? `
-                    <div class="rating">
-                      <div class="stars">${starsHtml}</div>
-                      <span class="rating-value">${shop.rating}</span>
-                      ${shop.reviewCount ? `<span class="review-count">(${shop.reviewCount}件)</span>` : ''}
-                    </div>
-                  ` : ''}
-                  ${shop.priceRange ? `
-                    <div class="price-range">
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      <span>${shop.priceRange}</span>
-                    </div>
-                  ` : ''}
-                </div>
-              </div>
-            </a>
 
-            ${shop.description ? `<p class="description">${shop.description}</p>` : ''}
-            
-            ${highlightsHtml}
-            
-            ${tipsHtml}
-            
-            <div class="link-buttons">
-              ${linksHtml}
-            </div>
+          ${shop.description ? `<p class="description">${shop.description}</p>` : ''}
+          
+          ${highlightsHtml}
+          
+          ${tipsHtml}
+          
+          <div class="link-buttons">
+            ${linksHtml}
           </div>
-        `;
-      } catch (e) {
-        console.error('ShopCard creation failed:', e, shop);
-        card.innerHTML = `<div style="padding:20px; color:red;">カード生成エラー: ${shop.name}</div>`;
-      }
+        </div>
+      `;
 
       return card;
     }
@@ -1141,11 +1072,7 @@ const { apiBaseUrl = '' } = Astro.props;
 
     // クリア
     clear() {
-      // ★ここでも最新のコンテナを取得
-      const container = this.getContainer();
-      if (container) {
-          container.innerHTML = '';
-      }
+      this.container.innerHTML = '';
     }
   }
 
