@@ -1,3 +1,4 @@
+
 // src/scripts/chat/chat-controller.ts
 import { i18n } from '../../constants/i18n'; 
 import { AudioManager } from './audio-manager';
@@ -117,45 +118,7 @@ export class ChatController {
     this.els.userInput.addEventListener('blur', () => {
       if (floatingButtons) floatingButtons.classList.remove('keyboard-active');
     });
-
-    // ▼▼▼ 追加: ロゴクリックで「ソフトリセット」を実行 ▼▼▼
-    const pageTitle = document.getElementById('pageTitle');
-    if (pageTitle) {
-      pageTitle.style.cursor = 'pointer';
-      pageTitle.addEventListener('click', () => {
-        this.resetAppContent();
-      });
-    }
-    // ▲▲▲ 追加終わり ▲▲▲
   }
-
-  // ▼▼▼ 追加: アプリの状態を初期化する（リロードなし） ▼▼▼
-  private resetAppContent() {
-    // 1. 進行中の処理をすべて止める
-    this.stopAllActivities();
-
-    // 2. チャット履歴を消す
-    if (this.els.chatArea) {
-      this.els.chatArea.innerHTML = '';
-    }
-
-    // 3. ショップリスト（カード）を消す
-    const shopListSection = document.getElementById('shopListSection');
-    if (shopListSection) {
-      shopListSection.innerHTML = '';
-      shopListSection.classList.remove('has-shops');
-    }
-
-    // 4. 内部データをリセット
-    this.currentShops = [];
-    this.sessionId = null; 
-    this.lastAISpeech = '';
-    this.preGeneratedAcks.clear();
-
-    // 5. 新規セッションを開始して挨拶を表示
-    this.initializeSession();
-  }
-  // ▲▲▲ 追加終わり ▲▲▲
 
   private initSocket() {
     // @ts-ignore
