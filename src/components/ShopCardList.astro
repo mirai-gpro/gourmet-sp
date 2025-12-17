@@ -7,7 +7,7 @@ export interface Props {
 const { apiBaseUrl = '' } = Astro.props;
 ---
 
-<div class="shop-list-wrapper">
+<div class="shop-list-wrapper" id="shopCardList" data-api-base={apiBaseUrl}>
   
   <div class="shop-list-header">
     <div class="header-icon">
@@ -19,20 +19,28 @@ const { apiBaseUrl = '' } = Astro.props;
     <span class="header-title">おすすめの店舗</span>
   </div>
 
-  <div class="shop-card-grid" id="shop-card-grid-content" data-api-base={apiBaseUrl}>
+  <div class="shop-card-grid" id="shop-card-grid-content">
   </div>
 
 </div>
 
 <style>
-  /* --- レイアウト構造 --- */
+  /* --- 全体のレイアウト --- */
   .shop-list-wrapper {
     display: flex;
     flex-direction: column;
     gap: 16px;
     width: 100%;
+    /* 表示アニメーション */
+    animation: fadeIn 0.5s ease-out;
   }
 
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* --- ヘッダー --- */
   .shop-list-header {
     display: flex;
     align-items: center;
@@ -40,12 +48,14 @@ const { apiBaseUrl = '' } = Astro.props;
     padding: 0 8px;
     margin-bottom: 4px;
     color: #374151;
+    border-bottom: 2px solid #f3f4f6;
+    padding-bottom: 12px;
   }
 
   .header-icon {
     width: 24px;
     height: 24px;
-    color: #ef4444; /* 赤っぽいピンの色 */
+    color: #ef4444;
   }
 
   .header-title {
@@ -53,11 +63,12 @@ const { apiBaseUrl = '' } = Astro.props;
     font-weight: 700;
   }
 
+  /* --- カードグリッド（中箱） --- */
   .shop-card-grid {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-height: 50px; /* 空になっても高さを維持 */
+    min-height: 50px; /* 空になっても潰れないように */
   }
 
   /* --- カード本体のデザイン --- */
@@ -665,7 +676,7 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   class ShopCardManager {
-    // ★重要: ヘッダーとは別の、カード表示領域のIDを保持
+    // ★重要: ここには「カード表示領域（中箱）」のIDをセットします
     private containerId: string;
     private currentLanguage: string = 'ja';
 
@@ -746,7 +757,7 @@ const { apiBaseUrl = '' } = Astro.props;
         this.currentLanguage = language;
       }
       
-      // ★クリアするのは「カード表示領域」のみ。ヘッダーは消えない。
+      // ★クリア: 中箱だけを空にします。外箱（ヘッダー含む）は無事です。
       container.innerHTML = ''; 
       
       if (!shops || shops.length === 0) {
@@ -1028,7 +1039,7 @@ const { apiBaseUrl = '' } = Astro.props;
   (window as any).ShopCardManager = ShopCardManager;
   // 初期化
   document.addEventListener('DOMContentLoaded', () => {
-    // ★重要: ここで渡すIDを新しいID 'shop-card-grid-content' に変更
+    // ★重要: "shop-card-grid-content"（中箱のID）をマネージャーに渡します
     const manager = new ShopCardManager('shop-card-grid-content');
     (window as any).shopCardManager = manager;
 
