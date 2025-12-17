@@ -1,4 +1,3 @@
-
 ---
 // ShopCardList.astro - ProposalCard形式のショップカードリスト
 export interface Props {
@@ -405,16 +404,16 @@ const { apiBaseUrl = '' } = Astro.props;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); /* ロゴ自体に少し影をつけて立体感を出す */
   }
 
-  /* ★変更: ホットペッパーボタン（白背景・オレンジ枠） */
+  /* ★変更: ホットペッパーボタン（白背景・食べログと同じ枠線） */
   .shop-card-list :global(.link-btn.hotpepper) {
-    background: white; /* 白背景に変更 */
-    border: 2px solid #ea580c; /* オレンジの枠線 */
-    color: #1f2937; /* 文字色は濃いグレー */
-    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+    background: white; 
+    border: 2px solid #e5e7eb; /* 食べログと同じ枠線色 */
+    color: #1f2937; 
   }
 
   .shop-card-list :global(.link-btn.hotpepper:hover) {
     background-color: #fff7ed; /* ホバー時は薄いオレンジ背景 */
+    border-color: #ea580c; /* ホバー時はブランドカラーの枠線 */
   }
 
   .shop-card-list :global(.link-btn.maps) {
@@ -435,6 +434,18 @@ const { apiBaseUrl = '' } = Astro.props;
 
   .shop-card-list :global(.link-btn.tabelog:hover) {
     border-color: #fdba74;
+  }
+
+  /* ★変更: ぐるなびボタン（白背景・食べログと同じ枠線） */
+  .shop-card-list :global(.link-btn.gnavi) {
+    background: white;
+    border: 2px solid #e5e7eb; /* 食べログと同じ枠線色 */
+    color: #1f2937;
+  }
+
+  .shop-card-list :global(.link-btn.gnavi:hover) {
+    background-color: #fffbeb; /* ホバー時は薄い黄色背景 */
+    border-color: #fbbf24; /* ホバー時はブランドカラーの枠線 */
   }
 
   /* TripAdvisorボタン */
@@ -830,7 +841,6 @@ const { apiBaseUrl = '' } = Astro.props;
               </div>
             </div>
           </a>
-
           ${shop.description ? `<p class="description">${shop.description}</p>` : ''}
           
           ${highlightsHtml}
