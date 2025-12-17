@@ -92,6 +92,48 @@ export class ChatController {
       }
     }, 2000);
   }
+// bindEvents()の直前に追加
+private resetAppContent() {
+  console.log('[Reset] Starting soft reset...');
+  
+  this.stopAllActivities();
+
+  if (this.els.chatArea) {
+    this.els.chatArea.innerHTML = '';
+  }
+
+  const shopCardList = document.getElementById('shopCardList');
+  if (shopCardList) {
+    shopCardList.innerHTML = '';
+    console.log('[Reset] Shop cards cleared');
+  }
+
+  const shopListSection = document.getElementById('shopListSection');
+  if (shopListSection) {
+    shopListSection.classList.remove('has-shops');
+    console.log('[Reset] has-shops class removed');
+  }
+
+  const floatingButtons = document.querySelector('.floating-buttons');
+  if (floatingButtons) {
+    floatingButtons.classList.remove('shop-card-active');
+  }
+
+  this.els.userInput.value = '';
+  this.els.reservationBtn.disabled = true;
+
+  this.currentShops = [];
+  this.sessionId = null;
+  this.lastAISpeech = '';
+  this.preGeneratedAcks.clear();
+  this.isProcessing = false;
+  this.isAISpeaking = false;
+  this.isFromVoiceInput = false;
+
+  this.initializeSession();
+  
+  console.log('[Reset] Soft reset completed');
+}
 
   private bindEvents() {
     this.els.sendBtn.addEventListener('click', () => this.sendMessage());
@@ -109,8 +151,12 @@ export class ChatController {
       this.updateUILanguage();
     });
 
-    this.container.addEventListener('click', () => this.enableAudioPlayback(), { once: true });
-    
+    const chatHeader = document.getElementById('chatHeader');
+    if (chatHeader) {
+      chatHeader.addEventListener('click', () => {
+        this.resetAppContent();
+      });
+    }    
     const floatingButtons = this.container.querySelector('.floating-buttons');
     this.els.userInput.addEventListener('focus', () => {
       setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
