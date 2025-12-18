@@ -947,14 +947,16 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     // リンクボタンの生成（URLの有無に基づいて表示）
-    private createLinksHtml(shop: ShopData): string {
+      private createLinksHtml(shop: ShopData): string {
       const links: string[] = [];
-      // 0. Instagram検索 (★修正: スマホ対応のためハッシュタグ検索URLに変更)
+    // 0. Instagram検索 (★修正: 欧文部分を優先的に抽出してハッシュタグ化)
       if (shop.name) {
-        // ハッシュタグではスペースが使えないため削除する
-        const tagName = shop.name.replace(/\s+/g, '');
-        // URL形式: /explore/tags/店名/ (これならアプリでも開く)
-        const instaUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(tagName)}/`;
+    // 欧文部分を抽出（英数字のみ、スペース除去）
+      const englishMatch = shop.name.match(/[a-zA-Z0-9]+/g);
+    // 欧文があればそれを結合、なければ日本語部分（スペース除去）
+      const tagName = englishMatch ? englishMatch.join('') : shop.name.replace(/\s+/g, '');
+    // URL形式: /explore/tags/店名/ (これならアプリでも開く)
+      const instaUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(tagName)}/`;
         links.push(`
           <a href="${instaUrl}" target="_blank" rel="noopener noreferrer" class="link-btn instagram" onclick="return openLinkPopup(event, '${instaUrl}')">
             <div class="link-btn-content">
