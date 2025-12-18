@@ -316,7 +316,8 @@ export class ChatController {
       this.els.sendBtn.disabled = false;
       this.els.micBtn.disabled = false;
       this.els.speakerBtn.disabled = false;
-      this.els.userInput.focus();
+      // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
+      // this.els.userInput.focus();
 
     } catch (e) {
       console.error('[Session] Initialization error:', e);
@@ -764,8 +765,12 @@ export class ChatController {
       this.showError('メッセージの送信に失敗しました。'); 
     } finally { 
       this.resetInputState();
-      if (this.currentShops.length === 0) this.els.userInput.focus(); 
-      else this.els.userInput.blur();
+      // ★修正: ショップカードがある時も自動フォーカスしない（ソフトキーボード表示を防ぐ）
+      // if (this.currentShops.length === 0) this.els.userInput.focus(); 
+      // else this.els.userInput.blur();
+      
+      // 明示的にblurしてキーボードを隠す
+      this.els.userInput.blur();
     }
   }
 
@@ -1003,7 +1008,8 @@ export class ChatController {
     this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped');
     this.els.voiceStatus.className = 'voice-status stopped';
     this.els.userInput.value = '';
-    this.els.userInput.focus();
+    // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
+    // this.els.userInput.focus();
     if (window.innerWidth < 1024) {
       setTimeout(() => { this.els.chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
     }
@@ -1036,7 +1042,8 @@ export class ChatController {
     this.els.sendBtn.disabled = false;
     this.els.micBtn.disabled = false;
     this.els.userInput.disabled = false;
-    this.els.userInput.focus();
+    // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
+    // this.els.userInput.focus();
   }
 
   private showError(msg: string) {
