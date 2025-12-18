@@ -1,4 +1,3 @@
-
 // src/scripts/chat/chat-controller.ts
 import { i18n } from '../../constants/i18n'; 
 import { AudioManager } from './audio-manager';
@@ -70,6 +69,8 @@ export class ChatController {
   }
 
   private async init() {
+    console.log('[init] Starting initialization...');
+    
     this.bindEvents();
     this.initSocket();
     
@@ -82,7 +83,10 @@ export class ChatController {
         }
     }, 10000);
 
+    // ★先にセッション初期化（メッセージ追加）
     await this.initializeSession();
+    
+    // ★その後でUI言語更新（メッセージは追加しない）
     this.updateUILanguage();
     
     setTimeout(() => {
@@ -91,53 +95,98 @@ export class ChatController {
         setTimeout(() => this.els.splashOverlay.classList.add('hidden'), 800);
       }
     }, 2000);
-  }
-// bindEvents()の直前に追加
-private resetAppContent() {
-  console.log('[Reset] Starting soft reset...');
-  
-  this.stopAllActivities();
-
-  if (this.els.chatArea) {
-    this.els.chatArea.innerHTML = '';
+    
+    console.log('[init] Initialization completed');
   }
 
-  const shopCardList = document.getElementById('shopCardList');
-  if (shopCardList) {
-    shopCardList.innerHTML = '';
-    console.log('[Reset] Shop cards cleared');
+  // bindEvents()の直前に追加
+  private async resetAppContent() {
+    console.log('[Reset] Starting soft reset...');
+    
+    // 古いセッションIDを保存
+    const oldSessionId = this.sessionId;
+    
+    // まず全ての活動を停止
+    this.stopAllActivities();
+    
+    // 古いセッションに対する処理中断リクエストを送信
+    if (oldSessionId) {
+      console.log('[Reset] Cancelling old session:', oldSessionId);
+      try {
+        await fetch(`${this.apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: oldSessionId })
+        });
+      } catch (e) {
+        console.log('[Reset] Failed to cancel old session:', e);
+      }
+    }
+
+    // チャットエリアを完全にクリア
+    if (this.els.chatArea) {
+      this.els.chatArea.innerHTML = '';
+      console.log('[Reset] Chat area cleared');
+    }
+
+    // ショップカードをクリア
+    const shopCardList = document.getElementById('shopCardList');
+    if (shopCardList) {
+      shopCardList.innerHTML = '';
+      console.log('[Reset] Shop cards cleared');
+    }
+
+    // ショップリストセクションのクラスを削除
+    const shopListSection = document.getElementById('shopListSection');
+    if (shopListSection) {
+      shopListSection.classList.remove('has-shops');
+      console.log('[Reset] has-shops class removed');
+    }
+
+    // フローティングボタンのクラスをリセット
+    const floatingButtons = document.querySelector('.floating-buttons');
+    if (floatingButtons) {
+      floatingButtons.classList.remove('shop-card-active');
+    }
+
+    // 入力フィールドとボタンをリセット
+    this.els.userInput.value = '';
+    this.els.userInput.disabled = true;
+    this.els.sendBtn.disabled = true;
+    this.els.micBtn.disabled = true;
+    this.els.speakerBtn.disabled = true;
+    this.els.reservationBtn.disabled = true;
+
+    // 状態変数をリセット
+    this.currentShops = [];
+    this.sessionId = null; // セッションIDをクリア
+    this.lastAISpeech = '';
+    this.preGeneratedAcks.clear();
+    this.isProcessing = false;
+    this.isAISpeaking = false;
+    this.isFromVoiceInput = false;
+
+    console.log('[Reset] State variables cleared');
+    
+    // 少し待ってから新しいセッションを初期化（古いリクエストの完了を待つ）
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // セッションを再初期化（新しいセッションIDが発行される）
+    await this.initializeSession();
+    
+    console.log('[Reset] Soft reset completed');
   }
-
-  const shopListSection = document.getElementById('shopListSection');
-  if (shopListSection) {
-    shopListSection.classList.remove('has-shops');
-    console.log('[Reset] has-shops class removed');
-  }
-
-  const floatingButtons = document.querySelector('.floating-buttons');
-  if (floatingButtons) {
-    floatingButtons.classList.remove('shop-card-active');
-  }
-
-  this.els.userInput.value = '';
-  this.els.reservationBtn.disabled = true;
-
-  this.currentShops = [];
-  this.sessionId = null;
-  this.lastAISpeech = '';
-  this.preGeneratedAcks.clear();
-  this.isProcessing = false;
-  this.isAISpeaking = false;
-  this.isFromVoiceInput = false;
-
-  this.initializeSession();
-  
-  console.log('[Reset] Soft reset completed');
-}
 
   private bindEvents() {
+    // 基本的なボタン操作
     this.els.sendBtn.addEventListener('click', () => this.sendMessage());
-    this.els.micBtn.addEventListener('click', () => this.toggleRecording());
+    
+    // マイクボタン（これが動くようになります）
+    this.els.micBtn.addEventListener('click', () => {
+      console.log('[Chat] Mic button clicked');
+      this.toggleRecording();
+    });
+
     this.els.speakerBtn.addEventListener('click', () => this.toggleTTS());
     this.els.reservationBtn.addEventListener('click', () => this.openReservationModal());
     this.els.stopBtn.addEventListener('click', () => this.stopAllActivities());
@@ -151,12 +200,6 @@ private resetAppContent() {
       this.updateUILanguage();
     });
 
-    const chatHeader = document.getElementById('chatHeader');
-    if (chatHeader) {
-      chatHeader.addEventListener('click', () => {
-        this.resetAppContent();
-      });
-    }    
     const floatingButtons = this.container.querySelector('.floating-buttons');
     this.els.userInput.addEventListener('focus', () => {
       setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
@@ -164,6 +207,24 @@ private resetAppContent() {
     this.els.userInput.addEventListener('blur', () => {
       if (floatingButtons) floatingButtons.classList.remove('keyboard-active');
     });
+
+    // ★修正ポイント: グローバルなリセットイベントをリッスン（documentのみ）
+    const resetHandler = async () => {
+      console.log('[ChatController] ===== RESET EVENT RECEIVED =====');
+      await this.resetAppContent();
+    };
+    
+    // once: true オプションで重複実行を防止しつつ、再登録
+    const resetWrapper = async () => {
+      await resetHandler();
+      // イベント処理後に再登録（次回のリセットに備える）
+      document.addEventListener('gourmet-app:reset', resetWrapper, { once: true });
+    };
+    
+    // 初回登録（once: true で1回だけ実行される）
+    document.addEventListener('gourmet-app:reset', resetWrapper, { once: true });
+    
+    console.log('[ChatController] Reset event listeners registered');
   }
 
   private initSocket() {
@@ -191,6 +252,20 @@ private resetAppContent() {
 
   private async initializeSession() {
     try {
+      // 既存セッションがあれば終了リクエストを送信
+      if (this.sessionId) {
+        console.log('[Session] Closing old session:', this.sessionId);
+        try {
+          await fetch(`${this.apiBase}/api/session/end`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: this.sessionId })
+          });
+        } catch (e) {
+          console.log('[Session] Failed to close old session:', e);
+        }
+      }
+
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -199,6 +274,9 @@ private resetAppContent() {
       const data = await res.json();
       this.sessionId = data.session_id;
       
+      console.log('[Session] New session created:', this.sessionId);
+      
+      // 初回の挨拶メッセージを追加（1回だけ）
       this.addMessage('assistant', this.t('initialGreeting'), null, true);
       
       const ackTexts = [
@@ -228,6 +306,7 @@ private resetAppContent() {
         } catch (_e) { /* エラー無視 */ }
       });
 
+      // TTS音声合成と事前生成を並列処理
       await Promise.all([
         this.speakTextGCP(this.t('initialGreeting')), 
         ...ackPromises
@@ -240,7 +319,7 @@ private resetAppContent() {
       this.els.userInput.focus();
 
     } catch (e) {
-      console.error(e);
+      console.error('[Session] Initialization error:', e);
     }
   }
 
@@ -334,7 +413,7 @@ private resetAppContent() {
 
     this.els.userInput.value = transcript;
     
-// ▼▼▼ 日にちチェック無効化 (1/2) ▼▼▼
+    // ▼▼▼ 日にちチェック無効化 (1/2) ▼▼▼
     /*
     // @ts-ignore
     if (i18n[this.currentLanguage].patterns.dateCheck.test(transcript)) {
@@ -406,7 +485,7 @@ private resetAppContent() {
           this.isFromVoiceInput = true;
           this.sendMessage();
         }
-      } catch (_error) { // 変数名を_errorに変更して未使用エラーを回避
+      } catch (_error) {
         if (this.els.userInput.value.trim()) {
           this.isFromVoiceInput = true;
           this.sendMessage();
@@ -424,6 +503,9 @@ private resetAppContent() {
     const message = this.els.userInput.value.trim();
     if (!message || this.isProcessing) return;
     
+    // 現在のセッションIDを保存（レスポンス時に検証するため）
+    const currentSessionId = this.sessionId;
+    
     this.isProcessing = true; 
     this.els.sendBtn.disabled = true;
     this.els.micBtn.disabled = true; 
@@ -432,7 +514,7 @@ private resetAppContent() {
     if (!this.isFromVoiceInput) {
       this.addMessage('user', message);
       
-// ▼▼▼ 日にちチェック無効化 (2/2) ▼▼▼
+      // ▼▼▼ 日にちチェック無効化 (2/2) ▼▼▼
       /*
       // @ts-ignore
       if (i18n[this.currentLanguage].patterns.dateCheck.test(message)) {
@@ -501,13 +583,19 @@ private resetAppContent() {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
-          session_id: this.sessionId, 
+          session_id: currentSessionId, 
           message: message, 
           stage: this.currentStage, 
           language: this.currentLanguage 
         }) 
       });
       const data = await response.json();
+      
+      // ★セッションIDチェック: リセット後の古いレスポンスは無視
+      if (this.sessionId !== currentSessionId) {
+        console.log('[Chat] Ignoring response from old session:', currentSessionId);
+        return;
+      }
       
       this.hideWaitOverlay();
       this.currentAISpeech = data.response;
@@ -723,7 +811,7 @@ private resetAppContent() {
               if (!this.isRecording) {
                 try {
                   await this.toggleRecording();
-                } catch (_error) { // 未使用変数回避
+                } catch (_error) {
                   this.showMicPrompt();
                 }
               }
@@ -931,7 +1019,7 @@ private resetAppContent() {
     let contentHtml = `<div class="message-content"><span class="message-text">${text}</span></div>`;
     if (summary) {
         const wrapper = document.createElement('div');
-        wrapper.innerHTML = `<div class="message-content"><span class="message-text">${text}</span></div><div class="summary-box"><strong>🔍 内容確認</strong>${summary}</div>`;
+        wrapper.innerHTML = `<div class="message-content"><span class="message-text">${text}</span></div><div class="summary-box"><strong>📝 内容確認</strong>${summary}</div>`;
         contentHtml = wrapper.innerHTML;
     }
 
@@ -967,6 +1055,8 @@ private resetAppContent() {
   }
 
   private updateUILanguage() {
+    console.log('[updateUILanguage] Updating UI language to:', this.currentLanguage);
+    
     this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped');
     this.els.userInput.placeholder = this.t('inputPlaceholder');
     this.els.micBtn.title = this.t('btnVoiceInput');
@@ -985,8 +1075,12 @@ private resetAppContent() {
     const pageFooter = document.getElementById('pageFooter');
     if (pageFooter) pageFooter.innerHTML = `${this.t('footerMessage')} ✨`;
 
+    // ★既存の初期メッセージのテキストのみを更新（新しいメッセージは追加しない）
     const initialMessage = this.els.chatArea.querySelector('.message.assistant[data-initial="true"] .message-text');
-    if (initialMessage) initialMessage.textContent = this.t('initialGreeting');
+    if (initialMessage) {
+      console.log('[updateUILanguage] Updating existing initial message');
+      initialMessage.textContent = this.t('initialGreeting');
+    }
     
     const waitText = document.querySelector('.wait-text');
     if (waitText) waitText.textContent = this.t('waitMessage');
