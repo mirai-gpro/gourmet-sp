@@ -61,13 +61,23 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       align-items: center;
       justify-content: center;
       gap: 12px;
-      /* 画像と文字の間隔 */
       font-size: 28px;
       font-weight: 900;
       margin-bottom: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.2s;
+      user-select: none;
     }
 
-    /* :global() を付けることで、JSで追加された .app-logo にも確実に適用させる */
+    .page-header h1:hover {
+      opacity: 0.9;
+      transform: scale(1.02);
+    }
+
+    .page-header h1:active {
+      transform: scale(0.98);
+    }
+
     :global(.app-logo) {
       width: 40px;
       height: 40px;
@@ -154,12 +164,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 
     /* モバイルでのスタック表示 */
     @media (max-width: 1023px) {
-      /* ★修正: スマホではショップリスト(カード)を先に表示 [order: 1] */
       .shop-list-section {
         order: 1;
       }
       
-      /* ★修正: チャット画面はその下に表示 [order: 2] */
       .chat-section {
         order: 2;
       }
@@ -198,6 +206,29 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <ReservationModal apiBaseUrl={apiBaseUrl} />
 
   <script>
+    // ★★★ ソフトリセット機能 ★★★
+    document.addEventListener('DOMContentLoaded', () => {
+      const pageTitle = document.getElementById('pageTitle');
+      if (pageTitle) {
+        pageTitle.addEventListener('click', () => {
+          console.log('[index.astro] ===== PAGE TITLE CLICKED =====');
+          console.log('[index.astro] Triggering soft reset...');
+          
+          // ★修正: documentのみにイベント発火（windowは削除）
+          const resetEvent = new CustomEvent('gourmet-app:reset', { 
+            bubbles: true, 
+            cancelable: true 
+          });
+          
+          document.dispatchEvent(resetEvent);
+          
+          console.log('[index.astro] Reset event dispatched');
+        });
+      } else {
+        console.error('[index.astro] pageTitle element not found!');
+      }
+    });
+
     // ★★★ PWAインストール案内を最優先で登録 ★★★
     let deferredPrompt: any = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
