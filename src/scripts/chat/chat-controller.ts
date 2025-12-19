@@ -10,7 +10,7 @@ export class ChatController {
   private audioManager: AudioManager;
   private socket: any = null;
   
-  // オリジナルの状態変数
+  // オリジナルの状態変数２
   private currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
   private sessionId: string | null = null;
   private isProcessing = false;
@@ -1144,3 +1144,4 @@ try {
     document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: this.currentLanguage } }));
   }
 }
+
