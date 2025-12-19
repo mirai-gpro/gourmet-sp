@@ -90,6 +90,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       opacity: 0.9;
     }
 
+    .gourmet-chat-container {
+      /* ★修正: スマホで高さを調整 */
+      max-height: none; /* 600px → none */
+      height: auto;
+      min-height: 400px;
+    }
+    
     .main-content {
       display: grid;
       gap: 24px;
@@ -100,6 +107,11 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       .main-content {
         grid-template-columns: 1fr 1fr;
         align-items: start;
+      }
+      
+      /* PCのみ高さ制限 */
+      .gourmet-chat-container {
+        max-height: 600px;
       }
     }
 
