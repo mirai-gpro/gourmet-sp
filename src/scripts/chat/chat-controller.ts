@@ -517,14 +517,10 @@ private async sendMessage() {
   // 現在のセッションIDを保存（レスポンス時に検証するため）
   const currentSessionId = this.sessionId;
   
-  // ★修正: テキスト入力かどうかを判定
-  const isTextInput = !this.isFromVoiceInput;
-  
-  // ★修正: テキスト入力の場合、一時的にTTSを無効化して音楽を止めない
-  const originalTTSState = this.isTTSEnabled;
-  if (isTextInput) {
-    this.isTTSEnabled = false;
-  }
+// ★修正: テキスト入力かどうかを判定（フラグのみ保持）
+const isTextInput = !this.isFromVoiceInput;
+
+// TTS状態の変更は不要（skipAudioフラグで制御）
   
   this.isProcessing = true; 
   this.els.sendBtn.disabled = true;
@@ -580,17 +576,19 @@ private async sendMessage() {
   }   
       if (firstAckPromise) await firstAckPromise;
       
-      const cleanText = this.removeFillers(message);
-      const fallbackResponse = this.generateFallbackResponse(cleanText);
-      
-      if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(fallbackResponse, false);
-      this.addMessage('assistant', fallbackResponse);
-      
-      setTimeout(async () => {
-        const additionalResponse = this.t('additionalResponse');
-        if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(additionalResponse, false);
-        this.addMessage('assistant', additionalResponse);
-      }, 3000);
+const cleanText = this.removeFillers(message);
+const fallbackResponse = this.generateFallbackResponse(cleanText);
+
+// ★修正: テキスト入力時はskipAudio=trueを渡す
+if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(fallbackResponse, false, false, isTextInput);
+this.addMessage('assistant', fallbackResponse);
+
+setTimeout(async () => {
+  const additionalResponse = this.t('additionalResponse');
+  // ★修正: テキスト入力時はskipAudio=trueを渡す
+  if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(additionalResponse, false, false, isTextInput);
+  this.addMessage('assistant', additionalResponse);
+}, 3000);
     }
 
     this.isFromVoiceInput = false;
@@ -641,45 +639,47 @@ private async sendMessage() {
            }, 300);
         }
         
-        (async () => {
-          try {
-            this.isAISpeaking = true;
-            if (this.isRecording) { this.stopStreamingSTT(); }
+(async () => {
+  try {
+    this.isAISpeaking = true;
+    if (this.isRecording) { this.stopStreamingSTT(); }
 
-            await this.speakTextGCP(this.t('ttsIntro'));
-            
-            const lines = data.response.split('\n\n');
-            let introText = ""; 
-            let shopLines = lines;
+    // ★修正: テキスト入力時はskipAudio=trueを渡す
+    await this.speakTextGCP(this.t('ttsIntro'), true, false, isTextInput);
+    
+    const lines = data.response.split('\n\n');
+    let introText = ""; 
+    let shopLines = lines;
             
             if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { 
               introText = lines[0]; 
               shopLines = lines.slice(1); 
             }
             
-            let introPart2Promise: Promise<void> | null = null;
-            if (introText && this.isTTSEnabled && this.isUserInteracted) {
-              const preGeneratedIntro = this.preGeneratedAcks.get(introText);
-              if (preGeneratedIntro) {
-                introPart2Promise = new Promise<void>((resolve) => {
-                  this.lastAISpeech = this.normalizeText(introText);
-                  this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
-                  this.ttsPlayer.onended = () => resolve();
-                  this.ttsPlayer.play();
-                });
-              } else { 
-                introPart2Promise = this.speakTextGCP(introText, false); 
-              }
-            }
+let introPart2Promise: Promise<void> | null = null;
+// ★修正: テキスト入力時（isTextInput=true）はAudio操作をスキップ
+if (introText && this.isTTSEnabled && this.isUserInteracted && !isTextInput) {
+  const preGeneratedIntro = this.preGeneratedAcks.get(introText);
+  if (preGeneratedIntro) {
+    introPart2Promise = new Promise<void>((resolve) => {
+      this.lastAISpeech = this.normalizeText(introText);
+      this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+      this.ttsPlayer.onended = () => resolve();
+      this.ttsPlayer.play();
+    });
+  } else { 
+    introPart2Promise = this.speakTextGCP(introText, false, false, isTextInput); 
+  }
+}
 
             let firstShopAudioPromise: Promise<string | null> | null = null;
             let remainingAudioPromise: Promise<string | null> | null = null;
             const shopLangConfig = this.LANGUAGE_CODE_MAP[this.currentLanguage];
             
-            if (shopLines.length > 0 && this.isTTSEnabled && this.isUserInteracted) {
-              const firstShop = shopLines[0];
-              const restShops = shopLines.slice(1).join('\n\n');
-              
+// ★修正: テキスト入力時はTTS生成をスキップ
+if (shopLines.length > 0 && this.isTTSEnabled && this.isUserInteracted && !isTextInput) {
+  const firstShop = shopLines[0];
+  const restShops = shopLines.slice(1).join('\n\n');              
               firstShopAudioPromise = (async () => {
                 const cleanText = this.stripMarkdown(firstShop);
                 const response = await fetch(`${this.apiBase}/api/tts/synthesize`, { 
@@ -761,32 +761,32 @@ private async sendMessage() {
             this.isAISpeaking = false;
           } catch (_e) { this.isAISpeaking = false; }
         })();
-      } else {
-        if (data.response) {
-          const extractedShops = this.extractShopsFromResponse(data.response);
-          if (extractedShops.length > 0) {
-            this.currentShops = extractedShops;
-            this.els.reservationBtn.disabled = false;
-            document.dispatchEvent(new CustomEvent('displayShops', { 
-              detail: { shops: extractedShops, language: this.currentLanguage } 
-            }));
-            const section = document.getElementById('shopListSection');
-            if (section) section.classList.add('has-shops');
-            this.speakTextGCP(data.response);
-          } else { 
-            this.speakTextGCP(data.response); 
-          }
-        }
-      }
+} else {
+  if (data.response) {
+    const extractedShops = this.extractShopsFromResponse(data.response);
+    if (extractedShops.length > 0) {
+      this.currentShops = extractedShops;
+      this.els.reservationBtn.disabled = false;
+      document.dispatchEvent(new CustomEvent('displayShops', { 
+        detail: { shops: extractedShops, language: this.currentLanguage } 
+      }));
+      const section = document.getElementById('shopListSection');
+      if (section) section.classList.add('has-shops');
+      // ★修正: テキスト入力時はskipAudio=trueを渡す
+      this.speakTextGCP(data.response, true, false, isTextInput);
+    } else { 
+      // ★修正: テキスト入力時はskipAudio=trueを渡す
+      this.speakTextGCP(data.response, true, false, isTextInput); 
+    }
+  }
+}
 } catch (error) { 
   console.error('送信エラー:', error);
   this.hideWaitOverlay(); 
   this.showError('メッセージの送信に失敗しました。'); 
 } finally { 
-  // ★修正: TTS状態を復元
-  if (isTextInput) {
-    this.isTTSEnabled = originalTTSState;
-  }
+  // ★修正: TTS状態の復元は不要（skipAudioフラグで制御）
+  // 削除: if (isTextInput) { this.isTTSEnabled = originalTTSState; }
   
   this.resetInputState();
   // 明示的にblurしてキーボードを隠す
@@ -796,12 +796,12 @@ private async sendMessage() {
 
   // --- ヘルパーメソッド群 ---
 
-  private async speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
-  // ★修正: TTSが無効なら即座にreturn（Audio要素を一切触らない）
-   if (!this.isTTSEnabled || !text) return Promise.resolve();
+private async speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false, skipAudio: boolean = false) {
+  // ★修正: TTSが無効、またはskipAudioフラグがtrueなら即座にreturn
+  if (!this.isTTSEnabled || !text || skipAudio) return Promise.resolve();
   
   // ★修正: stopPreviousがfalseの場合はpauseしない（音楽を止めない）
-   if (stopPrevious) this.ttsPlayer.pause();
+  if (stopPrevious) this.ttsPlayer.pause();
   
    const cleanText = this.stripMarkdown(text);
 
