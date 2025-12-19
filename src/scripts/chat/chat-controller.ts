@@ -600,7 +600,9 @@ export class ChatController {
       
       this.hideWaitOverlay();
       this.currentAISpeech = data.response;
-      this.addMessage('assistant', data.response, data.summary);
+      // ★修正: summaryを非表示（コメントアウト）
+      // this.addMessage('assistant', data.response, data.summary);
+      this.addMessage('assistant', data.response, null); // summaryなし
       this.stopCurrentAudio();
       
       if (data.shops && data.shops.length > 0) {
@@ -1023,11 +1025,15 @@ export class ChatController {
     if (isInitial) div.setAttribute('data-initial', 'true');
     
     let contentHtml = `<div class="message-content"><span class="message-text">${text}</span></div>`;
+    
+    // ★修正: 「内容確認」(summary)を非表示にする
+    /*
     if (summary) {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="message-content"><span class="message-text">${text}</span></div><div class="summary-box"><strong>📝 内容確認</strong>${summary}</div>`;
         contentHtml = wrapper.innerHTML;
     }
+    */
 
     div.innerHTML = `
       <div class="message-avatar">${role === 'assistant' ? '🍽' : '👤'}</div>
