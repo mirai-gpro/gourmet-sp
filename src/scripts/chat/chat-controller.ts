@@ -10,7 +10,7 @@ export class ChatController {
   private audioManager: AudioManager;
   private socket: any = null;
   
-  // オリジナルの状態変数２
+  // オリジナルの状態変数
   private currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
   private sessionId: string | null = null;
   private isProcessing = false;
@@ -327,7 +327,11 @@ export class ChatController {
   private async toggleRecording() {
     this.enableAudioPlayback();
     this.els.userInput.value = '';
-    this.stopCurrentAudio();
+    
+    // ★修正: TTS有効時のみ停止（音楽は止めない）
+    if (this.isTTSEnabled) {
+      this.stopCurrentAudio();
+    }
     
     if (this.isRecording) { 
       this.stopAllActivities();
@@ -621,8 +625,8 @@ const data = await response.json();
       this.currentAISpeech = data.response;
       this.addMessage('assistant', data.response, data.summary);
       
-      // ★修正: テキスト入力時は音楽を停止しない
-      if (!isTextInput) {
+      // ★修正: TTS有効かつ音声入力時のみ停止
+      if (!isTextInput && this.isTTSEnabled) {
         console.log('[sendMessage] Stopping current audio (voice input)');
         this.stopCurrentAudio();
       }
@@ -729,8 +733,8 @@ if (firstShopAudioPromise) {
                 const firstShopText = this.stripMarkdown(shopLines[0]);
                 this.lastAISpeech = this.normalizeText(firstShopText);
                 
-                // ★修正: 音声入力時のみ現在のオーディオを停止
-                if (!isTextInput) {
+                // ★修正: TTS有効かつ音声入力時のみ停止
+                if (!isTextInput && this.isTTSEnabled) {
                   console.log('[sendMessage] Stopping audio before first shop');
                   this.stopCurrentAudio();
                 }
@@ -754,8 +758,8 @@ if (remainingAudioPromise) {
                     this.lastAISpeech = this.normalizeText(restShopsText);
                     await new Promise(r => setTimeout(r, 500));
                     
-                    // ★修正: 音声入力時のみ現在のオーディオを停止
-                    if (!isTextInput) {
+                    // ★修正: TTS有効かつ音声入力時のみ停止
+                    if (!isTextInput && this.isTTSEnabled) {
                       console.log('[sendMessage] Stopping audio before remaining shops');
                       this.stopCurrentAudio();
                     }
@@ -823,8 +827,8 @@ if (remainingAudioPromise) {
   // TTSが無効またはテキストが空ならreturn
   if (!this.isTTSEnabled || !text) return Promise.resolve();
   
-  // ★stopPreviousがtrueの場合のみ停止
-  if (stopPrevious) {
+  // ★修正: TTS有効かつstopPreviousがtrueの場合のみ停止
+  if (stopPrevious && this.isTTSEnabled) {
     console.log('[speakTextGCP] Pausing ttsPlayer');
     this.ttsPlayer.pause();
   }
@@ -1144,4 +1148,3 @@ try {
     document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: this.currentLanguage } }));
   }
 }
-
