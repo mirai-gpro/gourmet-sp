@@ -517,8 +517,10 @@ private async sendMessage() {
   // 現在のセッションIDを保存（レスポンス時に検証するため）
   const currentSessionId = this.sessionId;
   
-// ★修正: テキスト入力かどうかを判定（フラグのみ保持）
-const isTextInput = !this.isFromVoiceInput;
+  // ★テキスト入力かどうかを判定
+  const isTextInput = !this.isFromVoiceInput;
+  console.log('[sendMessage] Input type:', isTextInput ? 'TEXT' : 'VOICE', 
+              '| TTS enabled:', this.isTTSEnabled);
 
 // TTS状態の変更は不要（skipAudioフラグで制御）
   
@@ -607,7 +609,7 @@ setTimeout(async () => {
           language: this.currentLanguage 
         }) 
       });
-      const data = await response.json();
+const data = await response.json();
       
       // ★セッションIDチェック: リセット後の古いレスポンスは無視
       if (this.sessionId !== currentSessionId) {
@@ -618,7 +620,12 @@ setTimeout(async () => {
       this.hideWaitOverlay();
       this.currentAISpeech = data.response;
       this.addMessage('assistant', data.response, data.summary);
-      this.stopCurrentAudio();
+      
+      // ★修正: テキスト入力時は音楽を停止しない
+      if (!isTextInput) {
+        console.log('[sendMessage] Stopping current audio (voice input)');
+        this.stopCurrentAudio();
+      }
       
       if (data.shops && data.shops.length > 0) {
         this.currentShops = data.shops;
@@ -651,15 +658,16 @@ setTimeout(async () => {
     let introText = ""; 
     let shopLines = lines;
             
-            if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { 
+if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { 
               introText = lines[0]; 
               shopLines = lines.slice(1); 
             }
             
 let introPart2Promise: Promise<void> | null = null;
-// ★修正: テキスト入力時（isTextInput=true）はAudio操作をスキップ
+// ★テキスト入力時はAudio操作をスキップ
 if (introText && this.isTTSEnabled && this.isUserInteracted && !isTextInput) {
-  const preGeneratedIntro = this.preGeneratedAcks.get(introText);
+  console.log('[sendMessage] Playing intro text for shop results');
+    const preGeneratedIntro = this.preGeneratedAcks.get(introText);
   if (preGeneratedIntro) {
     introPart2Promise = new Promise<void>((resolve) => {
       this.lastAISpeech = this.normalizeText(introText);
@@ -715,14 +723,19 @@ if (shopLines.length > 0 && this.isTTSEnabled && this.isUserInteracted && !isTex
 
             if (introPart2Promise) await introPart2Promise;
             
-            if (firstShopAudioPromise) {
+if (firstShopAudioPromise) {
               const firstShopAudio = await firstShopAudioPromise;
               if (firstShopAudio) {
                 const firstShopText = this.stripMarkdown(shopLines[0]);
                 this.lastAISpeech = this.normalizeText(firstShopText);
-                this.stopCurrentAudio(); 
-                this.ttsPlayer.src = firstShopAudio;
                 
+                // ★修正: 音声入力時のみ現在のオーディオを停止
+                if (!isTextInput) {
+                  console.log('[sendMessage] Stopping audio before first shop');
+                  this.stopCurrentAudio();
+                }
+                
+                this.ttsPlayer.src = firstShopAudio;                
                 await new Promise<void>((resolve) => { 
                   this.ttsPlayer.onended = () => { 
                     this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped'); 
@@ -734,16 +747,20 @@ if (shopLines.length > 0 && this.isTTSEnabled && this.isUserInteracted && !isTex
                   this.ttsPlayer.play(); 
                 });
                 
-                if (remainingAudioPromise) {
+if (remainingAudioPromise) {
                   const remainingAudio = await remainingAudioPromise;
                   if (remainingAudio) {
                     const restShopsText = this.stripMarkdown(shopLines.slice(1).join('\n\n'));
                     this.lastAISpeech = this.normalizeText(restShopsText);
                     await new Promise(r => setTimeout(r, 500));
                     
-                    this.stopCurrentAudio(); 
-                    this.ttsPlayer.src = remainingAudio;
+                    // ★修正: 音声入力時のみ現在のオーディオを停止
+                    if (!isTextInput) {
+                      console.log('[sendMessage] Stopping audio before remaining shops');
+                      this.stopCurrentAudio();
+                    }
                     
+                    this.ttsPlayer.src = remainingAudio;                    
                     await new Promise<void>((resolve) => { 
                       this.ttsPlayer.onended = () => { 
                         this.els.voiceStatus.innerHTML = '🎤 音声認識: 停止中'; 
@@ -796,25 +813,34 @@ if (shopLines.length > 0 && this.isTTSEnabled && this.isUserInteracted && !isTex
 
   // --- ヘルパーメソッド群 ---
 
-private async speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false, skipAudio: boolean = false) {
-  // ★修正: TTSが無効、またはskipAudioフラグがtrueなら即座にreturn
-  if (!this.isTTSEnabled || !text || skipAudio) return Promise.resolve();
+  private async speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false, skipAudio: boolean = false) {
+  // ★最優先チェック: skipAudioならすぐreturn（音声処理を一切しない）
+  if (skipAudio) {
+    console.log('[speakTextGCP] Skipping audio - returning immediately');
+    return Promise.resolve();
+  }
   
-  // ★修正: stopPreviousがfalseの場合はpauseしない（音楽を止めない）
-  if (stopPrevious) this.ttsPlayer.pause();
+  // TTSが無効またはテキストが空ならreturn
+  if (!this.isTTSEnabled || !text) return Promise.resolve();
   
-   const cleanText = this.stripMarkdown(text);
-
-   try {
+  // ★stopPreviousがtrueの場合のみ停止
+  if (stopPrevious) {
+    console.log('[speakTextGCP] Pausing ttsPlayer');
+    this.ttsPlayer.pause();
+  }
+  
+  const cleanText = this.stripMarkdown(text);
+try {
     this.isAISpeaking = true;
     
-    // 修正: iOSまたはAndroid録音中の場合のハンドリングを強化
-     if (this.isIOS || (this.isAndroid && this.isRecording)) {
-        this.stopStreamingSTT();
-     }
+    // ★録音中かつモバイルの場合のみ停止（テキスト入力時は実行されない）
+    if (this.isRecording && (this.isIOS || this.isAndroid)) {
+      console.log('[speakTextGCP] Stopping streaming STT for mobile recording');
+      this.stopStreamingSTT();
+    }
       
-      this.els.voiceStatus.innerHTML = this.t('voiceStatusSynthesizing');
-      this.els.voiceStatus.className = 'voice-status speaking';
+    this.els.voiceStatus.innerHTML = this.t('voiceStatusSynthesizing');
+  this.els.voiceStatus.className = 'voice-status speaking';
       const langConfig = this.LANGUAGE_CODE_MAP[this.currentLanguage];
       
       const response = await fetch(`${this.apiBase}/api/tts/synthesize`, {
