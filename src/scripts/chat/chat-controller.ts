@@ -562,22 +562,22 @@ private async sendMessage() {
       this.currentAISpeech = ack.text;
       this.addMessage('assistant', ack.text);
       
-      if (this.isTTSEnabled) {
-        try {
-          const preGeneratedAudio = this.preGeneratedAcks.get(ack.text);
-          if (preGeneratedAudio && this.isUserInteracted) {
-            firstAckPromise = new Promise<void>((resolve) => {
-              this.lastAISpeech = this.normalizeText(ack.text);
-              this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
-              this.ttsPlayer.onended = () => resolve();
-              this.ttsPlayer.play().catch(_e => resolve());
-            });
-          } else { 
-            firstAckPromise = this.speakTextGCP(ack.text, false); 
-          }
-        } catch (_e) {}
+  // ★修正: テキスト入力時（isTextInput=true）はAudio要素を操作しない
+  if (this.isTTSEnabled && !isTextInput) {
+    try {
+      const preGeneratedAudio = this.preGeneratedAcks.get(ack.text);
+      if (preGeneratedAudio && this.isUserInteracted) {
+        firstAckPromise = new Promise<void>((resolve) => {
+          this.lastAISpeech = this.normalizeText(ack.text);
+          this.ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+          this.ttsPlayer.onended = () => resolve();
+          this.ttsPlayer.play().catch(_e => resolve());
+        });
+      } else { 
+        firstAckPromise = this.speakTextGCP(ack.text, false); 
       }
-      
+    } catch (_e) {}
+  }   
       if (firstAckPromise) await firstAckPromise;
       
       const cleanText = this.removeFillers(message);
