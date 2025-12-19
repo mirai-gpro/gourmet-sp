@@ -399,13 +399,23 @@ export class ChatController {
     this.els.voiceStatus.className = 'voice-status stopped';
   }
 
-  private async handleStreamingSTTComplete(transcript: string) {
-    this.stopStreamingSTT();
-    this.els.voiceStatus.innerHTML = this.t('voiceStatusComplete');
-    this.els.voiceStatus.className = 'voice-status';
+private async handleStreamingSTTComplete(transcript: string) {
+  this.stopStreamingSTT();
+  
+  // ★修正: 音声認識が終了したら、音楽プレーヤーを再開（試行）
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.playbackState = 'playing';
+    } catch (e) {
+      // エラーは無視
+    }
+  }
+  
+  this.els.voiceStatus.innerHTML = this.t('voiceStatusComplete');
+  this.els.voiceStatus.className = 'voice-status';
 
-    const normTranscript = this.normalizeText(transcript);
-    if (this.isSemanticEcho(normTranscript, this.lastAISpeech)) {
+  const normTranscript = this.normalizeText(transcript);
+  if (this.isSemanticEcho(normTranscript, this.lastAISpeech)) {
         this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped');
         this.els.voiceStatus.className = 'voice-status stopped';
         this.lastAISpeech = '';
@@ -498,22 +508,31 @@ export class ChatController {
     this.els.voiceStatus.className = 'voice-status stopped';
   }
 
-  private async sendMessage() {
-    let firstAckPromise: Promise<void> | null = null; 
-    this.unlockAudioParams();
-    const message = this.els.userInput.value.trim();
-    if (!message || this.isProcessing) return;
-    
-    // 現在のセッションIDを保存（レスポンス時に検証するため）
-    const currentSessionId = this.sessionId;
-    
-    this.isProcessing = true; 
-    this.els.sendBtn.disabled = true;
-    this.els.micBtn.disabled = true; 
-    this.els.userInput.disabled = true;
+private async sendMessage() {
+  let firstAckPromise: Promise<void> | null = null; 
+  this.unlockAudioParams();
+  const message = this.els.userInput.value.trim();
+  if (!message || this.isProcessing) return;
+  
+  // 現在のセッションIDを保存（レスポンス時に検証するため）
+  const currentSessionId = this.sessionId;
+  
+  // ★修正: テキスト入力かどうかを判定
+  const isTextInput = !this.isFromVoiceInput;
+  
+  // ★修正: テキスト入力の場合、一時的にTTSを無効化して音楽を止めない
+  const originalTTSState = this.isTTSEnabled;
+  if (isTextInput) {
+    this.isTTSEnabled = false;
+  }
+  
+  this.isProcessing = true; 
+  this.els.sendBtn.disabled = true;
+  this.els.micBtn.disabled = true; 
+  this.els.userInput.disabled = true;
 
-    if (!this.isFromVoiceInput) {
-      this.addMessage('user', message);
+  if (!this.isFromVoiceInput) {
+    this.addMessage('user', message);
       
       // ▼▼▼ 日にちチェック無効化 (2/2) ▼▼▼
       /*
@@ -600,9 +619,7 @@ export class ChatController {
       
       this.hideWaitOverlay();
       this.currentAISpeech = data.response;
-      // ★修正: summaryを非表示（コメントアウト）
-      // this.addMessage('assistant', data.response, data.summary);
-      this.addMessage('assistant', data.response, null); // summaryなし
+      this.addMessage('assistant', data.response, data.summary);
       this.stopCurrentAudio();
       
       if (data.shops && data.shops.length > 0) {
@@ -761,36 +778,40 @@ export class ChatController {
           }
         }
       }
-    } catch (error) { 
-      console.error('送信エラー:', error);
-      this.hideWaitOverlay(); 
-      this.showError('メッセージの送信に失敗しました。'); 
-    } finally { 
-      this.resetInputState();
-      // ★修正: ショップカードがある時も自動フォーカスしない（ソフトキーボード表示を防ぐ）
-      // if (this.currentShops.length === 0) this.els.userInput.focus(); 
-      // else this.els.userInput.blur();
-      
-      // 明示的にblurしてキーボードを隠す
-      this.els.userInput.blur();
-    }
+} catch (error) { 
+  console.error('送信エラー:', error);
+  this.hideWaitOverlay(); 
+  this.showError('メッセージの送信に失敗しました。'); 
+} finally { 
+  // ★修正: TTS状態を復元
+  if (isTextInput) {
+    this.isTTSEnabled = originalTTSState;
+  }
+  
+  this.resetInputState();
+  // 明示的にblurしてキーボードを隠す
+  this.els.userInput.blur();
+}
   }
 
   // --- ヘルパーメソッド群 ---
 
   private async speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
-    if (!this.isTTSEnabled || !text) return;
-    if (stopPrevious) this.ttsPlayer.pause();
-    
-    const cleanText = this.stripMarkdown(text);
+  // ★修正: TTSが無効なら即座にreturn（Audio要素を一切触らない）
+   if (!this.isTTSEnabled || !text) return Promise.resolve();
+  
+  // ★修正: stopPreviousがfalseの場合はpauseしない（音楽を止めない）
+   if (stopPrevious) this.ttsPlayer.pause();
+  
+   const cleanText = this.stripMarkdown(text);
 
-    try {
-      this.isAISpeaking = true;
-      
-      // 修正: iOSまたはAndroid録音中の場合のハンドリングを強化
-      if (this.isIOS || (this.isAndroid && this.isRecording)) {
-         this.stopStreamingSTT();
-      }
+   try {
+    this.isAISpeaking = true;
+    
+    // 修正: iOSまたはAndroid録音中の場合のハンドリングを強化
+     if (this.isIOS || (this.isAndroid && this.isRecording)) {
+        this.stopStreamingSTT();
+     }
       
       this.els.voiceStatus.innerHTML = this.t('voiceStatusSynthesizing');
       this.els.voiceStatus.className = 'voice-status speaking';
@@ -1025,15 +1046,11 @@ export class ChatController {
     if (isInitial) div.setAttribute('data-initial', 'true');
     
     let contentHtml = `<div class="message-content"><span class="message-text">${text}</span></div>`;
-    
-    // ★修正: 「内容確認」(summary)を非表示にする
-    /*
     if (summary) {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="message-content"><span class="message-text">${text}</span></div><div class="summary-box"><strong>📝 内容確認</strong>${summary}</div>`;
         contentHtml = wrapper.innerHTML;
     }
-    */
 
     div.innerHTML = `
       <div class="message-avatar">${role === 'assistant' ? '🍽' : '👤'}</div>
