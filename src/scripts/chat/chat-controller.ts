@@ -54,7 +54,7 @@ export class ChatController {
       userInput: query('#userInput') as HTMLInputElement,
       sendBtn: query('#sendBtn'),
       micBtn: query('#micBtnFloat'),
-      speakerBtn: query('#speakerBtn'),
+      speakerBtn: query('#speakerBtnFloat'),  // ★変更: 新しいIDに変更
       voiceStatus: query('#voiceStatus'),
       waitOverlay: query('#waitOverlay'),
       waitVideo: query('#waitVideo') as HTMLVideoElement,
@@ -312,10 +312,13 @@ export class ChatController {
         ...ackPromises
       ]);
       
-      this.els.userInput.disabled = false;
-      this.els.sendBtn.disabled = false;
-      this.els.micBtn.disabled = false;
-      this.els.speakerBtn.disabled = false;
+this.els.userInput.disabled = false;
+this.els.sendBtn.disabled = false;
+this.els.micBtn.disabled = false;
+this.els.speakerBtn.disabled = false;
+
+// ★追加: 初期状態でスピーカーON（disabledクラスなし）
+this.els.speakerBtn.classList.remove('disabled');
       // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
       // this.els.userInput.focus();
 
@@ -1026,15 +1029,21 @@ try {
     document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: this.currentShops } }));
   }
 
-  private toggleTTS() {
-    if (!this.isUserInteracted) { this.enableAudioPlayback(); return; }
-    this.enableAudioPlayback();
-    this.isTTSEnabled = !this.isTTSEnabled;
-    this.els.speakerBtn.innerHTML = this.isTTSEnabled ? '🔊' : '🔇';
-    this.els.speakerBtn.title = this.isTTSEnabled ? this.t('btnTTSOn') : this.t('btnTTSOff');
-    this.els.speakerBtn.className = this.isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
-    if (!this.isTTSEnabled) this.stopCurrentAudio();
+private toggleTTS() {
+  if (!this.isUserInteracted) { this.enableAudioPlayback(); return; }
+  this.enableAudioPlayback();
+  this.isTTSEnabled = !this.isTTSEnabled;
+  
+  // ★変更: フローティングボタン用のクラス切り替え
+  this.els.speakerBtn.title = this.isTTSEnabled ? this.t('btnTTSOn') : this.t('btnTTSOff');
+  if (this.isTTSEnabled) {
+    this.els.speakerBtn.classList.remove('disabled');
+  } else {
+    this.els.speakerBtn.classList.add('disabled');
   }
+  
+  if (!this.isTTSEnabled) this.stopCurrentAudio();
+}
 
   private stopAllActivities() {
     if (this.isProcessing) {
