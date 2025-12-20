@@ -1076,11 +1076,15 @@ try {
     if (isInitial) div.setAttribute('data-initial', 'true');
     
     let contentHtml = `<div class="message-content"><span class="message-text">${text}</span></div>`;
+    // ★修正: 要約表示をコメントアウト
+    /*
     if (summary) {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="message-content"><span class="message-text">${text}</span></div><div class="summary-box"><strong>📝 内容確認</strong>${summary}</div>`;
         contentHtml = wrapper.innerHTML;
     }
+    */
+
 
     div.innerHTML = `
       <div class="message-avatar">${role === 'assistant' ? '🍽' : '👤'}</div>
