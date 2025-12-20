@@ -59,12 +59,13 @@ export class AudioManager {
       this.audioContext.resume();
     }
     
-    if (elementToUnlock) {
-        elementToUnlock.play().then(() => {
-            elementToUnlock.pause();
-            elementToUnlock.currentTime = 0;
-        }).catch(() => {});
-    }
+  // ★削除: Audio要素の play/pause は音楽プレーヤーと干渉するため実行しない
+  // if (elementToUnlock) {
+  //     elementToUnlock.play().then(() => {
+  //         elementToUnlock.pause();
+  //         elementToUnlock.currentTime = 0;
+  //     }).catch(() => {});
+  // }
   }
 
   public fullResetAudioResources() {
