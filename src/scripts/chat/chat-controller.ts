@@ -582,9 +582,11 @@ private async sendMessage() {
   }   
 if (firstAckPromise) await firstAckPromise;
       
-const cleanText = this.removeFillers(message);
-const fallbackResponse = this.generateFallbackResponse(cleanText);
     }
+
+    // ★修正: fallbackResponseの定義を外に出す
+    const cleanText = this.removeFillers(message);
+    const fallbackResponse = this.generateFallbackResponse(cleanText);
 
     this.isFromVoiceInput = false;
     
