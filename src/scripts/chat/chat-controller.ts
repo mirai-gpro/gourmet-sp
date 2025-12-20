@@ -1,4 +1,3 @@
-
 // src/scripts/chat/chat-controller.ts
 import { i18n } from '../../constants/i18n'; 
 import { AudioManager } from './audio-manager';
@@ -527,16 +526,28 @@ private async sendMessage() {
   console.log('[sendMessage] Input type:', isTextInput ? 'TEXT' : 'VOICE', 
               '| TTS enabled:', this.isTTSEnabled);
 
+// TTS状態の変更は不要（skipAudioフラグで制御）
+  
   this.isProcessing = true; 
   this.els.sendBtn.disabled = true;
   this.els.micBtn.disabled = true; 
   this.els.userInput.disabled = true;
 
-  // ★★★ 最適化: API送信を即座に開始（並列処理） ★★★
-  let apiPromise: Promise<Response> | null = null;
-
   if (!this.isFromVoiceInput) {
     this.addMessage('user', message);
+      
+      // ▼▼▼ 日にちチェック無効化 (2/2) ▼▼▼
+      /*
+      // @ts-ignore
+      if (i18n[this.currentLanguage].patterns.dateCheck.test(message)) {
+           const msg = this.t('dateWarningMsg');
+           if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(msg, true);
+           this.addMessage('assistant', msg);
+           this.resetInputState();
+           return;
+      }
+      */
+      // ▲▲▲ 日にちチェック無効化 (2/2) ▲▲▲
       
       const textLength = message.trim().replace(/\s+/g, '').length;
       if (textLength < 4) {
@@ -552,22 +563,6 @@ private async sendMessage() {
       const ack = this.selectSmartAcknowledgment(message);
       this.currentAISpeech = ack.text;
       this.addMessage('assistant', ack.text);
-      
-      // ★★★ API送信を即座に開始（await しない） ★★★
-      console.log('[sendMessage] Starting API request immediately at T=0');
-      apiPromise = fetch(`${this.apiBase}/api/chat`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-          session_id: currentSessionId, 
-          message: message, 
-          stage: this.currentStage, 
-          language: this.currentLanguage 
-        }) 
-      }).catch(err => {
-        console.error('[sendMessage] API request failed:', err);
-        return null as any; // エラーを保持しつつ処理継続
-      });
       
   // ★修正: テキスト入力時（isTextInput=true）はAudio要素を操作しない
   if (this.isTTSEnabled && !isTextInput) {
@@ -604,16 +599,11 @@ setTimeout(async () => {
 
     this.isFromVoiceInput = false;
     
-    // ★★★ waitOverlay は API応答待ちの間だけ表示 ★★★
     if (this.waitOverlayTimer) clearTimeout(this.waitOverlayTimer);
-    this.waitOverlayTimer = window.setTimeout(() => { 
-      this.showWaitOverlay(); 
-    }, 4000);
+    this.waitOverlayTimer = window.setTimeout(() => { this.showWaitOverlay(); }, 4000);
 
     try {
-      // ★★★ API応答を待機（既に処理中の可能性が高い） ★★★
-      console.log('[sendMessage] Waiting for API response...');
-      const response = apiPromise ? await apiPromise : await fetch(`${this.apiBase}/api/chat`, { 
+      const response = await fetch(`${this.apiBase}/api/chat`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
@@ -623,14 +613,7 @@ setTimeout(async () => {
           language: this.currentLanguage 
         }) 
       });
-      
-      // ★エラーチェック
-      if (!response || !response.ok) {
-        throw new Error('API request failed');
-      }
-      
-      const data = await response.json();
-      console.log('[sendMessage] API response received');
+const data = await response.json();
       
       // ★セッションIDチェック: リセット後の古いレスポンスは無視
       if (this.sessionId !== currentSessionId) {
