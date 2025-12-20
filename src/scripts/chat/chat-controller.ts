@@ -580,21 +580,10 @@ private async sendMessage() {
       }
     } catch (_e) {}
   }   
-      if (firstAckPromise) await firstAckPromise;
+if (firstAckPromise) await firstAckPromise;
       
 const cleanText = this.removeFillers(message);
 const fallbackResponse = this.generateFallbackResponse(cleanText);
-
-// ★修正: テキスト入力時はskipAudio=trueを渡す
-if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(fallbackResponse, false, false, isTextInput);
-this.addMessage('assistant', fallbackResponse);
-
-setTimeout(async () => {
-  const additionalResponse = this.t('additionalResponse');
-  // ★修正: テキスト入力時はskipAudio=trueを渡す
-  if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(additionalResponse, false, false, isTextInput);
-  this.addMessage('assistant', additionalResponse);
-}, 3000);
     }
 
     this.isFromVoiceInput = false;
@@ -602,17 +591,31 @@ setTimeout(async () => {
     if (this.waitOverlayTimer) clearTimeout(this.waitOverlayTimer);
     this.waitOverlayTimer = window.setTimeout(() => { this.showWaitOverlay(); }, 4000);
 
+    // ★修正: バックエンド送信を先に開始（awaitしない）
+    const backendPromise = fetch(`${this.apiBase}/api/chat`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ 
+        session_id: currentSessionId, 
+        message: message, 
+        stage: this.currentStage, 
+        language: this.currentLanguage 
+      }) 
+    });
+
+    // ★時間稼ぎのTTS再生（バックエンド処理と並行）
+    if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(fallbackResponse, false, false, isTextInput);
+    this.addMessage('assistant', fallbackResponse);
+
+    setTimeout(async () => {
+      const additionalResponse = this.t('additionalResponse');
+      if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(additionalResponse, false, false, isTextInput);
+      this.addMessage('assistant', additionalResponse);
+    }, 3000);
+
+    // ★バックエンドのレスポンスを待つ
     try {
-      const response = await fetch(`${this.apiBase}/api/chat`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-          session_id: currentSessionId, 
-          message: message, 
-          stage: this.currentStage, 
-          language: this.currentLanguage 
-        }) 
-      });
+      const response = await backendPromise;
 const data = await response.json();
       
       // ★セッションIDチェック: リセット後の古いレスポンスは無視
