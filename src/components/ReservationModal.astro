@@ -19,7 +19,7 @@ const { apiBaseUrl = '' } = Astro.props;
       <div class="shop-selection-area">
         <div class="section-header">
           <h3 id="shopSelectTitle">&#127942; お店を選択</h3>
-          <p class="selection-guide" id="selectionGuide">優先順にクリックしてください（最大3件）</p>
+          <p class="selection-guide" id="selectionGuide">優先順にクリックしてください(最大3件)</p>
           <button class="reset-btn" id="resetSelection">やり直し</button>
         </div>
         <div class="shop-list-compact" id="shopListCompact">
@@ -123,7 +123,8 @@ const { apiBaseUrl = '' } = Astro.props;
           <div class="textarea-with-mic">
             <textarea id="otherRequests" placeholder="誕生日ケーキ、アレルギー対応、禁煙席など"></textarea>
             <button type="button" class="mic-btn" id="otherRequestsMic" title="音声入力">
-              &#127908;
+              <img src="/mic-on.svg" alt="Mic On" class="icon-mic" />
+              <img src="/mic-off.svg" alt="Mic Off" class="icon-stop" />
             </button>
           </div>
           <p class="voice-hint" id="voiceHint"></p>
@@ -430,34 +431,99 @@ const { apiBaseUrl = '' } = Astro.props;
     flex: 1;
   }
 
+  /* マイクボタン - チャット画面と同じデザイン */
   .mic-btn {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: #10b981;
+    background: linear-gradient(135deg, #e8eef7 0%, #d4dce9 100%);
     border: none;
     cursor: pointer;
-    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
     flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 -2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: visible;
   }
 
   .mic-btn:hover {
-    background: #059669;
     transform: scale(1.05);
   }
 
-  .mic-btn.recording {
-    background: #ef4444;
-    animation: pulse-mic 1.5s infinite;
+  .mic-btn img {
+    width: 44px;
+    height: 44px;
+    transition: opacity 0.3s;
+    filter: brightness(0) saturate(100%) invert(68%) sepia(8%) saturate(438%) hue-rotate(182deg) brightness(93%) contrast(88%);
   }
 
-  @keyframes pulse-mic {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.8; transform: scale(1.05); }
+  .mic-btn .icon-mic {
+    display: block;
+  }
+
+  .mic-btn .icon-stop {
+    display: none;
+  }
+
+  /* 録音中の状態 */
+  .mic-btn.recording {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    box-shadow: 0 4px 20px rgba(74, 144, 226, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .mic-btn.recording img {
+    filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+  }
+
+  .mic-btn.recording .icon-mic {
+    display: none;
+  }
+
+  .mic-btn.recording .icon-stop {
+    display: block;
+  }
+
+  .mic-btn.recording::before,
+  .mic-btn.recording::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid rgba(74, 144, 226, 0.6);
+    opacity: 0;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  .mic-btn.recording::before {
+    animation: ripple 2s ease-out infinite;
+  }
+
+  .mic-btn.recording::after {
+    animation: ripple 2s ease-out infinite 0.6s;
+  }
+
+  @keyframes ripple {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+      border-width: 3px;
+    }
+    50% {
+      opacity: 0.3;
+      border-width: 2px;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+      border-width: 1px;
+    }
   }
 
   .voice-hint {
@@ -468,7 +534,8 @@ const { apiBaseUrl = '' } = Astro.props;
   }
 
   .voice-hint.recording {
-    color: #ef4444;
+    color: #4a90e2;
+    font-weight: 600;
   }
 
   .voice-hint.success {
@@ -765,29 +832,98 @@ const { apiBaseUrl = '' } = Astro.props;
     min-height: 50px;
   }
 
+  /* お店毎のマイクボタン (小さいサイズ) */
   :global(.mic-btn-sm) {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: #10b981;
+    background: linear-gradient(135deg, #e8eef7 0%, #d4dce9 100%);
     border: none;
     cursor: pointer;
-    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
     flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 -2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: visible;
   }
 
   :global(.mic-btn-sm:hover) {
-    background: #059669;
     transform: scale(1.05);
   }
 
+  :global(.mic-btn-sm img) {
+    width: 36px;
+    height: 36px;
+    transition: opacity 0.3s;
+    filter: brightness(0) saturate(100%) invert(68%) sepia(8%) saturate(438%) hue-rotate(182deg) brightness(93%) contrast(88%);
+  }
+
+  :global(.mic-btn-sm .icon-mic) {
+    display: block;
+  }
+
+  :global(.mic-btn-sm .icon-stop) {
+    display: none;
+  }
+
   :global(.mic-btn-sm.recording) {
-    background: #ef4444;
-    animation: pulse-mic 1.5s infinite;
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    box-shadow: 0 4px 20px rgba(74, 144, 226, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  :global(.mic-btn-sm.recording img) {
+    filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
+  }
+
+  :global(.mic-btn-sm.recording .icon-mic) {
+    display: none;
+  }
+
+  :global(.mic-btn-sm.recording .icon-stop) {
+    display: block;
+  }
+
+  :global(.mic-btn-sm.recording::before),
+  :global(.mic-btn-sm.recording::after) {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid rgba(74, 144, 226, 0.6);
+    opacity: 0;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+
+  :global(.mic-btn-sm.recording::before) {
+    animation: ripple-sm 2s ease-out infinite;
+  }
+
+  :global(.mic-btn-sm.recording::after) {
+    animation: ripple-sm 2s ease-out infinite 0.6s;
+  }
+
+  @keyframes ripple-sm {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+      border-width: 2px;
+    }
+    50% {
+      opacity: 0.3;
+      border-width: 1px;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+      border-width: 0.5px;
+    }
   }
 
   /* モーダルフッター */
@@ -876,14 +1012,14 @@ const { apiBaseUrl = '' } = Astro.props;
     location?: string;
     priceRange?: string;
     image?: string;
-    phone?: string;      // 電話番号（Places APIから取得）
-    place_id?: string;   // Google Place ID
+    phone?: string;
+    place_id?: string;
   }
 
   interface SelectedShop extends ShopData {
     priority: number;
     useCommonSettings: boolean;
-    editedPhone?: string;  // ユーザーが編集した電話番号
+    editedPhone?: string;
     customSettings?: {
       guestCount?: number;
       date?: string;
@@ -922,29 +1058,22 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     private initEventListeners() {
-      // 閉じるボタン
       document.getElementById('closeReservationModal')?.addEventListener('click', () => this.close());
       document.getElementById('cancelReservation')?.addEventListener('click', () => this.close());
 
-      // オーバーレイクリックで閉じる
       this.overlay.addEventListener('click', (e) => {
         if (e.target === this.overlay) this.close();
       });
 
-      // やり直しボタン
       document.getElementById('resetSelection')?.addEventListener('click', () => this.resetSelection());
-
-      // 送信ボタン
       this.submitBtn.addEventListener('click', () => this.submitReservation());
 
-      // ESCキーで閉じる
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && this.overlay.classList.contains('active')) {
           this.close();
         }
       });
 
-      // お店毎に予約内容を変えるボタン
       this.perShopBtn?.addEventListener('click', () => this.togglePerShopMode());
     }
 
@@ -995,10 +1124,10 @@ const { apiBaseUrl = '' } = Astro.props;
           <div class="shop-info-compact">
             <div class="shop-name-compact">${shop.name}</div>
             <div class="shop-meta-compact">
-              ${shop.rating ? `<span>$2B50${shop.rating}</span>` : ''}
+              ${shop.rating ? `<span>⭐${shop.rating}</span>` : ''}
               ${shop.location ? `<span>${this.truncateLocation(shop.location)}</span>` : ''}
               ${shop.priceRange ? `<span>${shop.priceRange}</span>` : ''}
-              ${shop.phone ? `<span class="shop-phone">$D83D$DCDE${shop.phone}</span>` : ''}
+              ${shop.phone ? `<span class="shop-phone">📞${shop.phone}</span>` : ''}
             </div>
           </div>
         `;
@@ -1011,7 +1140,6 @@ const { apiBaseUrl = '' } = Astro.props;
     }
 
     private getPriorityLabel(priority: number): string {
-      // HTMLエンティティで丸数字を表示（太字赤）
       const labels = ['', '&#9312;', '&#9313;', '&#9314;'];
       return labels[priority] || priority.toString();
     }
@@ -1028,10 +1156,8 @@ const { apiBaseUrl = '' } = Astro.props;
       const existingIndex = this.selectedShops.findIndex(s => s.name === shop.name);
 
       if (existingIndex !== -1) {
-        // 選択解除
         this.selectedShops.splice(existingIndex, 1);
       } else if (this.selectedShops.length < this.maxSelection) {
-        // 新規選択
         this.selectedShops.push({
           ...shop,
           priority: this.selectedShops.length + 1,
@@ -1113,12 +1239,12 @@ const { apiBaseUrl = '' } = Astro.props;
             </div>
             <div class="shop-detail-form">
               <div class="form-row shop-phone-row">
-                <label>$D83D$DCDE ${this.t('reservationPhoneLabel')}</label>
+                <label>📞 ${this.t('reservationPhoneLabel')}</label>
                 <input type="tel" class="shop-phone-input" value="${currentPhone}" placeholder="03-xxxx-xxxx" />
                 <p class="field-hint-sm">${this.t('reservationPhoneHint')}</p>
               </div>
               <div class="form-row">
-                <label>$D83D$DC65 ${this.t('reservationGuestCount')}</label>
+                <label>👥 ${this.t('reservationGuestCount')}</label>
                 <select class="shop-guest-count">
                   ${[1,2,3,4,5,6,7,8,9,10].map(n =>
                     `<option value="${n}" ${settings.guestCount == n ? 'selected' : ''}>${this.t('reservationGuestOption', n)}</option>`
@@ -1126,11 +1252,11 @@ const { apiBaseUrl = '' } = Astro.props;
                 </select>
               </div>
               <div class="form-row">
-                <label>$D83D$DCC5 ${this.t('reservationDate')}</label>
+                <label>📅 ${this.t('reservationDate')}</label>
                 <input type="date" class="shop-date" value="${settings.date || ''}" />
               </div>
               <div class="form-row">
-                <label>$23F0 ${this.t('reservationTime')}</label>
+                <label>⏰ ${this.t('reservationTime')}</label>
                 <select class="shop-start-time">
                   <option value="">${this.t('reservationSelectPlaceholder')}</option>
                   ${['11:00','11:30','12:00','12:30','13:00','13:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30'].map(t =>
@@ -1139,7 +1265,7 @@ const { apiBaseUrl = '' } = Astro.props;
                 </select>
               </div>
               <div class="form-row">
-                <label>$23F1 ${this.t('reservationTimeFlexibility')}</label>
+                <label>⏱ ${this.t('reservationTimeFlexibility')}</label>
                 <div class="radio-group-inline">
                   <label class="radio-label-sm">
                     <input type="radio" name="timeFlexibility_${index}" value="exact" ${settings.timeFlexibility === 'exact' || !settings.timeFlexibility ? 'checked' : ''} />
@@ -1160,7 +1286,7 @@ const { apiBaseUrl = '' } = Astro.props;
                 </div>
               </div>
               <div class="form-row">
-                <label>$D83E$DE91 ${this.t('reservationSeatPreference')}</label>
+                <label>🪑 ${this.t('reservationSeatPreference')}</label>
                 <div class="checkbox-group-inline">
                   <label class="checkbox-label-sm">
                     <input type="checkbox" class="shop-seat-table" value="table" ${seatTypes.includes('table') ? 'checked' : ''} />
@@ -1177,10 +1303,13 @@ const { apiBaseUrl = '' } = Astro.props;
                 </div>
               </div>
               <div class="form-row">
-                <label>$D83D$DCDD ${this.t('reservationOtherRequests')}</label>
+                <label>📝 ${this.t('reservationOtherRequests')}</label>
                 <div class="textarea-with-mic-sm">
                   <textarea class="shop-other-requests" placeholder="${this.t('reservationPerShopPlaceholder')}">${settings.otherRequests || ''}</textarea>
-                  <button type="button" class="mic-btn-sm shop-mic-btn" data-shop-index="${index}" title="音声入力">$D83C$DFA4</button>
+                  <button type="button" class="mic-btn-sm shop-mic-btn" data-shop-index="${index}" title="音声入力">
+                    <img src="/mic-on.svg" alt="Mic On" class="icon-mic" />
+                    <img src="/mic-off.svg" alt="Mic Off" class="icon-stop" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1190,7 +1319,6 @@ const { apiBaseUrl = '' } = Astro.props;
 
       this.selectedShopsDetail.classList.add('has-selection');
 
-      // 各フォームの変更を監視
       this.selectedShopsDetail.querySelectorAll('.shop-detail-card').forEach((card, index) => {
         const updateCustomSettings = () => {
           const seatTypes: string[] = [];
@@ -1198,7 +1326,6 @@ const { apiBaseUrl = '' } = Astro.props;
           if ((card.querySelector('.shop-seat-counter') as HTMLInputElement)?.checked) seatTypes.push('counter');
           if ((card.querySelector('.shop-seat-private') as HTMLInputElement)?.checked) seatTypes.push('private');
 
-          // 電話番号の更新
           const phoneInput = card.querySelector('.shop-phone-input') as HTMLInputElement;
           if (phoneInput) {
             this.selectedShops[index].editedPhone = phoneInput.value;
@@ -1219,7 +1346,6 @@ const { apiBaseUrl = '' } = Astro.props;
           el.addEventListener('input', updateCustomSettings);
         });
 
-        // 音声入力ボタン
         const micBtn = card.querySelector('.shop-mic-btn') as HTMLButtonElement;
         const textarea = card.querySelector('.shop-other-requests') as HTMLTextAreaElement;
         if (micBtn && textarea) {
@@ -1237,7 +1363,6 @@ const { apiBaseUrl = '' } = Astro.props;
           mediaRecorder?.stop();
           isRecording = false;
           micBtn.classList.remove('recording');
-          micBtn.textContent = '$D83C$DFA4';
           return;
         }
 
@@ -1279,15 +1404,12 @@ const { apiBaseUrl = '' } = Astro.props;
           mediaRecorder.start();
           isRecording = true;
           micBtn.classList.add('recording');
-          micBtn.textContent = '$23F9';
 
-          // 5秒後に自動停止
           setTimeout(() => {
             if (isRecording && mediaRecorder?.state === 'recording') {
               mediaRecorder.stop();
               isRecording = false;
               micBtn.classList.remove('recording');
-              micBtn.textContent = '$D83C$DFA4';
             }
           }, 5000);
 
@@ -1320,14 +1442,11 @@ const { apiBaseUrl = '' } = Astro.props;
       const formData = this.getFormData();
       const reserverInfo = this.getReserverInfo();
 
-      // 電話API用のJSONペイロード形式
       const reservationData = {
-        // 予約者情報
         reserver: {
           name: reserverInfo.name,
           contact_phone: reserverInfo.phone
         },
-        // 店舗リスト（優先順位順）
         shops: this.selectedShops.map((shop, index) => {
           const settings = shop.useCommonSettings ? formData : shop.customSettings;
           return {
@@ -1345,27 +1464,17 @@ const { apiBaseUrl = '' } = Astro.props;
             }
           };
         }),
-        // 共通設定（参考用）
         commonSettings: formData
       };
 
       console.log('[ReservationModal] 予約依頼JSON:', JSON.stringify(reservationData, null, 2));
 
-      // カスタムイベントを発火
       const event = new CustomEvent('reservationSubmit', {
         detail: reservationData
       });
       document.dispatchEvent(event);
 
-      // モーダルを閉じる
       this.close();
-
-      // TODO: 実際の予約APIを呼び出す
-      // fetch('/api/reservation/start', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(reservationData)
-      // });
 
       const shopsList = this.selectedShops.map((s, i) =>
         `${i + 1}. ${s.name} (${s.editedPhone || s.phone || this.t('reservationAlertNoPhone')})`
@@ -1381,10 +1490,8 @@ const { apiBaseUrl = '' } = Astro.props;
     }
   }
 
-  // グローバルに公開
   (window as any).ReservationModal = ReservationModal;
 
-  // 音声入力クラス
   class VoiceInput {
     private micBtn: HTMLButtonElement;
     private textarea: HTMLTextAreaElement;
@@ -1437,7 +1544,6 @@ const { apiBaseUrl = '' } = Astro.props;
       }
       this.isRecording = false;
       this.micBtn.classList.remove('recording');
-      this.micBtn.innerHTML = '&#127908;';
     }
 
     async toggleRecording() {
@@ -1448,7 +1554,6 @@ const { apiBaseUrl = '' } = Astro.props;
         }
         this.isRecording = false;
         this.micBtn.classList.remove('recording');
-        this.micBtn.innerHTML = '&#127908;';
         return;
       }
 
@@ -1458,7 +1563,6 @@ const { apiBaseUrl = '' } = Astro.props;
         this.audioChunks = [];
         this.hasSpoken = false;
 
-        // 無音検出のセットアップ
         this.audioContext = new AudioContext();
         const source = this.audioContext.createMediaStreamSource(stream);
         this.analyser = this.audioContext.createAnalyser();
@@ -1467,7 +1571,6 @@ const { apiBaseUrl = '' } = Astro.props;
 
         const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
-        // 音声レベルを定期的にチェック
         this.vadCheckInterval = window.setInterval(() => {
           if (!this.analyser || !this.isRecording) return;
 
@@ -1509,220 +1612,4 @@ const { apiBaseUrl = '' } = Astro.props;
         this.mediaRecorder.start();
         this.isRecording = true;
         this.micBtn.classList.add('recording');
-        this.micBtn.innerHTML = '&#9209;';
-        this.voiceHint.textContent = '話してください...';
-        this.voiceHint.className = 'voice-hint recording';
-
-      } catch (error) {
-        console.error('[VoiceInput] Error:', error);
-        this.voiceHint.textContent = 'マイクアクセスエラー';
-        this.voiceHint.className = 'voice-hint';
-      }
-    }
-
-    private async transcribeAudio(audioBlob: Blob) {
-      try {
-        this.voiceHint.textContent = '音声認識中...';
-        this.voiceHint.className = 'voice-hint';
-
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-
-        reader.onloadend = async () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-
-          const response = await fetch(`${this.apiBase}/api/stt/transcribe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              audio: base64Audio,
-              language_code: 'ja-JP'
-            })
-          });
-
-          const data = await response.json();
-
-          if (data.success && data.transcript) {
-            // 既存のテキストに追記
-            const currentText = this.textarea.value;
-            this.textarea.value = currentText
-              ? currentText + '\n' + data.transcript
-              : data.transcript;
-            this.voiceHint.textContent = '入力完了';
-            this.voiceHint.className = 'voice-hint success';
-            setTimeout(() => {
-              this.voiceHint.textContent = '';
-              this.voiceHint.className = 'voice-hint';
-            }, 2000);
-          } else {
-            this.voiceHint.textContent = '音声が認識されませんでした';
-            this.voiceHint.className = 'voice-hint';
-          }
-        };
-
-      } catch (error) {
-        console.error('[VoiceInput] Error:', error);
-        this.voiceHint.textContent = '認識エラー';
-        this.voiceHint.className = 'voice-hint';
-      }
-    }
-  }
-
-  // 多言語化: UI要素を更新
-  function updateReservationModalLanguage() {
-    const gourmetI18n = (window as any).gourmetI18n;
-    if (!gourmetI18n) return;
-
-    const t = gourmetI18n.t;
-
-    // モーダルヘッダー
-    const modalTitle = document.getElementById('modalTitle');
-    if (modalTitle) modalTitle.innerHTML = `&#128222; ${t('reservationModalTitle')}`;
-
-    // 店舗選択エリア
-    const shopSelectTitle = document.getElementById('shopSelectTitle');
-    if (shopSelectTitle) shopSelectTitle.innerHTML = `&#127942; ${t('reservationShopSelect')}`;
-
-    const selectionGuide = document.getElementById('selectionGuide');
-    if (selectionGuide) selectionGuide.textContent = t('reservationSelectionGuide');
-
-    const resetBtn = document.getElementById('resetSelection');
-    if (resetBtn) resetBtn.textContent = t('reservationResetBtn');
-
-    const priorityNote = document.getElementById('priorityNote');
-    if (priorityNote) priorityNote.innerHTML = `&#8505; ${t('reservationPriorityNote')}`;
-
-    // 予約内容エリア
-    const contentTitle = document.getElementById('contentTitle');
-    if (contentTitle) contentTitle.innerHTML = `&#128203; ${t('reservationContentTitle')}`;
-
-    const guestCountLabel = document.getElementById('guestCountLabel');
-    if (guestCountLabel) guestCountLabel.innerHTML = `&#128101; ${t('reservationGuestCount')}`;
-
-    // 人数オプションを更新
-    const guestCountSelect = document.getElementById('guestCount') as HTMLSelectElement;
-    if (guestCountSelect) {
-      const options = guestCountSelect.querySelectorAll('option');
-      options.forEach((option, index) => {
-        const value = parseInt(option.value);
-        option.textContent = t('reservationGuestOption', value);
-      });
-    }
-
-    const dateLabel = document.getElementById('dateLabel');
-    if (dateLabel) dateLabel.innerHTML = `&#128197; ${t('reservationDate')}`;
-
-    const timeLabel = document.getElementById('timeLabel');
-    if (timeLabel) timeLabel.innerHTML = `&#9200; ${t('reservationTime')}`;
-
-    const selectPlaceholder = document.getElementById('selectPlaceholder');
-    if (selectPlaceholder) selectPlaceholder.textContent = t('reservationSelectPlaceholder');
-
-    // 時間の許容範囲ラベル
-    const timeFlexibilityLabel = document.getElementById('timeFlexibilityLabel');
-    if (timeFlexibilityLabel) timeFlexibilityLabel.innerHTML = `&#9201; ${t('reservationTimeFlexibility')}`;
-
-    // 時間の許容範囲
-    const timeFlexibilityLabels = document.querySelectorAll('.time-flexibility label span');
-    if (timeFlexibilityLabels.length >= 4) {
-      (timeFlexibilityLabels[0] as HTMLElement).textContent = t('reservationTimeExact');
-      (timeFlexibilityLabels[1] as HTMLElement).textContent = t('reservationTimePlus30');
-      (timeFlexibilityLabels[2] as HTMLElement).textContent = t('reservationTimePlus60');
-      (timeFlexibilityLabels[3] as HTMLElement).textContent = t('reservationTimePlus90');
-    }
-
-    // 席の希望ラベル
-    const seatPreferenceLabel = document.getElementById('seatPreferenceLabel');
-    if (seatPreferenceLabel) seatPreferenceLabel.innerHTML = `&#129681; ${t('reservationSeatPreference')}`;
-
-    // 席の希望
-    const seatLabels = document.querySelectorAll('label[class="checkbox-label"] span');
-    let seatIndex = 0;
-    seatLabels.forEach((label) => {
-      const input = (label as HTMLElement).previousElementSibling as HTMLInputElement;
-      if (input && input.name === 'seatType') {
-        if (input.value === 'table') {
-          (label as HTMLElement).textContent = t('reservationSeatTable');
-        } else if (input.value === 'counter') {
-          (label as HTMLElement).textContent = t('reservationSeatCounter');
-        } else if (input.value === 'private') {
-          (label as HTMLElement).textContent = t('reservationSeatPrivate');
-        }
-      }
-    });
-
-    // その他の希望ラベル
-    const otherRequestsLabel = document.getElementById('otherRequestsLabel');
-    if (otherRequestsLabel) otherRequestsLabel.innerHTML = `&#128221; ${t('reservationOtherRequests')}`;
-
-    // その他の希望
-    const otherRequestsTextarea = document.getElementById('otherRequests') as HTMLTextAreaElement;
-    if (otherRequestsTextarea) {
-      otherRequestsTextarea.placeholder = t('reservationOtherRequestsPlaceholder');
-    }
-
-    // お店毎設定ボタン
-    const perShopBtn = document.getElementById('togglePerShopSettings');
-    if (perShopBtn && !perShopBtn.classList.contains('active')) {
-      perShopBtn.innerHTML = `&#9881; ${t('reservationPerShopBtn')}`;
-    }
-
-    // 予約者情報タイトル
-    const reserverInfoTitle = document.getElementById('reserverInfoTitle');
-    if (reserverInfoTitle) reserverInfoTitle.innerHTML = `&#128100; ${t('reservationReserverInfo')}`;
-
-    // お名前ラベル
-    const reserverNameLabel = document.getElementById('reserverNameLabel');
-    if (reserverNameLabel) reserverNameLabel.textContent = t('reservationReserverName');
-
-    // 携帯番号ラベル
-    const reserverPhoneLabel = document.getElementById('reserverPhoneLabel');
-    if (reserverPhoneLabel) reserverPhoneLabel.innerHTML = `&#128241; ${t('reservationReserverPhone')}`;
-
-    // 予約者情報
-    const reserverName = document.getElementById('reserverName') as HTMLInputElement;
-    if (reserverName) {
-      reserverName.placeholder = t('reservationReserverNamePlaceholder');
-    }
-
-    const reserverPhoneHint = document.querySelector('.reserver-info .field-hint');
-    if (reserverPhoneHint) {
-      reserverPhoneHint.textContent = t('reservationReserverPhoneHint');
-    }
-
-    // フッターボタン
-    const cancelBtn = document.getElementById('cancelReservation');
-    if (cancelBtn) cancelBtn.textContent = t('reservationCancel');
-
-    const submitBtn = document.getElementById('submitReservation');
-    if (submitBtn) submitBtn.innerHTML = `&#128222; ${t('reservationSubmit')}`;
-  }
-
-  // 初期化
-  document.addEventListener('DOMContentLoaded', () => {
-    const modal = new ReservationModal();
-    (window as any).reservationModal = modal;
-
-    // APIベースURLを取得
-    const overlay = document.getElementById('reservationModalOverlay') as HTMLElement;
-    const apiBase = overlay?.dataset.apiBase || '';
-
-    // 音声入力を初期化
-    new VoiceInput('otherRequestsMic', 'otherRequests', 'voiceHint', apiBase);
-
-    // 初期言語を適用
-    updateReservationModalLanguage();
-
-    // 言語変更イベントをリッスン
-    document.addEventListener('languageChange', () => {
-      updateReservationModalLanguage();
-    });
-
-    // カスタムイベントをリッスン
-    document.addEventListener('openReservationModal', ((event: CustomEvent) => {
-      if (event.detail && event.detail.shops) {
-        modal.open(event.detail.shops);
-      }
-    }) as EventListener);
-  });
-</script>
+        this.voiceHint.textContent = '話してください
