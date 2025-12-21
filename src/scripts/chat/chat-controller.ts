@@ -1185,3 +1185,4 @@ private toggleTTS() {
     document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: this.currentLanguage } }));
   }
 }
+
