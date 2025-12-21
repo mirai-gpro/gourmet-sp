@@ -23,6 +23,7 @@ export class ChatController {
   private currentShops: any[] = [];
   private isFromVoiceInput = false;
   private lastAISpeech = '';
+  private lastAIMessage = '';  // 追加: 最後のAIメッセージ全文を保存
   private preGeneratedAcks: Map<string, string> = new Map();
   private isAISpeaking = false;
   private currentAISpeech = "";
@@ -162,6 +163,7 @@ export class ChatController {
     this.currentShops = [];
     this.sessionId = null; // セッションIDをクリア
     this.lastAISpeech = '';
+    this.lastAIMessage = '';  // ★追加: 最後のAIメッセージもクリア
     this.preGeneratedAcks.clear();
     this.isProcessing = false;
     this.isAISpeaking = false;
@@ -517,11 +519,27 @@ private async handleStreamingSTTComplete(transcript: string) {
   }
 
 private async sendMessage() {
-  let firstAckPromise: Promise<void> | null = null; 
+  let firstAckPromise: Promise<void> | null = null;
   this.unlockAudioParams();
   const message = this.els.userInput.value.trim();
   if (!message || this.isProcessing) return;
-  
+
+  // ★追加: 予約モーダル自動起動ロジック
+  const affirmativeKeywords = ['はい', '開いて', 'お願い', 'yes', 'ok', 'うん', 'そうして', 'そうする', '開く'];
+  const isAffirmative = affirmativeKeywords.some(keyword =>
+    message.toLowerCase().includes(keyword)
+  );
+
+  // 最後のAIメッセージに「予約依頼画面」が含まれていて、
+  // ユーザーが肯定的な返答をした場合、自動的にモーダルを開く
+  if (this.lastAIMessage.includes('予約依頼画面') && isAffirmative && this.currentShops.length > 0) {
+    console.log('[Auto-trigger] Opening reservation modal automatically');
+    // 少し待ってからモーダルを開く（ユーザーメッセージを先に表示）
+    setTimeout(() => {
+      this.openReservationModal();
+    }, 500);
+  }
+
   // 現在のセッションIDを保存（レスポンス時に検証するため）
   const currentSessionId = this.sessionId;
   
@@ -1084,7 +1102,12 @@ private toggleTTS() {
     const div = document.createElement('div');
     div.className = `message ${role}`;
     if (isInitial) div.setAttribute('data-initial', 'true');
-    
+
+    // ★追加: AIのメッセージを保存
+    if (role === 'assistant') {
+      this.lastAIMessage = text;
+    }
+
     let contentHtml = `<div class="message-content"><span class="message-text">${text}</span></div>`;
     // ★修正: 要約表示をコメントアウト
     /*
