@@ -49,21 +49,21 @@ export class ChatController {
 
     // DOM要素取得
     const query = (sel: string) => container.querySelector(sel) as HTMLElement;
-    this.els = {
-      chatArea: query('#chatArea'),
-      userInput: query('#userInput') as HTMLInputElement,
-      sendBtn: query('#sendBtn'),
-      micBtn: query('#micBtnFloat'),
-      speakerBtn: query('#speakerBtnFloat'),  // ★変更: 新しいIDに変更
-      voiceStatus: query('#voiceStatus'),
-      waitOverlay: query('#waitOverlay'),
-      waitVideo: query('#waitVideo') as HTMLVideoElement,
-      splashOverlay: query('#splashOverlay'),
-      splashVideo: query('#splashVideo') as HTMLVideoElement,
-      reservationBtn: query('#reservationBtn'),
-      stopBtn: query('#stopBtn'),
-      languageSelect: query('#languageSelect') as HTMLSelectElement
-    };
+this.els = {
+  chatArea: query('#chatArea'),
+  userInput: query('#userInput') as HTMLInputElement,
+  sendBtn: query('#sendBtn'),
+  micBtn: query('#micBtnFloat'),
+  speakerBtn: query('#speakerBtnFloat'),
+  voiceStatus: query('#voiceStatus'),
+  waitOverlay: query('#waitOverlay'),
+  waitVideo: query('#waitVideo') as HTMLVideoElement,
+  splashOverlay: query('#splashOverlay'),
+  splashVideo: query('#splashVideo') as HTMLVideoElement,
+  reservationBtn: query('#reservationBtnFloat'),  // ★変更: 新しいIDに変更
+  stopBtn: query('#stopBtn'),
+  languageSelect: query('#languageSelect') as HTMLSelectElement
+};
 
     this.init();
   }
@@ -149,13 +149,13 @@ export class ChatController {
       floatingButtons.classList.remove('shop-card-active');
     }
 
-    // 入力フィールドとボタンをリセット
-    this.els.userInput.value = '';
-    this.els.userInput.disabled = true;
-    this.els.sendBtn.disabled = true;
-    this.els.micBtn.disabled = true;
-    this.els.speakerBtn.disabled = true;
-    this.els.reservationBtn.disabled = true;
+// 入力フィールドとボタンをリセット
+this.els.userInput.value = '';
+this.els.userInput.disabled = true;
+this.els.sendBtn.disabled = true;
+this.els.micBtn.disabled = true;
+this.els.speakerBtn.disabled = true;
+this.els.reservationBtn.classList.remove('visible');  // ★変更: ボタンを非表示
 
     // 状態変数をリセット
     this.currentShops = [];
@@ -317,8 +317,11 @@ this.els.sendBtn.disabled = false;
 this.els.micBtn.disabled = false;
 this.els.speakerBtn.disabled = false;
 
-// ★追加: 初期状態でスピーカーON（disabledクラスなし）
+// 初期状態でスピーカーON（disabledクラスなし）
 this.els.speakerBtn.classList.remove('disabled');
+
+// ★追加: 予約ボタンは初期非表示
+this.els.reservationBtn.classList.remove('visible');
       // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
       // this.els.userInput.focus();
 
@@ -634,13 +637,13 @@ const data = await response.json();
         this.stopCurrentAudio();
       }
       
-      if (data.shops && data.shops.length > 0) {
-        this.currentShops = data.shops;
-        this.els.reservationBtn.disabled = false;
-        this.els.userInput.value = '';
-        document.dispatchEvent(new CustomEvent('displayShops', { 
-          detail: { shops: data.shops, language: this.currentLanguage } 
-        }));
+if (data.shops && data.shops.length > 0) {
+  this.currentShops = data.shops;
+  this.els.reservationBtn.classList.add('visible');  // ★変更: ボタンを表示
+  this.els.userInput.value = '';
+  document.dispatchEvent(new CustomEvent('displayShops', { 
+    detail: { shops: data.shops, language: this.currentLanguage } 
+  }));
         
         const section = document.getElementById('shopListSection');
         if (section) section.classList.add('has-shops');
@@ -788,12 +791,12 @@ if (remainingAudioPromise) {
 } else {
   if (data.response) {
     const extractedShops = this.extractShopsFromResponse(data.response);
-    if (extractedShops.length > 0) {
-      this.currentShops = extractedShops;
-      this.els.reservationBtn.disabled = false;
-      document.dispatchEvent(new CustomEvent('displayShops', { 
-        detail: { shops: extractedShops, language: this.currentLanguage } 
-      }));
+if (extractedShops.length > 0) {
+  this.currentShops = extractedShops;
+  this.els.reservationBtn.classList.add('visible');  // ★変更: ボタンを表示
+  document.dispatchEvent(new CustomEvent('displayShops', { 
+    detail: { shops: extractedShops, language: this.currentLanguage } 
+  }));
       const section = document.getElementById('shopListSection');
       if (section) section.classList.add('has-shops');
       // ★修正: テキスト入力時はskipAudio=trueを渡す
