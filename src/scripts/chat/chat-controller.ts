@@ -62,7 +62,7 @@ export class ChatController {
       waitVideo: query('#waitVideo') as HTMLVideoElement,
       splashOverlay: query('#splashOverlay'),
       splashVideo: query('#splashVideo') as HTMLVideoElement,
-      reservationBtn: query('#reservationBtn'),
+      reservationBtn: query('#reservationBtnFloat'),  // ★変更: 新しいIDに変更
       stopBtn: query('#stopBtn'),
       languageSelect: query('#languageSelect') as HTMLSelectElement
     };
@@ -151,13 +151,13 @@ export class ChatController {
       floatingButtons.classList.remove('shop-card-active');
     }
 
-    // 入力フィールドとボタンをリセット
-    this.els.userInput.value = '';
-    this.els.userInput.disabled = true;
-    this.els.sendBtn.disabled = true;
-    this.els.micBtn.disabled = true;
-    this.els.speakerBtn.disabled = true;
-    this.els.reservationBtn.disabled = true;
+// 入力フィールドとボタンをリセット
+this.els.userInput.value = '';
+this.els.userInput.disabled = true;
+this.els.sendBtn.disabled = true;
+this.els.micBtn.disabled = true;
+this.els.speakerBtn.disabled = true;
+this.els.reservationBtn.classList.remove('visible');  // ★変更: ボタンを非表示
 
     // 状態変数をリセット
     this.currentShops = [];
@@ -320,8 +320,11 @@ this.els.sendBtn.disabled = false;
 this.els.micBtn.disabled = false;
 this.els.speakerBtn.disabled = false;
 
-// ★追加: 初期状態でスピーカーON（disabledクラスなし）
+// 初期状態でスピーカーON（disabledクラスなし）
 this.els.speakerBtn.classList.remove('disabled');
+
+// ★追加: 予約ボタンは初期非表示
+this.els.reservationBtn.classList.remove('visible');
       // ★修正: 自動フォーカスを削除（ソフトキーボード表示を防ぐ）
       // this.els.userInput.focus();
 
@@ -330,47 +333,50 @@ this.els.speakerBtn.classList.remove('disabled');
     }
   }
 
-  private async toggleRecording() {
-    this.enableAudioPlayback();
-    this.els.userInput.value = '';
-    
-    // ★修正: TTS有効時のみ停止（音楽は止めない）
-    if (this.isTTSEnabled) {
-      this.stopCurrentAudio();
-    }
-    
-    if (this.isRecording) { 
-      this.stopAllActivities();
-      return;
-    }
-    
-    if (this.socket && this.socket.connected) {
-        this.isRecording = true;
-        this.els.micBtn.classList.add('recording');
-        this.els.voiceStatus.innerHTML = this.t('voiceStatusListening');
-        this.els.voiceStatus.className = 'voice-status listening';
-
-        try {
-          const langCode = this.LANGUAGE_CODE_MAP[this.currentLanguage].stt;
-          
-          await this.audioManager.startStreaming(
-            this.socket, 
-            langCode, 
-            () => { this.stopStreamingSTT(); },
-            () => { 
-                this.els.voiceStatus.innerHTML = this.t('voiceStatusRecording');
-            }
-          );
-        } catch (error: any) {
-          this.stopStreamingSTT();
-          if (!error.message?.includes('マイク')) {
-              this.showError(this.t('micAccessError'));
-          }
-        }
-    } else {
-        await this.startLegacyRecording();
-    }
+private async toggleRecording() {
+  // ★追加: isUserInteracted フラグのみセット（音楽を止めない）
+  if (!this.isUserInteracted) {
+    this.isUserInteracted = true;
+    const clickPrompt = this.container.querySelector('.click-prompt');
+    if (clickPrompt) clickPrompt.remove();
   }
+  
+  this.els.userInput.value = '';
+  
+  // ★削除: stopCurrentAudio() は呼ばない
+  
+  if (this.isRecording) { 
+    this.stopAllActivities();
+    return;
+  }
+  
+  if (this.socket && this.socket.connected) {
+    this.isRecording = true;
+    this.els.micBtn.classList.add('recording');
+    this.els.voiceStatus.innerHTML = this.t('voiceStatusListening');
+    this.els.voiceStatus.className = 'voice-status listening';
+
+    try {
+      const langCode = this.LANGUAGE_CODE_MAP[this.currentLanguage].stt;
+      
+      await this.audioManager.startStreaming(
+        this.socket, 
+        langCode, 
+        () => { this.stopStreamingSTT(); },
+        () => { 
+          this.els.voiceStatus.innerHTML = this.t('voiceStatusRecording');
+        }
+      );
+    } catch (error: any) {
+      this.stopStreamingSTT();
+      if (!error.message?.includes('マイク')) {
+        this.showError(this.t('micAccessError'));
+      }
+    }
+  } else {
+    await this.startLegacyRecording();
+  }
+}
   
   private async startLegacyRecording() {
       try {
@@ -520,7 +526,7 @@ private async handleStreamingSTTComplete(transcript: string) {
 
 private async sendMessage() {
   let firstAckPromise: Promise<void> | null = null;
-  this.unlockAudioParams();
+  // this.unlockAudioParams();  // ★削除: 音楽プレーヤーと干渉するため
   const message = this.els.userInput.value.trim();
   if (!message || this.isProcessing) return;
 
@@ -653,13 +659,13 @@ const data = await response.json();
         this.stopCurrentAudio();
       }
       
-      if (data.shops && data.shops.length > 0) {
-        this.currentShops = data.shops;
-        this.els.reservationBtn.disabled = false;
-        this.els.userInput.value = '';
-        document.dispatchEvent(new CustomEvent('displayShops', { 
-          detail: { shops: data.shops, language: this.currentLanguage } 
-        }));
+if (data.shops && data.shops.length > 0) {
+  this.currentShops = data.shops;
+  this.els.reservationBtn.classList.add('visible');  // ★変更: ボタンを表示
+  this.els.userInput.value = '';
+  document.dispatchEvent(new CustomEvent('displayShops', { 
+    detail: { shops: data.shops, language: this.currentLanguage } 
+  }));
         
         const section = document.getElementById('shopListSection');
         if (section) section.classList.add('has-shops');
@@ -807,12 +813,12 @@ if (remainingAudioPromise) {
 } else {
   if (data.response) {
     const extractedShops = this.extractShopsFromResponse(data.response);
-    if (extractedShops.length > 0) {
-      this.currentShops = extractedShops;
-      this.els.reservationBtn.disabled = false;
-      document.dispatchEvent(new CustomEvent('displayShops', { 
-        detail: { shops: extractedShops, language: this.currentLanguage } 
-      }));
+if (extractedShops.length > 0) {
+  this.currentShops = extractedShops;
+  this.els.reservationBtn.classList.add('visible');  // ★変更: ボタンを表示
+  document.dispatchEvent(new CustomEvent('displayShops', { 
+    detail: { shops: extractedShops, language: this.currentLanguage } 
+  }));
       const section = document.getElementById('shopListSection');
       if (section) section.classList.add('has-shops');
       // ★修正: テキスト入力時はskipAudio=trueを渡す
@@ -940,14 +946,14 @@ try {
     this.audioManager.unlockAudioParams(this.ttsPlayer);
   }
 
-  private enableAudioPlayback() {
-    if (!this.isUserInteracted) {
-      this.isUserInteracted = true;
-      const clickPrompt = this.container.querySelector('.click-prompt');
-      if (clickPrompt) clickPrompt.remove();
-      this.unlockAudioParams();
-    }
+private enableAudioPlayback() {
+  if (!this.isUserInteracted) {
+    this.isUserInteracted = true;
+    const clickPrompt = this.container.querySelector('.click-prompt');
+    if (clickPrompt) clickPrompt.remove();
+    // this.unlockAudioParams();  // ★削除: 音楽プレーヤーと干渉するため
   }
+}
 
   private stopCurrentAudio() {
     this.ttsPlayer.pause();
