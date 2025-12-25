@@ -1,5 +1,5 @@
 ---
-// GourmetChat.astro - Split refactored version (SVG file support)
+// GourmetChat.astro - iPhone音声認識改善版
 export interface Props {
   apiBaseUrl?: string;
 }
@@ -12,7 +12,7 @@ const { apiBaseUrl = '' } = Astro.props;
     <video id="splashVideo" class="splash-video" autoplay muted playsinline loop>
       <source src="/splash.mp4" type="video/mp4">
     </video>
-    <div class="splash-loading"><div class="spinner"></div><p>Loading...</p></div>
+    <div class="splash-loading"><div class="spinner"></div><p>準備中...</p></div>
   </div>
 
   <div class="wait-overlay hidden" id="waitOverlay">
@@ -20,7 +20,7 @@ const { apiBaseUrl = '' } = Astro.props;
       <video id="waitVideo" class="wait-video" muted playsinline loop>
         <source src="/wait.mp4" type="video/mp4">
       </video>
-      <p class="wait-text">Thinking...</p>
+      <p class="wait-text">AIがお店を検索しています...</p>
     </div>
   </div>
 
@@ -33,315 +33,1295 @@ const { apiBaseUrl = '' } = Astro.props;
     </select>
   </div>
 
-  <div class="voice-status stopped" id="voiceStatus">🎤 Ready</div>
+  <div class="voice-status stopped" id="voiceStatus">🎤 音声認識: 停止中</div>
   <div class="chat-area" id="chatArea"></div>
 
   <div class="input-area">
     <div class="input-group">
-      <input type="text" id="userInput" placeholder="..." disabled />
-      <button class="btn btn-send-expanded" id="sendBtn">Send</button>
+      <input type="text" id="userInput" placeholder="メッセージを入力..." disabled />
+      <button class="btn btn-icon btn-speaker" id="speakerBtn" title="音声読み上げON" disabled>🔊</button>
+      <button class="btn" id="sendBtn" disabled>送信</button>
+    </div>
+    <div class="input-actions">
+      <button class="btn btn-reservation" id="reservationBtn" disabled>📞 予約依頼する</button>
     </div>
   </div>
   
   <div class="floating-buttons">
-    <button class="btn-floating btn-reservation-float" id="reservationBtnFloat" title="Reservation">
-      📞 予約依頼
-    </button>
-
-    <button class="btn-floating btn-speaker-float" id="speakerBtnFloat" title="Speaker">
-      <span class="speaker-icon"></span>
-    </button>
-
-    <button class="btn-floating btn-stop" id="stopBtn" title="Stop">
-      <img src="/mic-off.svg" alt="Stop" />
-    </button>
-
-    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="Mic">
-      <img src="/mic-on.svg" alt="Mic On" class="icon-mic" />
-      <img src="/mic-off.svg" alt="Mic Off" class="icon-stop" />
-    </button>
+    <button class="btn-floating btn-stop" id="stopBtn" title="中止"></button>
+    <button class="btn-floating btn-mic-float" id="micBtnFloat" title="音声入力" disabled></button>
   </div>
 </div>
 
 <style>
-/* Existing CSS layout */
-.gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
-.language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
-.language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
-.chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
-.voice-status { padding: 10px 15px; text-align: center; font-size: 12px; border-bottom: 1px solid #e0e0e0; font-weight: 500; }
-.voice-status.listening { background: #e8f5e9; color: #2e7d32; animation: pulse 2s infinite; }
-.voice-status.stopped { background: #ffebee; color: #c62828; }
-.voice-status.speaking { background: #e1f5fe; color: #0277bd; animation: pulse 2s infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
-.chat-area { flex: 1; overflow-y: auto; padding: 20px; background: #f7f9fc; min-height: 300px; }
-:global(.message) { margin-bottom: 16px; display: flex; gap: 10px; }
-:global(.message.assistant) { flex-direction: row; }
-:global(.message.user) { flex-direction: row-reverse; }
-:global(.message-avatar) { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-:global(.message.assistant .message-avatar) { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-:global(.message.user .message-avatar) { background: #e0e7ff; color: #667eea; }
-:global(.message-content) { max-width: 70%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; font-size: 14px; white-space: pre-wrap; }
-:global(.message.assistant .message-content) { background: white; border: 1px solid #e5e7eb; color: #1f2937; }
-:global(.message.user .message-content) { background: #667eea; color: white; }
-.input-area { padding: 16px; background: white; border-top: 1px solid #e5e7eb; }
-.input-group { display: flex; gap: 10px; align-items: center; }
-#userInput { flex: 1; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 14px; outline: none; transition: border-color 0.2s; }
-#userInput:focus { border-color: #667eea; }
-.btn { padding: 10px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
-.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* 送信ボタンの拡大 */
-.btn-send-expanded {
-  padding: 10px 24px;
-  min-width: 100px;
-}
-
-.error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
-.splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
-.splash-overlay.fade-out { opacity: 0; pointer-events: none; }
-.splash-overlay.hidden { display: none; }
-.splash-video { width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; transform: scale(0.5); }
-.splash-loading { position: absolute; bottom: 60px; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 1; }
-.splash-loading .spinner { width: 40px; height: 40px; border: 4px solid rgba(102, 126, 234, 0.3); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
-.wait-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 500; display: flex; align-items: center; justify-content: center; border-radius: 16px; opacity: 1; transition: opacity 0.5s ease-out, visibility 0.5s; }
-.wait-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-.wait-content { text-align: center; width: 80%; max-width: 400px; }
-.wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
-
-/* フローティングボタンの配置 */
-.floating-buttons { 
-  position: fixed; 
-  bottom: 20px; 
-  right: 20px; 
-  display: flex; 
-  gap: 12px; 
-  z-index: 10000;
-  pointer-events: none;
-}
-
-.floating-buttons > * {
-  pointer-events: auto;
-}
-
-/* Icon image styles */
-.btn-floating { 
-  width: 56px; 
-  height: 56px; 
-  border-radius: 50%; 
-  border: none; 
-  font-size: 24px; 
-  cursor: pointer; 
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); 
-  transition: transform 0.2s, box-shadow 0.2s; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-}
-.btn-floating:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
-
-/* Reservation floating button - 横長楕円ボタン */
-.btn-reservation-float {
-  width: auto;
-  min-width: 120px;
-  height: 56px;
-  padding: 0 20px;
-  border-radius: 28px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-  white-space: nowrap;
+  .gourmet-chat-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); width: 100%; max-width: 800px; max-height: 600px; display: flex; flex-direction: column; overflow: hidden; margin: 0 auto; position: relative; }
+  .language-selector { padding: 12px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: flex-end; align-items: center; }
+  .language-dropdown { padding: 6px 12px; border: 2px solid white; border-radius: 20px; background: rgba(255,255,255,0.95); color: #667eea; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: all 0.2s; }
+  .chat-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
+  .voice-status { padding: 10px 15px; text-align: center; font-size: 12px; border-bottom: 1px solid #e0e0e0; font-weight: 500; }
+  .voice-status.listening { background: #e8f5e9; color: #2e7d32; animation: pulse 2s infinite; }
+  .voice-status.stopped { background: #ffebee; color: #c62828; }
+  .voice-status.speaking { background: #e1f5fe; color: #0277bd; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+  .chat-area { flex: 1; overflow-y: auto; padding: 20px; background: #f7f9fc; min-height: 300px; }
+  .message { margin-bottom: 16px; display: flex; gap: 10px; }
+  .message.assistant { flex-direction: row; }
+  .message.user { flex-direction: row-reverse; }
+  .message.system { justify-content: center; }
+  .message-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .message.assistant .message-avatar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+  .message.user .message-avatar { background: #e0e7ff; color: #667eea; }
+  .message.system .message-avatar { background: #fff3e0; color: #f57c00; }
+  .message-content { max-width: 70%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; font-size: 14px; white-space: pre-wrap; }
+  .message.assistant .message-content { background: white; border: 1px solid #e5e7eb; color: #1f2937; }
+  .message.user .message-content { background: #667eea; color: white; }
+  .message.system .message-content { background: #fff3e0; color: #e65100; font-size: 12px; }
+  .summary-box { margin-top: 10px; padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; font-size: 13px; color: #92400e; }
+  .final-summary { margin: 16px 0; padding: 16px; background: white; border: 2px solid #10b981; border-radius: 12px; }
+  .input-area { padding: 16px; background: white; border-top: 1px solid #e5e7eb; }
+  .input-group { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  #userInput { flex: 1; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 20px; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  #userInput:focus { border-color: #667eea; }
+  .btn { padding: 10px 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-reservation { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; font-size: 13px; padding: 10px 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); }
+  .btn-icon { padding: 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+  .btn-speaker { background: #f59e0b; }
+  .btn-speaker.disabled { background: #9ca3af; }
+  .input-actions { display: flex; justify-content: flex-end; }
+  .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-radius: 50%; border-top-color: #667eea; animation: spin 1s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-message { background: #fee2e2; color: #b91c1c; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; text-align: center; }
   
-  /* 初期状態: 非表示 */
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-}
+  .splash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; border-radius: 16px; overflow: hidden; transition: opacity 0.8s ease-out; pointer-events: all; }
+  .splash-overlay.fade-out { opacity: 0; pointer-events: none; }
+  .splash-overlay.hidden { display: none; }
+  .splash-video { width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; transform: scale(0.5); }
+  .splash-loading { position: absolute; bottom: 60px; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 1; }
+  .splash-loading .spinner { width: 40px; height: 40px; border: 4px solid rgba(102, 126, 234, 0.3); border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+  .wait-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 500; display: flex; align-items: center; justify-content: center; border-radius: 16px; opacity: 1; transition: opacity 0.5s ease-out, visibility 0.5s; }
+  .wait-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .wait-content { text-align: center; width: 80%; max-width: 400px; }
+  .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
+  .click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 12px; text-align: center; z-index: 100; cursor: pointer; }
 
-/* 店案内後: 表示 */
-.btn-reservation-float.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.btn-reservation-float:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
-}
-
-/* Speaker floating button - 波動なし */
-.btn-speaker-float { 
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
-  color: white; 
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-  transition: all 0.2s ease;
-}
-
-.btn-speaker-float .speaker-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  transition: all 0.3s ease;
-}
-
-/* オン状態のアイコン（音波ありSVG） */
-.btn-speaker-float:not(.disabled) .speaker-icon {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z'/%3E%3C/svg%3E");
-}
-
-/* Speaker OFF state */
-.btn-speaker-float.disabled { 
-  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); 
-  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
-  opacity: 0.7;
-}
-
-/* オフ状態のアイコン（ミュートSVG） */
-.btn-speaker-float.disabled .speaker-icon {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z'/%3E%3C/svg%3E");
-}
-
-/* Stop button - Square icon design */
-.btn-stop { 
-  background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); 
-  color: white;
-  position: relative;
-}
-.btn-stop img { 
-  width: 24px; 
-  height: 24px; 
-  display: none;
-}
-.btn-stop::before {
-  content: '';
-  width: 20px;
-  height: 20px;
-  background: white;
-  border-radius: 3px;
-  display: block;
-}
-
-/* Mic button - New design */
-.btn-mic-float { 
-  background: linear-gradient(135deg, #e8eef7 0%, #d4dce9 100%); 
-  color: white; 
-  position: relative; 
-  overflow: visible;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 -2px 4px rgba(0, 0, 0, 0.1);
-}
-.btn-mic-float:disabled { cursor: not-allowed; opacity: 0.6; }
-
-.btn-mic-float img { 
-  width: 56px; 
-  height: 56px; 
-  transition: opacity 0.3s;
-  filter: brightness(0) saturate(100%) invert(68%) sepia(8%) saturate(438%) hue-rotate(182deg) brightness(93%) contrast(88%);
-}
-
-.btn-mic-float .icon-mic { display: block; }
-.btn-mic-float .icon-stop { display: none; }
-
-/* Recording state */
-.btn-mic-float.recording { 
-  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-  box-shadow: 0 4px 20px rgba(74, 144, 226, 0.4), inset 0 -2px 4px rgba(0, 0, 0, 0.2);
-}
-.btn-mic-float.recording img {
-  filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%);
-}
-.btn-mic-float.recording .icon-mic { display: none; }
-.btn-mic-float.recording .icon-stop { display: block; }
-
-.btn-mic-float.recording::before,
-.btn-mic-float.recording::after { 
-  content: ''; 
-  position: absolute; 
-  width: 100%; 
-  height: 100%; 
-  border-radius: 50%; 
-  border: 3px solid rgba(74, 144, 226, 0.6); 
-  opacity: 0; 
-  top: 0; 
-  left: 0; 
-  box-sizing: border-box;
-  pointer-events: none;
-}
-
-.btn-mic-float.recording::before {
-  animation: ripple 2s ease-out infinite;
-}
-
-.btn-mic-float.recording::after {
-  animation: ripple 2s ease-out infinite 0.6s;
-}
-
-@keyframes ripple { 
-  0% { 
-    transform: scale(1); 
-    opacity: 0.6; 
-    border-width: 3px;
-  } 
-  50% {
-    opacity: 0.3;
-    border-width: 2px;
-  }
-  100% { 
-    transform: scale(2.2); 
-    opacity: 0; 
-    border-width: 1px;
-  } 
-}
-
-/* モバイル用の調整 */
-@media (max-width: 768px) { 
-  .floating-buttons { 
-    bottom: 80px;
-    right: 16px;
-    gap: 8px;
-  }
-  
-  .btn-floating {
-    width: 52px;
-    height: 52px;
-  }
-  
-  /* 予約ボタンをモバイルでは少し小さく */
-  .btn-reservation-float {
-    min-width: 100px;
-    height: 52px;
-    padding: 0 16px;
-    font-size: 13px;
-  }
-  
-  .btn-speaker-float .speaker-icon {
-    width: 22px;
-    height: 22px;
-  }
-  
-  .btn-mic-float img {
-    width: 52px;
-    height: 52px;
-  }
-}
-
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .floating-buttons { position: fixed; bottom: 20px; right: 20px; display: flex; gap: 12px; z-index: 1000; transition: bottom 0.3s ease; }
+  .floating-buttons.keyboard-active { bottom: 320px; }
+  @media (max-width: 768px) { .floating-buttons.keyboard-active { bottom: 280px; } }
+  .btn-floating { width: 56px; height: 56px; border-radius: 50%; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; }
+  .btn-floating:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+  .btn-stop { background: linear-gradient(135deg, #ff3b30 0%, #d32f2f 100%); color: white; }
+  .btn-stop::before { content: '⏹'; font-size: 24px; }
+  .btn-mic-float { background: #999; color: white; position: relative; overflow: visible; }
+  .btn-mic-float:not(:disabled) { background: #10b981; }
+  .btn-mic-float::before { content: '🎤'; font-size: 28px; }
+  .btn-mic-float:disabled { cursor: not-allowed; opacity: 0.6; }
+  .btn-mic-float.recording { background: #ef4444; }
+  .btn-mic-float.recording::before { content: '⏹'; }
+  .btn-mic-float.recording::after { content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 3px solid #ef4444; opacity: 0; animation: ripple 1.5s ease-out infinite; }
+  @keyframes ripple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(1.8); opacity: 0; } }
 </style>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-  import { ChatController } from '../scripts/chat/chat-controller';
+  import { i18n } from '../constants/i18n';
+  const LANGUAGE_CODE_MAP = {
+    ja: { tts: 'ja-JP', stt: 'ja-JP', voice: 'ja-JP-Chirp3-HD-Leda' },
+    en: { tts: 'en-US', stt: 'en-US', voice: 'en-US-Studio-O' },
+    zh: { tts: 'cmn-CN', stt: 'cmn-CN', voice: 'cmn-CN-Wavenet-A' },
+    ko: { tts: 'ko-KR', stt: 'ko-KR', voice: 'ko-KR-Wavenet-A' }
+  };
+
+  const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function fastArrayBufferToBase64(buffer: ArrayBuffer) {
+      let binary = '';
+      const bytes = new Uint8Array(buffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i += 3) {
+        const c1 = bytes[i];
+        const c2 = bytes[i + 1];
+        const c3 = bytes[i + 2];
+        const enc1 = c1 >> 2;
+        const enc2 = ((c1 & 3) << 4) | (c2 >> 4);
+        const enc3 = ((c2 & 15) << 2) | (c3 >> 6);
+        const enc4 = c3 & 63;
+        binary += b64chars[enc1] + b64chars[enc2];
+        if (Number.isNaN(c2)) { binary += '=='; } 
+        else if (Number.isNaN(c3)) { binary += b64chars[enc3] + '='; } 
+        else { binary += b64chars[enc3] + b64chars[enc4]; }
+      }
+      return binary;
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const container = document.querySelector('.gourmet-chat-container') as HTMLElement;
-    if (container) {
-      const apiBase = container.dataset.apiBase || '';
-      new ChatController(container, apiBase);
+    if (!container) return;
+
+    const apiBase = container.dataset.apiBase || '';
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    const splashOverlay = document.getElementById('splashOverlay') as HTMLDivElement;
+    const splashVideo = document.getElementById('splashVideo') as HTMLVideoElement;
+    function hideSplash() {
+      if (splashVideo) splashVideo.loop = false;
+      if (splashOverlay) {
+        splashOverlay.classList.add('fade-out');
+        setTimeout(() => splashOverlay.classList.add('hidden'), 800);
+      }
     }
+    setTimeout(() => hideSplash(), 10000);
+
+    const chatArea = document.getElementById('chatArea')!;
+    const userInput = document.getElementById('userInput') as HTMLInputElement;
+    const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
+    const speakerBtn = document.getElementById('speakerBtn') as HTMLButtonElement;
+    const reservationBtn = document.getElementById('reservationBtn') as HTMLButtonElement;
+    const voiceStatus = document.getElementById('voiceStatus')!;
+    const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
+    const stopBtn = document.getElementById('stopBtn') as HTMLButtonElement;
+    const micBtnFloat = document.getElementById('micBtnFloat') as HTMLButtonElement;
+    const waitOverlay = document.getElementById('waitOverlay') as HTMLDivElement;
+    const waitVideo = document.getElementById('waitVideo') as HTMLVideoElement;
+    let waitOverlayTimer: number | null = null;
+    
+    let currentLanguage: 'ja' | 'en' | 'zh' | 'ko' = 'ja';
+    let sessionId: string | null = null;
+    let isProcessing = false;
+    let currentStage = 'conversation';
+    let isRecording = false;
+    let mediaRecorder: MediaRecorder | null = null;
+    let audioChunks: Blob[] = [];
+    let recordingTimer: number | null = null;
+    const MAX_RECORDING_TIME = 55000;
+    let isTTSEnabled = true;
+    let isUserInteracted = false;
+    let currentShops: any[] = [];
+    let isFromVoiceInput = false;
+    
+    let lastAISpeech: string = '';
+    let preGeneratedAcks: Map<string, string> = new Map();
+    
+    let globalAudioContext: AudioContext | null = null;
+    let audioContext: AudioContext | null = null;
+    
+    let audioWorkletNode: AudioWorkletNode | null = null;
+    let mediaStream: MediaStream | null = null;
+    let socket: any = null;
+    let streamingTranscript = '';
+    let isStreamingSTT = false;
+    let isSendingAudio = true;
+    let isAISpeaking = false;
+    let currentAISpeech = "";
+    
+    let analyser: AnalyserNode | null = null;
+    let silenceTimer: number | null = null;
+    let vadCheckInterval: number | null = null;
+    let hasSpoken = false;
+    let recordingStartTime = 0;
+    const SILENCE_THRESHOLD = 35; 
+    const SILENCE_DURATION = 2000;
+    const MIN_RECORDING_TIME = 3000;
+
+    const ttsPlayer = new Audio();
+
+    function t(key: string, ...args: any[]): string {
+      // @ts-ignore
+      const translation = i18n[currentLanguage][key];
+      if (typeof translation === 'function') return translation(...args);
+      return translation || key;
+    }
+
+    function addMessage(role: string, content: string, summary: string | null = null, isInitial: boolean = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+      if (isInitial) messageDiv.setAttribute('data-initial', 'true');
+      const avatar = document.createElement('div');
+      avatar.className = 'message-avatar';
+      avatar.innerHTML = role === 'assistant' ? '🍽' : role === 'user' ? '👤' : '⚠';
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'message-content';
+      const messageText = document.createElement('span');
+      messageText.className = 'message-text';
+      messageText.textContent = content;
+      contentDiv.appendChild(messageText);
+      messageDiv.appendChild(avatar);
+      const wrapper = document.createElement('div');
+      wrapper.appendChild(contentDiv);
+      if (summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'summary-box';
+        summaryDiv.innerHTML = `<strong>🔍 内容確認</strong>${summary}`;
+        wrapper.appendChild(summaryDiv);
+      }
+      messageDiv.appendChild(wrapper);
+      chatArea.appendChild(messageDiv);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function showError(message: string) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = message;
+      chatArea.appendChild(errorDiv);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function showWaitOverlay() {
+      waitOverlay.classList.remove('hidden');
+      waitVideo.currentTime = 0;
+      waitVideo.play().catch(e => console.log('Video err', e));
+    }
+
+    function hideWaitOverlay() {
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      waitOverlay.classList.add('hidden');
+      setTimeout(() => waitVideo.pause(), 500);
+    }
+
+    function unlockAudioParams() {
+      ttsPlayer.play().then(() => { ttsPlayer.pause(); ttsPlayer.currentTime = 0; }).catch(e => {});
+      if (globalAudioContext && globalAudioContext.state === 'suspended') {
+        globalAudioContext.resume();
+      }
+    }
+
+    function enableAudioPlayback() {
+      if (!isUserInteracted) {
+        isUserInteracted = true;
+        const clickPrompt = container.querySelector('.click-prompt');
+        if (clickPrompt) clickPrompt.remove();
+        unlockAudioParams();
+      }
+    }
+
+    function showClickPrompt() {
+      const prompt = document.createElement('div');
+      prompt.className = 'click-prompt';
+      prompt.innerHTML = `<p>🔊</p><p>${t('clickPrompt')}</p><p>🔊</p>`;
+      prompt.addEventListener('click', enableAudioPlayback);
+      container.style.position = 'relative';
+      container.appendChild(prompt);
+    }
+
+    function stopCurrentAudio() {
+      ttsPlayer.pause();
+      ttsPlayer.currentTime = 0;
+    }
+
+    function stripMarkdown(text: string): string {
+      return text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\*([^*]+)\*/g, '$1').replace(/__([^_]+)__/g, '$1').replace(/_([^_]+)_/g, '$1').replace(/^#+\s*/gm, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/^(\d+)\.\s+/gm, '$1番目、').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeText(text: string): string {
+      return text.replace(/\s+/g, '').replace(/[、。！？,.!?]/g, '').toLowerCase();
+    }
+
+    function removeFillers(text: string): string {
+      // @ts-ignore
+      const pattern = i18n[currentLanguage].patterns.fillers;
+      return text.replace(pattern, '');
+    }
+
+    function generateFallbackResponse(text: string): string {
+      return t('fallbackResponse', text);
+    }
+
+    function selectSmartAcknowledgment(userMessage: string): { text: string, logText: string } {
+      const messageLower = userMessage.trim();
+      // @ts-ignore
+      const p = i18n[currentLanguage].patterns;
+      if (p.ackQuestions.test(messageLower)) return { text: t('ackConfirm'), logText: `質問形式` };
+      if (p.ackLocation.test(messageLower)) return { text: t('ackSearch'), logText: `場所` };
+      if (p.ackSearch.test(messageLower)) return { text: t('ackUnderstood'), logText: `検索` };
+      return { text: t('ackYes'), logText: `デフォルト` };
+    }
+
+    function extractShopsFromResponse(text: string): any[] {
+      const shops: any[] = [];
+      const pattern = /(\d+)\.\s*\*\*([^*]+)\*\*[::\s]*([^\n]+)/g;
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        const fullName = match[2].trim();
+        const description = match[3].trim();
+        let name = fullName;
+        const nameMatch = fullName.match(/^([^(]+)[(]([^)]+)[)]/);
+        if (nameMatch) name = nameMatch[1].trim();
+        const encodedName = encodeURIComponent(name);
+        shops.push({ name: name, description: description, category: 'イタリアン', hotpepper_url: `https://www.hotpepper.jp/SA11/srchRS/?keyword=${encodedName}`, maps_url: `https://www.google.com/maps/search/${encodedName}`, tabelog_url: `https://tabelog.com/rstLst/?vs=1&sa=&sk=${encodedName}` });
+      }
+      return shops;
+    }
+
+    function updateUILanguage() {
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      userInput.placeholder = t('inputPlaceholder');
+      micBtnFloat.title = t('btnVoiceInput');
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      sendBtn.textContent = t('btnSend');
+      reservationBtn.innerHTML = t('btnReservation');
+      const waitText = document.querySelector('.wait-text');
+      if (waitText) waitText.textContent = t('waitMessage');
+
+      const pageTitle = document.getElementById('pageTitle');
+      if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${t('pageTitle')}`;
+      const pageSubtitle = document.getElementById('pageSubtitle');
+      if (pageSubtitle) pageSubtitle.textContent = t('pageSubtitle');
+      const shopListTitle = document.getElementById('shopListTitle');
+      if (shopListTitle) shopListTitle.innerHTML = `🍽 ${t('shopListTitle')}`;
+      const shopListEmpty = document.getElementById('shopListEmpty');
+      if (shopListEmpty) shopListEmpty.textContent = t('shopListEmpty');
+      const pageFooter = document.getElementById('pageFooter');
+      if (pageFooter) pageFooter.innerHTML = `${t('footerMessage')} ✨`;
+
+      const initialMessage = chatArea.querySelector('.message.assistant[data-initial="true"]');
+      if (initialMessage) {
+        const messageText = initialMessage.querySelector('.message-text');
+        if (messageText) messageText.textContent = t('initialGreeting');
+      }
+
+      document.dispatchEvent(new CustomEvent('languageChange', { detail: { language: currentLanguage } }));
+    }
+
+    async function speakTextGCP(text: string, stopPrevious: boolean = true, autoRestartMic: boolean = false) {
+      if (!isTTSEnabled || !text) return;
+      if (stopPrevious) ttsPlayer.pause();
+      
+      const cleanText = stripMarkdown(text);
+
+      try {
+        isAISpeaking = true;
+        if (isAndroid && isRecording) {
+          stopStreamingSTT();
+        }
+        
+        voiceStatus.innerHTML = t('voiceStatusSynthesizing');
+        voiceStatus.className = 'voice-status speaking';
+        const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+        const response = await fetch(`${apiBase}/api/tts/synthesize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: cleanText, language_code: langConfig.tts, voice_name: langConfig.voice })
+        });
+        const data = await response.json();
+        if (data.success && data.audio) {
+          ttsPlayer.src = `data:audio/mp3;base64,${data.audio}`;
+          const playPromise = new Promise<void>((resolve) => {
+            ttsPlayer.onended = async () => {
+              voiceStatus.innerHTML = t('voiceStatusStopped');
+              voiceStatus.className = 'voice-status stopped';
+              isAISpeaking = false;
+              
+              if (autoRestartMic) {
+                if (isAndroid) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                } else if (!isRecording) {
+                  try {
+                    await startStreamingSTT();
+                  } catch (error) {
+                    showMicPrompt();
+                  }
+                }
+              }
+              resolve();
+            };
+            ttsPlayer.onerror = () => { 
+              isAISpeaking = false;
+              resolve(); 
+            };
+          });
+          if (isUserInteracted) {
+            lastAISpeech = normalizeText(cleanText);
+            await ttsPlayer.play();
+            await playPromise;
+          } else {
+            showClickPrompt();
+            voiceStatus.innerHTML = t('voiceStatusStopped');
+            voiceStatus.className = 'voice-status stopped';
+            isAISpeaking = false;
+          }
+        } else {
+          isAISpeaking = false;
+        }
+      } catch (error) {
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        isAISpeaking = false;
+      }
+    }
+
+    function showMicPrompt() {
+      const modal = document.createElement('div');
+      modal.id = 'mic-prompt-modal';
+      modal.style.cssText = `position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease;`;
+      modal.innerHTML = `
+        <div style="background: white; border-radius: 16px; padding: 24px; max-width: 90%; width: 350px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🎤</div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #333;">マイクをONにしてください</div>
+          <div style="font-size: 14px; color: #666; margin-bottom: 20px;">AIの回答が終わりました。<br>続けて話すにはマイクボタンをタップしてください。</div>
+          <button id="mic-prompt-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 14px 32px; border-radius: 24px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">🎤 マイクON</button>
+        </div>
+      `;
+      const style = document.createElement('style');
+      style.textContent = `@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`;
+      document.head.appendChild(style);
+      document.body.appendChild(modal);
+      const btn = document.getElementById('mic-prompt-btn');
+      btn?.addEventListener('click', async () => {
+        modal.remove();
+        await toggleRecording();
+      });
+      setTimeout(() => { if (document.getElementById('mic-prompt-modal')) { modal.remove(); } }, 3000);
+    }
+
+    function isSemanticEcho(transcript: string, aiText: string): boolean {
+      if (!aiText || !transcript) return false;
+      const normTranscript = normalizeText(transcript);
+      const normAI = normalizeText(aiText);
+      if (normAI === normTranscript) return true;
+      if (normAI.includes(normTranscript) && normTranscript.length > 5) return true;
+      return false;
+    }
+
+    async function startStreamingSTT() {
+      if (isIOS) {
+        await startStreamingSTT_iOS();
+      } else {
+        await startStreamingSTT_Default();
+      }
+    }
+
+    function stopStreamingSTT() {
+      if (isIOS) {
+        stopStreamingSTT_iOS();
+      } else {
+        stopStreamingSTT_Default();
+      }
+    }
+
+    function stopVAD_Default() {
+      if (vadCheckInterval) { clearInterval(vadCheckInterval); vadCheckInterval = null; }
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      analyser = null;
+      hasSpoken = false;
+    }
+
+    // ★ iPhone実装（改善版）
+    async function startStreamingSTT_iOS() {
+      try {
+        if (splashVideo) { splashVideo.pause(); }
+        if (waitVideo) { waitVideo.pause(); }
+        if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+        
+        // ★修正: Workletの完全クリーンアップ
+        if (audioWorkletNode) { 
+          audioWorkletNode.port.onmessage = null; 
+          audioWorkletNode.disconnect(); 
+          audioWorkletNode = null; 
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        // AudioContext作成（初回のみ）
+        if (!globalAudioContext) {
+          try {
+            globalAudioContext = new AudioContext({ 
+              latencyHint: 'interactive',  // ★修正
+              sampleRate: 48000            // ★追加
+            });
+          } catch (e) {
+            addMessage('system', 'AudioContext作成エラー');
+            throw e;
+          }
+        }
+        
+        if (globalAudioContext.state === 'suspended') {
+          await globalAudioContext.resume();
+        }
+        
+        // ★修正: MediaStreamの再利用を試みる
+        if (mediaStream) {
+          const tracks = mediaStream.getAudioTracks();
+          if (tracks.length > 0 && tracks[0].readyState === 'live') {
+            console.log('既存のMediaStreamを再利用');
+          } else {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+          }
+        }
+        
+        // MediaStream取得（必要な場合のみ）
+        if (!mediaStream) {
+          try {
+            // ★修正: エコキャン/ノイズ抑制をON
+            const audioConstraints: any = { 
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 48000
+            };
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+          } catch (micError: any) {
+            addMessage('system', `マイクエラー: ${micError.message}`);
+            throw micError;
+          }
+        }
+        
+        const targetSampleRate = 16000;
+        const nativeSampleRate = globalAudioContext.sampleRate;
+        const downsampleRatio = nativeSampleRate / targetSampleRate;
+        
+        const source = globalAudioContext.createMediaStreamSource(mediaStream);
+        
+        // ★修正: プロセッサ名の重複回避
+        const processorName = 'audio-processor-ios';
+        try {
+          audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
+        } catch (e) {
+          // ★修正: バッファサイズ8192、タイムアウト対策追加
+          const audioProcessorCode = `
+          class AudioProcessor extends AudioWorkletProcessor {
+            constructor() {
+              super();
+              this.bufferSize = 8192;
+              this.buffer = new Int16Array(this.bufferSize); 
+              this.writeIndex = 0;
+              this.ratio = ${downsampleRatio}; 
+              this.inputSampleCount = 0;
+              this.lastFlushTime = Date.now();
+            }
+
+            process(inputs, outputs, parameters) {
+              const input = inputs[0];
+              if (!input || input.length === 0) return true;
+              const channelData = input[0];
+              if (!channelData || channelData.length === 0) return true;
+              for (let i = 0; i < channelData.length; i++) {
+                this.inputSampleCount++;
+                if (this.inputSampleCount >= this.ratio) {
+                  this.inputSampleCount -= this.ratio;
+                  if (this.writeIndex < this.bufferSize) {
+                    const s = Math.max(-1, Math.min(1, channelData[i]));
+                    const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    this.buffer[this.writeIndex++] = int16Value;
+                  }
+                  
+                  if (this.writeIndex >= this.bufferSize || 
+                      (this.writeIndex > 0 && Date.now() - this.lastFlushTime > 500)) {
+                    this.flush();
+                  }
+                }
+              }
+              return true;
+            }
+            
+            flush() {
+              if (this.writeIndex === 0) return;
+              const chunk = this.buffer.slice(0, this.writeIndex);
+              this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
+              this.writeIndex = 0;
+              this.lastFlushTime = Date.now();
+            }
+          }
+          registerProcessor('${processorName}', AudioProcessor);
+          `;
+
+          try {
+            const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+            const processorUrl = URL.createObjectURL(blob);
+            await globalAudioContext.audioWorklet.addModule(processorUrl);
+            URL.revokeObjectURL(processorUrl);
+          } catch (workletError: any) {
+            addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
+            throw workletError;
+          }
+          
+          audioWorkletNode = new AudioWorkletNode(globalAudioContext, processorName);
+        }
+        
+        audioWorkletNode.port.onmessage = (event) => {
+          const { audioChunk } = event.data;
+          if (!isSendingAudio || !socket || !socket.connected) return;
+          
+          try {
+            const base64 = fastArrayBufferToBase64(audioChunk.buffer);
+            socket.emit('audio_chunk', { 
+              chunk: base64,
+              sample_rate: 16000
+            });
+          } catch (e) {
+            console.error('Audio convert error', e);
+          }
+        };
+        
+        source.connect(audioWorkletNode);
+        audioWorkletNode.connect(globalAudioContext.destination);
+        
+        // ★修正: Socket待機時間を延長
+        if (socket && socket.connected) {
+          socket.emit('stop_stream');
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        socket.emit('start_stream', { 
+          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+          sample_rate: 16000
+        });
+        isSendingAudio = true;
+        isRecording = true; micBtnFloat.classList.add('recording');
+        voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { 
+          if (isRecording) { 
+            stopStreamingSTT(); 
+            addMessage('system', t('recordingTimeLimit')); 
+          } 
+        }, MAX_RECORDING_TIME);
+      } catch (error: any) {
+        if (audioWorkletNode) { 
+          audioWorkletNode.port.onmessage = null; 
+          audioWorkletNode.disconnect(); 
+          audioWorkletNode = null; 
+        }
+        if (!error.message?.includes('マイク')) { 
+          addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); 
+        }
+      }
+    }
+
+    // ★修正: MediaStreamを保持
+    function stopStreamingSTT_iOS() {
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (audioWorkletNode) { 
+        audioWorkletNode.port.onmessage = null; 
+        audioWorkletNode.disconnect(); 
+        audioWorkletNode = null; 
+      }
+      if (socket && socket.connected) { socket.emit('stop_stream'); }
+      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
+    }
+
+    // PC/Android実装（従来版）
+    async function startStreamingSTT_Default() {
+      try {
+        if (splashVideo) { splashVideo.pause(); }
+        if (waitVideo) { waitVideo.pause(); }
+        if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+        
+        if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
+        
+        if (!audioContext) {
+          try {
+            audioContext = new AudioContext({ latencyHint: 'playback' });
+          } catch (e) {
+            addMessage('system', 'AudioContext作成エラー');
+            throw e;
+          }
+        }
+        
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+        
+        if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+        
+        try {
+          const audioConstraints: any = { 
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true 
+          };
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        } catch (micError: any) {
+          addMessage('system', `マイクエラー: ${micError.message}`);
+          throw micError;
+        }
+        
+        const targetSampleRate = 16000;
+        const nativeSampleRate = audioContext.sampleRate;
+        const downsampleRatio = nativeSampleRate / targetSampleRate;
+        
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        
+        const audioProcessorCode = `
+        class AudioProcessor extends AudioWorkletProcessor {
+          constructor() {
+            super();
+            this.bufferSize = 16000;
+            this.buffer = new Int16Array(this.bufferSize); 
+            this.writeIndex = 0;
+            this.ratio = ${downsampleRatio}; 
+            this.inputSampleCount = 0;
+            this.flushThreshold = 8000;
+          }
+
+          process(inputs, outputs, parameters) {
+            const input = inputs[0];
+            if (!input || input.length === 0) return true;
+            const channelData = input[0];
+            if (!channelData || channelData.length === 0) return true;
+            for (let i = 0; i < channelData.length; i++) {
+              this.inputSampleCount++;
+              if (this.inputSampleCount >= this.ratio) {
+                this.inputSampleCount -= this.ratio;
+                if (this.writeIndex < this.bufferSize) {
+                  const s = Math.max(-1, Math.min(1, channelData[i]));
+                  const int16Value = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                  this.buffer[this.writeIndex++] = int16Value;
+                }
+                
+                if (this.writeIndex >= this.bufferSize) {
+                  this.flush();
+                }
+              }
+            }
+            return true;
+          }
+          
+          flush() {
+            if (this.writeIndex === 0) return;
+            const chunk = this.buffer.slice(0, this.writeIndex);
+            this.port.postMessage({ audioChunk: chunk }, [chunk.buffer]);
+            this.writeIndex = 0;
+          }
+        }
+        registerProcessor('audio-processor', AudioProcessor);
+        `;
+
+        try {
+          const blob = new Blob([audioProcessorCode], { type: 'application/javascript' });
+          const processorUrl = URL.createObjectURL(blob);
+          await audioContext.audioWorklet.addModule(processorUrl);
+          URL.revokeObjectURL(processorUrl);
+        } catch (workletError: any) {
+          addMessage('system', `音声処理初期化エラー: ${workletError.message}`);
+          throw workletError;
+        }
+        
+        audioWorkletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+        audioWorkletNode.port.onmessage = (event) => {
+          const { audioChunk } = event.data;
+          if (!isSendingAudio || !socket || !socket.connected) return;
+          
+          try {
+            const blob = new Blob([audioChunk], { type: 'application/octet-stream' });
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = reader.result as string;
+                const base64 = result.split(',')[1];
+                socket.emit('audio_chunk', { chunk: base64, sample_rate: 16000 });
+            };
+            reader.readAsDataURL(blob);
+          } catch (e) {
+            console.error('Audio convert error', e);
+          }
+        };
+        
+        source.connect(audioWorkletNode);
+        audioWorkletNode.connect(audioContext.destination);
+
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        hasSpoken = false;
+        recordingStartTime = Date.now();
+        
+        vadCheckInterval = window.setInterval(() => {
+          if (!analyser || !isRecording) return;
+          if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          
+          if (average > SILENCE_THRESHOLD) { 
+             hasSpoken = true; 
+             if (silenceTimer) clearTimeout(silenceTimer); 
+             voiceStatus.innerHTML = t('voiceStatusRecording'); 
+          } else if (hasSpoken && !silenceTimer) { 
+             voiceStatus.innerHTML = t('voiceStatusWaiting'); 
+             silenceTimer = window.setTimeout(() => { stopStreamingSTT(); }, SILENCE_DURATION); 
+          }
+        }, 100);
+        
+        if (socket && socket.connected) {
+          socket.emit('stop_stream');
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        socket.emit('start_stream', { 
+          language_code: LANGUAGE_CODE_MAP[currentLanguage].stt,
+          sample_rate: 16000
+        });
+        isSendingAudio = true;
+        isRecording = true; micBtnFloat.classList.add('recording');
+        voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { 
+          if (isRecording) { 
+            stopStreamingSTT(); 
+            addMessage('system', t('recordingTimeLimit')); 
+          } 
+        }, MAX_RECORDING_TIME);
+      } catch (error: any) {
+        if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+        if (!error.message?.includes('マイク')) { addMessage('system', `${t('micAccessError')} ${error.message || 'Unknown error'}`); }
+      }
+    }
+
+    function stopStreamingSTT_Default() {
+      stopVAD_Default();
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (audioWorkletNode) { audioWorkletNode.port.onmessage = null; audioWorkletNode.disconnect(); audioWorkletNode = null; }
+      if (audioContext && audioContext.state !== 'closed') { audioContext.close(); audioContext = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+      if (socket && socket.connected) { socket.emit('stop_stream'); }
+      isSendingAudio = false; isRecording = false; micBtnFloat.classList.remove('recording');
+    }
+
+    // ★追加: 完全リセット関数
+    function fullResetAudioResources() {
+      if (audioWorkletNode) { 
+        audioWorkletNode.port.onmessage = null; 
+        audioWorkletNode.disconnect(); 
+        audioWorkletNode = null; 
+      }
+      
+      if (mediaStream) { 
+        mediaStream.getTracks().forEach(track => track.stop()); 
+        mediaStream = null; 
+      }
+      
+      if (globalAudioContext && globalAudioContext.state !== 'closed') {
+        globalAudioContext.close();
+        globalAudioContext = null;
+      }
+      
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close();
+        audioContext = null;
+      }
+      
+      isSendingAudio = false;
+      isRecording = false;
+      micBtnFloat.classList.remove('recording');
+    }
+
+    async function startLegacyRecording() {
+       try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        audioChunks = []; hasSpoken = false; recordingStartTime = Date.now();
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        vadCheckInterval = window.setInterval(() => {
+          if (!analyser || !isRecording) return;
+          if (Date.now() - recordingStartTime < MIN_RECORDING_TIME) return;
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          if (average > SILENCE_THRESHOLD) { hasSpoken = true; if (silenceTimer) clearTimeout(silenceTimer); voiceStatus.innerHTML = t('voiceStatusRecording'); }
+          else if (hasSpoken && !silenceTimer) { voiceStatus.innerHTML = t('voiceStatusWaiting'); silenceTimer = window.setTimeout(() => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); }, SILENCE_DURATION); }
+        }, 100);
+        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunks.push(event.data); };
+        mediaRecorder.onstop = async () => {
+          stopVAD_Default(); stream.getTracks().forEach(track => track.stop());
+          if (recordingTimer) clearTimeout(recordingTimer);
+          if (audioChunks.length > 0) { const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); await transcribeAudio(audioBlob); }
+        };
+        mediaRecorder.start();
+        isRecording = true; micBtnFloat.classList.add('recording'); voiceStatus.innerHTML = t('voiceStatusListening');
+        recordingTimer = window.setTimeout(() => { if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') { stopVAD_Default(); mediaRecorder.stop(); isRecording = false; micBtnFloat.classList.remove('recording'); addMessage('system', t('recordingTimeLimit')); } }, MAX_RECORDING_TIME);
+      } catch (error) { addMessage('system', `${t('micAccessError')} ${(error as Error).message}`); }
+    }
+
+    async function transcribeAudio(audioBlob: Blob) { }
+
+    function initializeWebSocketSTT() {
+      try {
+        const wsUrl = apiBase || window.location.origin;
+        socket = io(wsUrl);
+        socket.on('connect', () => { isStreamingSTT = true; });
+        socket.on('disconnect', () => { isStreamingSTT = false; });
+        socket.on('transcript', (data: any) => {
+          const { text, is_final } = data;
+          if (isAISpeaking) return;
+          if (is_final) { 
+            streamingTranscript = text; 
+            handleStreamingSTTComplete(text);
+            currentAISpeech = "";
+          } else { 
+            userInput.value = text;
+          }
+        });
+        socket.on('error', (data: any) => { 
+          addMessage('system', `${t('sttError')} ${data.message}`);
+          if (isRecording) stopStreamingSTT();
+        });
+      } catch (error) { isStreamingSTT = false; }
+    }
+
+    async function handleStreamingSTTComplete(transcript: string) {
+      stopStreamingSTT();
+      voiceStatus.innerHTML = t('voiceStatusComplete');
+      voiceStatus.className = 'voice-status';
+
+      const normTranscript = normalizeText(transcript);
+      if (isSemanticEcho(normTranscript, lastAISpeech)) {
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          lastAISpeech = '';
+          return;
+      }
+
+      userInput.value = transcript;
+      // @ts-ignore
+      if (i18n[currentLanguage].patterns.dateCheck.test(transcript)) {
+        const msg = t('dateWarningMsg');
+        currentAISpeech = msg;
+        addMessage('assistant', msg);
+        if (isTTSEnabled && isUserInteracted) {
+          await speakTextGCP(msg, true, true);
+        } else { await new Promise(r => setTimeout(r, 2000)); }
+        userInput.value = '';
+        voiceStatus.innerHTML = t('voiceStatusStopped');
+        voiceStatus.className = 'voice-status stopped';
+        return;
+      }
+
+      addMessage('user', transcript);
+      const textLength = transcript.trim().replace(/\s+/g, '').length;
+      if (textLength < 4) {
+          const msg = t('shortMsgWarning');
+          addMessage('assistant', msg);
+          isSendingAudio = false;
+          if (isTTSEnabled && isUserInteracted) {
+            await speakTextGCP(msg, true);
+          } else { await new Promise(r => setTimeout(r, 2000)); }
+          isSendingAudio = true;
+          userInput.value = '';
+          voiceStatus.innerHTML = t('voiceStatusStopped');
+          voiceStatus.className = 'voice-status stopped';
+          return;
+      }
+
+      const ack = selectSmartAcknowledgment(transcript);
+      const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+      let firstAckPromise: Promise<void> | null = null;
+      if (preGeneratedAudio && isTTSEnabled && isUserInteracted) {
+        firstAckPromise = new Promise<void>((resolve) => {
+          lastAISpeech = normalizeText(ack.text);
+          ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+          ttsPlayer.onended = () => resolve();
+          ttsPlayer.play().catch(e => resolve());
+        });
+      } else if (isTTSEnabled) { firstAckPromise = speakTextGCP(ack.text, false); }
+      addMessage('assistant', ack.text);
+      (async () => {
+        try {
+          if (firstAckPromise) await firstAckPromise;
+          const cleanText = removeFillers(transcript);
+          const fallbackResponse = generateFallbackResponse(cleanText);
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+          addMessage('assistant', fallbackResponse);
+          setTimeout(async () => {
+            const additionalResponse = t('additionalResponse');
+            if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+            addMessage('assistant', additionalResponse);
+          }, 3000);
+          if (userInput.value.trim()) {
+            isFromVoiceInput = true;
+            sendMessage();
+          }
+        } catch (error) { 
+          if (userInput.value.trim()) {
+            isFromVoiceInput = true;
+            sendMessage();
+          }
+        }
+      })();
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+    }
+
+    async function sendMessage() {
+      let firstAckPromise: Promise<void> | null = null; 
+      unlockAudioParams();
+      const message = userInput.value.trim();
+      if (!message || isProcessing) return;
+      isProcessing = true; sendBtn.disabled = true;
+      micBtnFloat.disabled = true; userInput.disabled = true;
+
+      if (!isFromVoiceInput) {
+        addMessage('user', message);
+        // @ts-ignore
+        if (i18n[currentLanguage].patterns.dateCheck.test(message)) {
+             const msg = t('dateWarningMsg');
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             addMessage('assistant', msg);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        const textLength = message.trim().replace(/\s+/g, '').length;
+        if (textLength < 4) {
+             const msg = t('shortMsgWarning');
+             addMessage('assistant', msg);
+             if (isTTSEnabled && isUserInteracted) await speakTextGCP(msg, true);
+             userInput.value = ''; isProcessing = false; sendBtn.disabled = false;
+             micBtnFloat.disabled = false; userInput.disabled = false; userInput.focus();
+             return;
+        }
+        userInput.value = '';
+        const ack = selectSmartAcknowledgment(message);
+        currentAISpeech = ack.text;
+        addMessage('assistant', ack.text);
+        if (isTTSEnabled) {
+          try {
+            const preGeneratedAudio = preGeneratedAcks.get(ack.text);
+            if (preGeneratedAudio && isUserInteracted) {
+              firstAckPromise = new Promise<void>((resolve) => {
+                lastAISpeech = normalizeText(ack.text);
+                ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedAudio}`;
+                ttsPlayer.onended = () => resolve();
+                ttsPlayer.play().catch(e => resolve());
+              });
+            } else { firstAckPromise = speakTextGCP(ack.text, false); }
+          } catch (e) {}
+        }
+        if (firstAckPromise) await firstAckPromise;
+        const cleanText = removeFillers(message);
+        const fallbackResponse = generateFallbackResponse(cleanText);
+        if (isTTSEnabled && isUserInteracted) await speakTextGCP(fallbackResponse, false);
+        addMessage('assistant', fallbackResponse);
+        setTimeout(async () => {
+          const additionalResponse = t('additionalResponse');
+          if (isTTSEnabled && isUserInteracted) await speakTextGCP(additionalResponse, false);
+          addMessage('assistant', additionalResponse);
+        }, 3000);
+      }
+
+      const wasVoiceInput = isFromVoiceInput;
+      isFromVoiceInput = false;
+      if (waitOverlayTimer) clearTimeout(waitOverlayTimer);
+      waitOverlayTimer = window.setTimeout(() => { showWaitOverlay(); }, 4000);
+
+      try {
+        const response = await fetch(`${apiBase}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, message: message, stage: currentStage, language: currentLanguage }) });
+        const data = await response.json();
+        hideWaitOverlay();
+        currentAISpeech = data.response;
+        addMessage('assistant', data.response, data.summary);
+        stopCurrentAudio();
+        if (data.shops && data.shops.length > 0) {
+          currentShops = data.shops;
+          reservationBtn.disabled = false;
+          userInput.value = '';
+          document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: data.shops, language: currentLanguage } }));
+          const section = document.getElementById('shopListSection');
+          if (section) section.classList.add('has-shops');
+          if (window.innerWidth < 1024) {
+            setTimeout(() => {
+              const shopSection = document.getElementById('shopListSection');
+              if (shopSection) {
+                shopSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 300);
+          }
+          
+          (async () => {
+            try {
+              isAISpeaking = true;
+              if (isRecording) { stopStreamingSTT(); }
+
+              await speakTextGCP(t('ttsIntro'));
+              const lines = data.response.split('\n\n');
+              let introText = ""; let shopLines = lines;
+              if (lines[0].includes('ご希望に合うお店') && lines[0].includes('ご紹介します')) { introText = lines[0]; shopLines = lines.slice(1); }
+              let introPart2Promise: Promise<void> | null = null;
+              if (introText && isTTSEnabled && isUserInteracted) {
+                const preGeneratedIntro = preGeneratedAcks.get(introText);
+                if (preGeneratedIntro) {
+                  introPart2Promise = new Promise<void>((resolve) => {
+                    lastAISpeech = normalizeText(introText);
+                    ttsPlayer.src = `data:audio/mp3;base64,${preGeneratedIntro}`;
+                    ttsPlayer.onended = () => resolve();
+                    ttsPlayer.play();
+                  });
+                } else { introPart2Promise = speakTextGCP(introText, false); }
+              }
+
+              let firstShopAudioPromise: Promise<string | null> | null = null;
+              let remainingAudioPromise: Promise<string | null> | null = null;
+              const shopLangConfig = LANGUAGE_CODE_MAP[currentLanguage];
+              if (shopLines.length > 0 && isTTSEnabled && isUserInteracted) {
+                const firstShop = shopLines[0];
+                const restShops = shopLines.slice(1).join('\n\n');
+                firstShopAudioPromise = (async () => {
+                  const cleanText = stripMarkdown(firstShop);
+                  const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                  const result = await response.json();
+                  return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                })();
+                if (restShops) {
+                  remainingAudioPromise = (async () => {
+                    const cleanText = stripMarkdown(restShops);
+                    const response = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: cleanText, language_code: shopLangConfig.tts, voice_name: shopLangConfig.voice }) });
+                    const result = await response.json();
+                    return result.success ? `data:audio/mp3;base64,${result.audio}` : null;
+                  })();
+                }
+              }
+
+              if (introPart2Promise) await introPart2Promise;
+              if (firstShopAudioPromise) {
+                const firstShopAudio = await firstShopAudioPromise;
+                if (firstShopAudio) {
+                  const firstShopText = stripMarkdown(shopLines[0]);
+                  lastAISpeech = normalizeText(firstShopText);
+                  stopCurrentAudio(); ttsPlayer.src = firstShopAudio;
+                  await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = t('voiceStatusStopped'); voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = t('voiceStatusSpeaking'); voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                  if (remainingAudioPromise) {
+                    const remainingAudio = await remainingAudioPromise;
+                    if (remainingAudio) {
+                      const restShopsText = stripMarkdown(shopLines.slice(1).join('\n\n'));
+                      lastAISpeech = normalizeText(restShopsText);
+                      await new Promise(r => setTimeout(r, 500));
+                      stopCurrentAudio(); ttsPlayer.src = remainingAudio;
+                      await new Promise<void>((resolve) => { ttsPlayer.onended = () => { voiceStatus.innerHTML = '🎤 音声認識: 停止中'; voiceStatus.className = 'voice-status stopped'; resolve(); }; voiceStatus.innerHTML = '🔊 音声再生中...'; voiceStatus.className = 'voice-status speaking'; ttsPlayer.play(); });
+                    }
+                  }
+                }
+              }
+              isAISpeaking = false;
+            } catch (e) { isAISpeaking = false; }
+          })();
+        } else {
+          if (data.response) {
+            const extractedShops = extractShopsFromResponse(data.response);
+            if (extractedShops.length > 0) {
+              currentShops = extractedShops;
+              reservationBtn.disabled = false;
+              document.dispatchEvent(new CustomEvent('displayShops', { detail: { shops: extractedShops, language: currentLanguage } }));
+              const section = document.getElementById('shopListSection');
+              if (section) section.classList.add('has-shops');
+              speakTextGCP(data.response);
+            } else { speakTextGCP(data.response); }
+          }
+        }
+      } catch (error) { console.error('送信エラー:', error);
+      hideWaitOverlay(); showError('メッセージの送信に失敗しました。'); }
+      finally { isProcessing = false; sendBtn.disabled = false; micBtnFloat.disabled = false;
+      userInput.disabled = false; if (currentShops.length === 0) userInput.focus(); else userInput.blur();
+      }
+    }
+
+    // イベントリスナー
+    function openReservationModal() {
+      if (currentShops.length === 0) { showError(t('searchError')); return; }
+      document.dispatchEvent(new CustomEvent('openReservationModal', { detail: { shops: currentShops } }));
+    }
+
+    async function toggleRecording() {
+      enableAudioPlayback();
+      userInput.value = '';
+      stopCurrentAudio();
+      if (isRecording) { 
+        stopAllActivities();
+        return;
+      }
+      if (isStreamingSTT) { 
+        await new Promise(r => setTimeout(r, 100));
+        await startStreamingSTT(); 
+      } else { 
+        await startLegacyRecording();
+      }
+    }
+
+    function toggleTTS() {
+      if (!isUserInteracted) { enableAudioPlayback(); return; }
+      enableAudioPlayback();
+      isTTSEnabled = !isTTSEnabled;
+      speakerBtn.innerHTML = isTTSEnabled ? '🔊' : '🔇';
+      speakerBtn.title = isTTSEnabled ? t('btnTTSOn') : t('btnTTSOff');
+      speakerBtn.className = isTTSEnabled ? 'btn btn-icon btn-speaker' : 'btn btn-icon btn-speaker disabled';
+      if (!isTTSEnabled) stopCurrentAudio();
+    }
+
+    function stopAllActivities() {
+      if (isProcessing) {
+        fetch(`${apiBase}/api/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        }).catch(err => console.error('中止リクエスト失敗:', err));
+      }
+      if (recordingTimer) { clearTimeout(recordingTimer); recordingTimer = null; }
+      if (isRecording) stopStreamingSTT();
+      stopCurrentAudio();
+      waitOverlay.classList.add('hidden');
+      if (waitOverlayTimer) { clearTimeout(waitOverlayTimer); waitOverlayTimer = null; }
+      isProcessing = false;
+      isAISpeaking = false;
+      voiceStatus.innerHTML = t('voiceStatusStopped');
+      voiceStatus.className = 'voice-status stopped';
+      userInput.value = '';
+      userInput.focus();
+      if (window.innerWidth < 1024) {
+        setTimeout(() => { chatArea.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+      }
+    }
+
+    // 初期化関数
+    async function initialize() {
+        try {
+            const response = await fetch(`${apiBase}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_info: {}, language: currentLanguage }) });
+            const data = await response.json(); sessionId = data.session_id;
+            addMessage('assistant', t('initialGreeting'), null, true);
+            const ackTexts = [t('ackConfirm'), t('ackSearch'), t('ackUnderstood'), t('ackYes'), t('ttsIntro')];
+            const langConfig = LANGUAGE_CODE_MAP[currentLanguage];
+            const ackPromises = ackTexts.map(async (text) => {
+              try {
+                const ackResponse = await fetch(`${apiBase}/api/tts/synthesize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, language_code: langConfig.tts, voice_name: langConfig.voice }) });
+                const ackData = await ackResponse.json();
+                if (ackData.success && ackData.audio) preGeneratedAcks.set(text, ackData.audio);
+              } catch (e) {}
+            });
+            await Promise.all([speakTextGCP(t('initialGreeting')), ...ackPromises]);
+            userInput.disabled = false; sendBtn.disabled = false; micBtnFloat.disabled = false; speakerBtn.disabled = false; userInput.focus();
+            if (splashOverlay) hideSplash();
+            initializeWebSocketSTT();
+            updateUILanguage();
+        } catch(e) { console.error(e); }
+    }
+
+    // イベントリスナー登録
+    languageSelect.addEventListener('change', () => { currentLanguage = languageSelect.value as any; updateUILanguage(); });
+    sendBtn.addEventListener('click', sendMessage);
+    micBtnFloat.addEventListener('click', toggleRecording);
+    speakerBtn.addEventListener('click', toggleTTS);
+    userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+    reservationBtn.addEventListener('click', openReservationModal);
+    
+    // ソフトキーボード検知
+    const floatingButtons = document.querySelector('.floating-buttons') as HTMLElement;
+    userInput.addEventListener('focus', () => {
+      setTimeout(() => { if (floatingButtons) floatingButtons.classList.add('keyboard-active'); }, 300);
+    });
+    userInput.addEventListener('blur', () => {
+      if (floatingButtons) floatingButtons.classList.remove('keyboard-active');
+    });
+    stopBtn.addEventListener('click', () => { stopAllActivities(); });
+    
+    // 最後に初期化を実行
+    initialize();
   });
 </script>
