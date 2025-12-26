@@ -63,6 +63,18 @@ export class AudioManager {
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume();
     }
+    
+    // ★iOS対策: HTMLAudioElementも明示的にアンロック
+    if (elementToUnlock) {
+      elementToUnlock.muted = true;
+      elementToUnlock.play().then(() => {
+        elementToUnlock.pause();
+        elementToUnlock.currentTime = 0;
+        elementToUnlock.muted = false;
+      }).catch(() => {
+        // エラーは無視（既にアンロック済みの場合）
+      });
+    }
   }
 
   public fullResetAudioResources() {
