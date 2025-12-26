@@ -9,6 +9,8 @@ export const i18n = {
     shopListEmpty: 'チャットで検索すると、ここにお店が表示されます',
     footerMessage: '素敵なグルメ体験をお楽しみください',
     initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
+       // ★ 追加: コンシェルジュモード用
+    initialGreetingConcierge: 'ようこそ。AIコンシェルジュがおもてなしの心でお店探しをサポートいたします。\nどのようなシーンでお店をお探しでしょうか?',
     voiceStatusStopped: '🎤 音声認識: 停止中',
     voiceStatusListening: '🎤 話してください...',
     voiceStatusRecording: '🎤 録音中...',
@@ -124,6 +126,7 @@ export const i18n = {
     shopListEmpty: 'Search in the chat to see restaurants here',
     footerMessage: 'Enjoy your wonderful dining experience',
     initialGreeting: 'Hello! I\'m the Gourmet Support AI.\n\nWhat kind of restaurant are you looking for today? I can help you find restaurants anywhere in the world.',
+    initialGreetingConcierge: 'Welcome! Your AI Concierge is here to assist you with heartfelt hospitality.\nWhat occasion are you looking for a restaurant?',
     voiceStatusStopped: '🎤 Voice Recognition: Stopped',
     voiceStatusListening: '🎤 Please speak...',
     voiceStatusRecording: '🎤 Recording...',
