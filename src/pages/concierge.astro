@@ -78,12 +78,12 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             transform: scale(0.98);
         }
 
-        :global(.app-logo) {
+        .app-logo {
             width: 40px;
             height: 40px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
+        }
 
         .page-header p {
             font-size: 14px;
@@ -184,7 +184,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         <header class="page-header">
             <h1 id="pageTitle">
                 <img src="/pwa-152x152.png" alt="Logo" class="app-logo" />
-                AI コンシェルジュ
+                AIコンシェルジュ
             </h1>
             <p id="pageSubtitle">おもてなしの心でお店探しをサポート</p>
         </header>
@@ -286,7 +286,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
                     
                     <div style="clear: both;"></div>
                     
-                    <img src="/pwa-152x152.png" style="width: 40px; height: 40px; border-radius: 12px; margin-bottom: 12px;">
+                    <img src="/pwa-152x152.png" style="width: 64px; height: 64px; border-radius: 12px; margin-bottom: 12px;">
                     
                     <div style="font-size: 18px; font-weight: 700; margin-bottom: 6px; color: #333;">
                         ホーム画面に追加
