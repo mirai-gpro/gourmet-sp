@@ -1,5 +1,5 @@
 // src/scripts/chat/audio-manager.ts
-// ★根本修正: サーバー準備完了を待ってから音声送信開始
+// ★根本修正: サーバー準備完了を待ってから音声送信開始2
 
 const b64chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function fastArrayBufferToBase64(buffer: ArrayBuffer) {
