@@ -4,13 +4,12 @@ export const i18n = {
   ja: {
     // --- UIテキスト ---
     pageTitle: 'グルメサポートAI',
+    pageTitleConcierge: 'AIコンシェルジュ',
     pageSubtitle: 'AIがあなたにぴったりのお店をご提案します',
     shopListTitle: 'おすすめのお店',
     shopListEmpty: 'チャットで検索すると、ここにお店が表示されます',
     footerMessage: '素敵なグルメ体験をお楽しみください',
     initialGreeting: 'こんにちは!グルメサポートAIです。\n\n本日はどのようなお店をお探ししましょうか?',
-       // ★ 追加: コンシェルジュモード用
-    initialGreetingConcierge: 'ようこそ。AIコンシェルジュがおもてなしの心でお店探しをサポートいたします。\nどのようなシーンでお店をお探しでしょうか?',
     voiceStatusStopped: '🎤 音声認識: 停止中',
     voiceStatusListening: '🎤 話してください...',
     voiceStatusRecording: '🎤 録音中...',
@@ -121,12 +120,12 @@ export const i18n = {
   },
   en: {
     pageTitle: 'Gourmet Support AI',
+    pageTitleConcierge: 'AI Concierge',
     pageSubtitle: 'AI will suggest the perfect restaurant for you',
     shopListTitle: 'Recommended Restaurants',
     shopListEmpty: 'Search in the chat to see restaurants here',
     footerMessage: 'Enjoy your wonderful dining experience',
     initialGreeting: 'Hello! I\'m the Gourmet Support AI.\n\nWhat kind of restaurant are you looking for today? I can help you find restaurants anywhere in the world.',
-    initialGreetingConcierge: 'Welcome! Your AI Concierge is here to assist you with heartfelt hospitality.\nWhat occasion are you looking for a restaurant?',
     voiceStatusStopped: '🎤 Voice Recognition: Stopped',
     voiceStatusListening: '🎤 Please speak...',
     voiceStatusRecording: '🎤 Recording...',
@@ -224,6 +223,7 @@ export const i18n = {
   },
   zh: {
     pageTitle: '美食支持AI',
+    pageTitleConcierge: 'AI礼宾员',
     pageSubtitle: 'AI为您推荐完美的餐厅',
     shopListTitle: '推荐餐厅',
     shopListEmpty: '在聊天中搜索后，餐厅将显示在这里',
@@ -326,6 +326,7 @@ export const i18n = {
   },
   ko: {
     pageTitle: '미식 지원 AI',
+    pageTitleConcierge: 'AI 컨시어지',
     pageSubtitle: 'AI가 완벽한 레스토랑을 추천해 드립니다',
     shopListTitle: '추천 레스토랑',
     shopListEmpty: '채팅에서 검색하면 여기에 레스토랑이 표시됩니다',
