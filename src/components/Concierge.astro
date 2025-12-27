@@ -1,3 +1,4 @@
+
 ---
 // Concierge.astro - コンシェルジュモードUI (チャットモードと同様の機能)
 import ReservationModal from './ReservationModal.astro';
@@ -275,6 +276,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 /* モバイル対応 */
 @media (max-width: 768px) { 
+  .gourmet-chat-container { max-height: 100vh; }
   .avatar-stage { height: 100px; }
   .avatar-container { width: 80px; height: 80px; }
   .floating-buttons { bottom: 80px; right: 16px; gap: 8px; } 
