@@ -1,4 +1,3 @@
-
 ---
 // Concierge.astro - コンシェルジュモードUI (チャットモードと同様の機能)
 import ReservationModal from './ReservationModal.astro';
@@ -93,13 +92,21 @@ const { apiBaseUrl = '' } = Astro.props;
   box-shadow: 0 20px 60px rgba(0,0,0,0.15); 
   width: 100%; 
   max-width: 800px; 
-  max-height: 650px;
+  max-height: none;
+  height: auto;
   display: flex;        
   flex-direction: column; 
   overflow: hidden;
   margin: 0 auto; 
   position: relative; 
   transition: all 0.5s ease;
+}
+
+/* PCのみ高さ制限 */
+@media (min-width: 1024px) {
+  .gourmet-chat-container {
+    max-height: 650px;
+  }
 }
 
 .gourmet-chat-container.mode-concierge {
@@ -273,9 +280,11 @@ input:checked + .slider:before { transform: translateX(20px); }
 .wait-content { text-align: center; width: 80%; max-width: 400px; }
 .wait-video { width: 100%; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); margin-bottom: 16px; }
 
-
 /* モバイル対応 */
 @media (max-width: 768px) { 
+  .chat-area {
+    min-height: 300px;  /* スマホでも適切な高さを確保 */
+  }
   .avatar-stage { height: 100px; }
   .avatar-container { width: 80px; height: 80px; }
   .floating-buttons { bottom: 80px; right: 16px; gap: 8px; } 
