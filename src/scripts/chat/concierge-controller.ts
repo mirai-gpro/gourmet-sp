@@ -1,3 +1,4 @@
+
 // src/scripts/chat/concierge-controller.ts
 import { CoreController } from './core-controller';
 import { AudioManager } from './audio-manager';
@@ -51,11 +52,10 @@ export class ConciergeController extends CoreController {
         } catch (e) {}
       }
 
-      const userId = this.getUserId();
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_info: { user_id: userId }, language: this.currentLanguage, mode: 'concierge' })
+        body: JSON.stringify({ user_info: {}, language: this.currentLanguage })
       });
       const data = await res.json();
       this.sessionId = data.session_id;
