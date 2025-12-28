@@ -214,16 +214,37 @@ export class CoreController {
         } catch (e) {}
       }
 
+      // ブラウザごとのユニークなユーザーIDを取得または生成
+      let userId = localStorage.getItem('gourmet_support_user_id');
+      if (!userId) {
+        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('gourmet_support_user_id', userId);
+      }
+
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_info: {}, language: this.currentLanguage, mode: this.currentMode })
+        body: JSON.stringify({ user_info: { user_id: userId }, language: this.currentLanguage, mode: this.currentMode })
       });
       const data = await res.json();
       this.sessionId = data.session_id;
 
-      // ✅ バックエンドの initial_message を使用（長期記憶対応）
-      const initialMessage = data.initial_message || this.t('initialGreeting');
+      // 挨拶文の組み立て
+      let initialMessage;
+      if (this.currentMode === 'concierge' && data.user_profile?.preferred_name) {
+        // コンシェルジュモード：名前で挨拶
+        const name = data.user_profile.preferred_name;
+        const honorific = data.user_profile.name_honorific || '';
+        const base = this.t('conciergeBaseGreeting') || 'いらっしゃいませ。グルメコンシェルジュです。今日はどのようなシーンでお店をお探しでしょうか?';
+        initialMessage = `お帰りなさいませ、${name}${honorific}。${base}`;
+      } else if (this.currentMode === 'concierge') {
+        // コンシェルジュモード：初回訪問
+        initialMessage = this.t('initialGreetingConcierge') || 'いらっしゃいませ。グルメコンシェルジュです。';
+      } else {
+        // チャットモード：固定挨拶
+        initialMessage = this.t('initialGreeting') || 'こんにちは!お店探しをお手伝いします。';
+      }
+
       this.addMessage('assistant', initialMessage, null, true);
       
       const ackTexts = [
