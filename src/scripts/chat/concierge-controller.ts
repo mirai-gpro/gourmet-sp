@@ -51,32 +51,23 @@ export class ConciergeController extends CoreController {
         } catch (e) {}
       }
 
-      // ブラウザごとのユニークなユーザーIDを取得または生成
-      let userId = localStorage.getItem('gourmet_support_user_id');
-      if (!userId) {
-        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('gourmet_support_user_id', userId);
-      }
+      // ★ user_id を取得（親クラスのメソッドを使用）
+      const userId = this.getUserId();
 
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_info: { user_id: userId }, language: this.currentLanguage, mode: 'concierge' })
+        body: JSON.stringify({
+          user_info: { user_id: userId },
+          language: this.currentLanguage,
+          mode: 'concierge'
+        })
       });
       const data = await res.json();
       this.sessionId = data.session_id;
 
-      // 名前で挨拶を組み立て
-      let greetingText;
-      if (data.user_profile?.preferred_name) {
-        const name = data.user_profile.preferred_name;
-        const honorific = data.user_profile.name_honorific || '';
-        const base = this.t('conciergeBaseGreeting') || 'いらっしゃいませ。グルメコンシェルジュです。今日はどのようなシーンでお店をお探しでしょうか?';
-        greetingText = `お帰りなさいませ、${name}${honorific}。${base}`;
-      } else {
-        greetingText = this.t('initialGreetingConcierge') || 'いらっしゃいませ。グルメコンシェルジュです。';
-      }
-
+      // ✅ バックエンドからの初回メッセージを使用（長期記憶対応）
+      const greetingText = data.initial_message || this.t('initialGreetingConcierge');
       this.addMessage('assistant', greetingText, null, true);
       
       const ackTexts = [
@@ -173,11 +164,18 @@ export class ConciergeController extends CoreController {
   }
 
   // ========================================
-  // 🎯 UI言語更新をオーバーライド（不要なのでコメントアウト）
+  // 🎯 UI言語更新をオーバーライド(挨拶文をコンシェルジュ用に)
   // ========================================
-  // protected updateUILanguage() {
-  //   super.updateUILanguage();
-  // }
+  protected updateUILanguage() {
+    // 親クラスのupdateUILanguageを実行
+    super.updateUILanguage();
+    
+    // ✅ 初期メッセージをコンシェルジュ用に再設定
+    const initialMessage = this.els.chatArea.querySelector('.message.assistant[data-initial="true"] .message-text');
+    if (initialMessage) {
+      initialMessage.textContent = this.t('initialGreetingConcierge');
+    }
+  }
 
   // モード切り替え処理 - ページ遷移
   private toggleMode() {
