@@ -152,8 +152,23 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       overflow-y: auto;
     }
 
-    .shop-list-section.has-shops .shop-list-header p {
-      display: none;
+    /* 初期状態: モバイルでヘッダーを非表示 */
+    @media (max-width: 1023px) {
+      .shop-list-header {
+        display: none;
+      }
+      
+      /* ショップが表示されたら表示 */
+      .shop-list-section.has-shops .shop-list-header {
+        display: block;
+      }
+    }
+
+    /* PC: 常に表示 */
+    @media (min-width: 1024px) {
+      .shop-list-header {
+        display: block;
+      }
     }
 
     @keyframes slideIn {
