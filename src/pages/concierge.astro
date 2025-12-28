@@ -1,5 +1,5 @@
 ---
-// src/pages/concierge.astro
+// src/pages/concierge.astro（修正版）
 import ConciergeComponent from '../components/Concierge.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 
@@ -43,13 +43,12 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             padding: 20px;
         }
         
-        /* コンテナの中央配置 */
         .page-container {
             max-width: 1200px;
             margin: 0 auto;
         }
         
-        /* ページヘッダー */
+        /* ★★★ 修正: ヘッダーを削除せず、コンパクト化 ★★★ */
         .page-header {
             text-align: center;
             color: white;
@@ -83,14 +82,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             height: 40px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
+        }
 
         .page-header p {
             font-size: 14px;
             opacity: 0.9;
         }
 
-        /* メインコンテンツ: PCではグリッド、スマホでは縦並び */
         .main-content {
             display: grid;
             gap: 24px;
@@ -104,12 +102,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             }
         }
 
-        /* チャットセクション */
         .chat-section {
             order: 1;
         }
 
-        /* ショップリストセクション */
         .shop-list-section {
             order: 2;
         }
@@ -154,18 +150,38 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             font-size: 13px;
         }
         
-        /* モバイルでのスタック表示: ショップリストが上、チャットが下 */
+        /* ★★★ 修正: スマホでの表示制御 ★★★ */
         @media (max-width: 1023px) {
             body {
                 padding: 0;
             }
 
-            .page-header,
+            /* ヘッダーをコンパクトに（display: none を削除） */
+            .page-header {
+                padding: 12px 0 16px;
+            }
+
+            .page-header h1 {
+                font-size: 20px;
+            }
+
+            .page-header p {
+                font-size: 12px;
+            }
+
+            /* フッターのみ非表示 */
             .page-footer {
                 display: none;
             }
 
+            /* スマホではショップリストを初期非表示 */
             .shop-list-section {
+                display: none;
+            }
+            
+            /* ショップが追加されたら表示し、チャットより上に配置 */
+            .shop-list-section.has-shops {
+                display: block !important;
                 order: 1;
             }
             
@@ -215,19 +231,21 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             if (pageTitle) {
                 pageTitle.addEventListener('click', () => {
                     console.log('[concierge.astro] Page title clicked - triggering soft reset');
+                    
                     const resetEvent = new CustomEvent('gourmet-app:reset', { 
                         bubbles: true, 
                         cancelable: true 
                     });
+                    
                     document.dispatchEvent(resetEvent);
                 });
             }
         });
 
-        // PWA インストール案内
-        let deferredPrompt = null;
+        // PWAインストール案内
+        let deferredPrompt: any = null;
         const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const isInStandaloneMode = ('standalone' in window.navigator) && window.navigator.standalone;
+        const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
         
         if (isIOS && !isInStandaloneMode) {
             setTimeout(() => {
