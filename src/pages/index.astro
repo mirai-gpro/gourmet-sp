@@ -1,9 +1,11 @@
 ---
-// index.astro - グルメサポートメインページ（修正版）
+// index.astro - グルメサポートメインページ（修正版・完全版）
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
 
+// APIベースURL（Cloud Runのエンドポイント）
+// 本番環境では環境変数から取得
 const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 ---
 
@@ -15,6 +17,8 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <title>グルメサポートAI - お店探しをお手伝い</title>
   
   <link rel="manifest" href="/manifest.webmanifest">
+
+  <!-- iOS用アイコン（既存ファイルのみ使用） -->
   <link rel="apple-touch-icon" sizes="180x180" href="/pwa-192x192.png">
   <link rel="apple-touch-icon" sizes="152x152" href="/pwa-152x152.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png">
@@ -27,7 +31,6 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
-  
   <style>
     * {
       margin: 0;
@@ -105,6 +108,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         align-items: start;
       }
       
+      /* PCのみ高さ制限 */
       .gourmet-chat-container {
         max-height: 600px;
       }
@@ -147,7 +151,6 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       overflow-y: auto;
     }
 
-    /* ★修正: ショップが追加されたら説明文を非表示 */
     .shop-list-section.has-shops .shop-list-header p {
       display: none;
     }
@@ -221,7 +224,85 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <ReservationModal apiBaseUrl={apiBaseUrl} />
 
   <script>
+    // ========================================
+    // ★★★ 緊急対応: Service Worker 完全削除 ★★★
+    // ========================================
+    
+    console.log('[Emergency] Starting Service Worker cleanup...');
+
+    // 1. 既存の Service Worker を完全削除
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        console.log('[SW] Found registrations:', registrations.length);
+        
+        for(let registration of registrations) {
+          console.log('[SW] Unregistering:', registration.scope);
+          registration.unregister().then(function(success) {
+            console.log('[SW] Unregister success:', success);
+          });
+        }
+      }).catch(function(err) {
+        console.error('[SW] Error getting registrations:', err);
+      });
+    }
+
+    // 2. すべてのキャッシュを削除
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        console.log('[Cache] Found caches:', names.length);
+        
+        for (let name of names) {
+          console.log('[Cache] Deleting:', name);
+          caches.delete(name).then(function(success) {
+            console.log('[Cache] Delete success:', success);
+          });
+        }
+      }).catch(function(err) {
+        console.error('[Cache] Error deleting:', err);
+      });
+    }
+
+    // 3. 確認（2秒後）
+    setTimeout(() => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          console.log('✅ [Final Check] Service Workers remaining:', regs.length);
+          if (regs.length === 0) {
+            console.log('✅ Service Worker cleanup successful!');
+          } else {
+            console.warn('⚠️ Some Service Workers still remain:', regs);
+          }
+        });
+      }
+      
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          console.log('✅ [Final Check] Caches remaining:', keys.length);
+          if (keys.length === 0) {
+            console.log('✅ Cache cleanup successful!');
+          } else {
+            console.warn('⚠️ Some caches still remain:', keys);
+          }
+        });
+      }
+    }, 2000);
+
+    // ========================================
+    // ★★★ Service Worker の新規登録を無効化 ★★★
+    // ========================================
+    
+    /*
+    // 問題解決後に再度有効化する場合はコメントを外す
+    import { registerSW } from 'virtual:pwa-register';
+    registerSW({ immediate: true });
+    */
+
+    console.log('✅ Service Worker registration is disabled');
+
+    // ========================================
     // ソフトリセット機能
+    // ========================================
+    
     document.addEventListener('DOMContentLoaded', () => {
       const pageTitle = document.getElementById('pageTitle');
       if (pageTitle) {
@@ -234,16 +315,25 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
           });
           
           document.dispatchEvent(resetEvent);
+          
+          console.log('[index.astro] Reset event dispatched');
         });
+      } else {
+        console.error('[index.astro] pageTitle element not found!');
       }
     });
 
+    // ========================================
     // PWAインストール案内
+    // ========================================
+    
     let deferredPrompt: any = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
     
+    // iPhone: スタンドアロンモードでない場合、案内を表示
     if (isIOS && !isInStandaloneMode) {
+      // ページ読み込み後3秒待ってから表示
       setTimeout(() => {
         showIOSInstallGuide();
       }, 3000);
@@ -374,11 +464,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       document.head.appendChild(style);
       document.body.appendChild(modal);
       
+      // 閉じるボタン
       const closeBtn = document.getElementById('ios-install-close');
       closeBtn?.addEventListener('click', () => {
         modal.remove();
       });
       
+      // 背景クリックで閉じる
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
           modal.remove();
@@ -394,11 +486,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     });
 
     function showInstallPrompt() {
+      // 既存のバナーを削除
       const existingBanner = document.getElementById('install-banner');
       if (existingBanner) {
         existingBanner.remove();
       }
       
+      // インストール案内バナーを作成
       const banner = document.createElement('div');
       banner.id = 'install-banner';
       banner.style.cssText = `
@@ -447,6 +541,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         ">×</button>
       `;
       
+      // アニメーション用CSS
       const style = document.createElement('style');
       style.textContent = `
         @keyframes slideUp {
@@ -463,6 +558,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       document.head.appendChild(style);
       document.body.appendChild(banner);
       
+      // インストールボタン
       const installBtn = document.getElementById('install-btn');
       installBtn?.addEventListener('click', async () => {
         if (deferredPrompt) {
@@ -474,22 +570,20 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
         }
       });
       
+      // 閉じるボタン
       const closeBtn = document.getElementById('install-close');
       closeBtn?.addEventListener('click', () => {
         banner.remove();
       });
     }
 
+    // インストール完了時
     window.addEventListener('appinstalled', () => {
       console.log('PWAがインストールされました');
       deferredPrompt = null;
       const banner = document.getElementById('install-banner');
       if (banner) banner.remove();
     });
-
-    // Service Worker登録
-    import { registerSW } from 'virtual:pwa-register';
-    registerSW({ immediate: true });
   </script>
 </body>
 </html>
