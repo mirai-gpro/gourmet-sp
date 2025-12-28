@@ -9,7 +9,7 @@ export class ConciergeController extends CoreController {
   constructor(container: HTMLElement, apiBase: string) {
     super(container, apiBase);
     
-    // ★コンシェルジュモード用のAudioManagerを6.5秒設定で再初期化
+    // ★コンシェルジュモード用のAudioManagerを6.5秒設定で再初期化２
     this.audioManager = new AudioManager(8000);
     
     // コンシェルジュモードに設定
@@ -703,4 +703,5 @@ export class ConciergeController extends CoreController {
       this.els.userInput.blur();
     }
   }
+
 }
