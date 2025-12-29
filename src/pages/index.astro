@@ -1,5 +1,6 @@
+
 ---
-// index.astro - グルメサポートメインページ（修正版・完全版）
+// index.astro - グルメサポートメインページ
 import GourmetChat from '../components/GourmetChat.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 import ReservationModal from '../components/ReservationModal.astro';
@@ -91,7 +92,8 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     }
 
     .gourmet-chat-container {
-      max-height: none;
+      /* ★修正: スマホで高さを調整 */
+      max-height: none; /* 600px → none */
       height: auto;
       min-height: 400px;
     }
@@ -173,16 +175,9 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       font-size: 13px;
     }
 
-    /* ★★★ 修正: スマホでの表示制御 ★★★ */
+    /* モバイルでのスタック表示 */
     @media (max-width: 1023px) {
-      /* スマホではショップリストを初期非表示 */
       .shop-list-section {
-        display: none;
-      }
-      
-      /* ショップが追加されたら表示し、チャットより上に配置 */
-      .shop-list-section.has-shops {
-        display: block !important;
         order: 1;
       }
       
@@ -224,91 +219,15 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
   <ReservationModal apiBaseUrl={apiBaseUrl} />
 
   <script>
-    // ========================================
-    // ★★★ 緊急対応: Service Worker 完全削除 ★★★
-    // ========================================
-    
-    console.log('[Emergency] Starting Service Worker cleanup...');
-
-    // 1. 既存の Service Worker を完全削除
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        console.log('[SW] Found registrations:', registrations.length);
-        
-        for(let registration of registrations) {
-          console.log('[SW] Unregistering:', registration.scope);
-          registration.unregister().then(function(success) {
-            console.log('[SW] Unregister success:', success);
-          });
-        }
-      }).catch(function(err) {
-        console.error('[SW] Error getting registrations:', err);
-      });
-    }
-
-    // 2. すべてのキャッシュを削除
-    if ('caches' in window) {
-      caches.keys().then(function(names) {
-        console.log('[Cache] Found caches:', names.length);
-        
-        for (let name of names) {
-          console.log('[Cache] Deleting:', name);
-          caches.delete(name).then(function(success) {
-            console.log('[Cache] Delete success:', success);
-          });
-        }
-      }).catch(function(err) {
-        console.error('[Cache] Error deleting:', err);
-      });
-    }
-
-    // 3. 確認（2秒後）
-    setTimeout(() => {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          console.log('✅ [Final Check] Service Workers remaining:', regs.length);
-          if (regs.length === 0) {
-            console.log('✅ Service Worker cleanup successful!');
-          } else {
-            console.warn('⚠️ Some Service Workers still remain:', regs);
-          }
-        });
-      }
-      
-      if ('caches' in window) {
-        caches.keys().then(keys => {
-          console.log('✅ [Final Check] Caches remaining:', keys.length);
-          if (keys.length === 0) {
-            console.log('✅ Cache cleanup successful!');
-          } else {
-            console.warn('⚠️ Some caches still remain:', keys);
-          }
-        });
-      }
-    }, 2000);
-
-    // ========================================
-    // ★★★ Service Worker の新規登録を無効化 ★★★
-    // ========================================
-    
-    /*
-    // 問題解決後に再度有効化する場合はコメントを外す
-    import { registerSW } from 'virtual:pwa-register';
-    registerSW({ immediate: true });
-    */
-
-    console.log('✅ Service Worker registration is disabled');
-
-    // ========================================
-    // ソフトリセット機能
-    // ========================================
-    
+    // ★★★ ソフトリセット機能 ★★★
     document.addEventListener('DOMContentLoaded', () => {
       const pageTitle = document.getElementById('pageTitle');
       if (pageTitle) {
         pageTitle.addEventListener('click', () => {
-          console.log('[index.astro] Page title clicked - triggering soft reset');
+          console.log('[index.astro] ===== PAGE TITLE CLICKED =====');
+          console.log('[index.astro] Triggering soft reset...');
           
+          // ★修正: documentのみにイベント発火（windowは削除）
           const resetEvent = new CustomEvent('gourmet-app:reset', { 
             bubbles: true, 
             cancelable: true 
@@ -323,10 +242,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       }
     });
 
-    // ========================================
-    // PWAインストール案内
-    // ========================================
-    
+    // ★★★ PWAインストール案内を最優先で登録 ★★★
     let deferredPrompt: any = null;
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
@@ -371,6 +287,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
           box-shadow: 0 8px 32px rgba(0,0,0,0.3);
           position: relative;
         ">
+          <!-- 閉じるボタン（大きく目立つ） -->
           <button id="ios-install-close" style="
             position: sticky;
             top: 0;
@@ -400,6 +317,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             アプリのように快適に使えます
           </div>
           
+          <!-- 操作デモ動画（80%サイズで表示） -->
           <div id="demo-video-container" style="
             background: #000;
             border-radius: 8px;
@@ -584,6 +502,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
       const banner = document.getElementById('install-banner');
       if (banner) banner.remove();
     });
+
+    // Service Worker登録
+    import { registerSW } from 'virtual:pwa-register';
+    registerSW({ immediate: true });
   </script>
 </body>
 </html>
