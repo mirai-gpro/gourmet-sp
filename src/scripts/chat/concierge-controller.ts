@@ -51,15 +51,22 @@ export class ConciergeController extends CoreController {
         } catch (e) {}
       }
 
+      // ★ user_id を取得（親クラスのメソッドを使用）
+      const userId = this.getUserId();
+
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_info: {}, language: this.currentLanguage, mode: 'concierge' })
+        body: JSON.stringify({
+          user_info: { user_id: userId },
+          language: this.currentLanguage,
+          mode: 'concierge'
+        })
       });
       const data = await res.json();
       this.sessionId = data.session_id;
 
-      // ✅ バックエンドの initial_message を使用（長期記憶対応）
+      // ✅ バックエンドからの初回メッセージを使用（長期記憶対応）
       const greetingText = data.initial_message || this.t('initialGreetingConcierge');
       this.addMessage('assistant', greetingText, null, true);
       
@@ -157,11 +164,21 @@ export class ConciergeController extends CoreController {
   }
 
   // ========================================
-  // 🎯 UI言語更新をオーバーライド（不要なのでコメントアウト）
+  // 🎯 UI言語更新をオーバーライド
   // ========================================
-  // protected updateUILanguage() {
-  //   super.updateUILanguage();
-  // }
+  protected updateUILanguage() {
+    // ✅ バックエンドからの長期記憶対応済み挨拶を保持
+    const initialMessage = this.els.chatArea.querySelector('.message.assistant[data-initial="true"] .message-text');
+    const savedGreeting = initialMessage?.textContent;
+
+    // 親クラスのupdateUILanguageを実行（UIラベル等を更新）
+    super.updateUILanguage();
+
+    // ✅ 長期記憶対応済み挨拶を復元（親が上書きしたものを戻す）
+    if (initialMessage && savedGreeting) {
+      initialMessage.textContent = savedGreeting;
+    }
+  }
 
   // モード切り替え処理 - ページ遷移
   private toggleMode() {
