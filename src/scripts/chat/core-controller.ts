@@ -385,7 +385,7 @@ protected async toggleRecording() {
     this.addMessage('user', transcript);
     
     const textLength = transcript.trim().replace(/\s+/g, '').length;
-    if (textLength < 4) {
+    if (textLength < 2) {
         const msg = this.t('shortMsgWarning');
         this.addMessage('assistant', msg);
         if (this.isTTSEnabled && this.isUserInteracted) {
@@ -465,7 +465,7 @@ protected async toggleRecording() {
     if (!this.isFromVoiceInput) {
       this.addMessage('user', message);
       const textLength = message.trim().replace(/\s+/g, '').length;
-      if (textLength < 4) {
+      if (textLength < 2) {
            const msg = this.t('shortMsgWarning');
            this.addMessage('assistant', msg);
            if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(msg, true);
