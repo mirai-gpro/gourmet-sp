@@ -1,4 +1,3 @@
-
 // src/scripts/chat/core-controller.ts
 import { i18n } from '../../constants/i18n'; 
 import { AudioManager } from './audio-manager';
@@ -70,39 +69,13 @@ export class CoreController {
     // ※ init() はコンストラクタで呼ばず、継承先で呼ぶ設計にします
   }
 
-  // 永続的なユーザーIDを取得または生成
-  protected getUserId(): string {
-    const STORAGE_KEY = 'gourmet_support_user_id';
-    let userId = localStorage.getItem(STORAGE_KEY);
-
-    if (!userId) {
-      // 新規ユーザー: UUIDを生成して保存
-      userId = this.generateUUID();
-      localStorage.setItem(STORAGE_KEY, userId);
-      console.log('[Core] New user ID generated:', userId);
-    } else {
-      console.log('[Core] Existing user ID found:', userId);
-    }
-
-    return userId;
-  }
-
-  // UUID v4生成
-  private generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
-
   // 初期化メソッド (継承先から呼び出す)
   protected async init() {
     console.log('[Core] Starting initialization...');
 
     this.bindEvents();
     this.initSocket();
-    
+
     // スプラッシュ画面のフェイルセーフ
     setTimeout(() => {
         if (this.els.splashVideo) this.els.splashVideo.loop = false;
@@ -114,15 +87,29 @@ export class CoreController {
 
     await this.initializeSession();
     this.updateUILanguage();
-    
+
     setTimeout(() => {
       if (this.els.splashOverlay) {
         this.els.splashOverlay.classList.add('fade-out');
         setTimeout(() => this.els.splashOverlay.classList.add('hidden'), 800);
       }
     }, 2000);
-    
+
     console.log('[Core] Initialization completed');
+  }
+
+  // ========================================
+  // ★ user_id 取得（localStorage で永続化）
+  // ========================================
+  protected getUserId(): string {
+    const STORAGE_KEY = 'gourmet_support_user_id';
+    let userId = localStorage.getItem(STORAGE_KEY);
+    if (!userId) {
+      userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem(STORAGE_KEY, userId);
+      console.log('[Core] 新規 user_id を生成:', userId);
+    }
+    return userId;
   }
 
   protected async resetAppContent() {
@@ -165,7 +152,6 @@ export class CoreController {
 
     await new Promise(resolve => setTimeout(resolve, 300));
     await this.initializeSession();
-    this.updateUILanguage();  // リセット後にUIを更新
     console.log('[Reset] Completed');
   }
 
@@ -184,10 +170,9 @@ export class CoreController {
       if (e.key === 'Enter') this.sendMessage();
     });
     
-    this.els.languageSelect?.addEventListener('change', async () => {
+    this.els.languageSelect?.addEventListener('change', () => {
       this.currentLanguage = this.els.languageSelect.value as any;
-      // 言語切り替え時はセッションを再初期化（長期記憶対応）
-      await this.resetAppContent();
+      this.updateUILanguage();
     });
 
     const floatingButtons = this.container.querySelector('.floating-buttons');
@@ -241,18 +226,15 @@ export class CoreController {
         } catch (e) {}
       }
 
-      const userId = this.getUserId();
       const res = await fetch(`${this.apiBase}/api/session/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_info: { user_id: userId }, language: this.currentLanguage, mode: this.currentMode })
+        body: JSON.stringify({ user_info: {}, language: this.currentLanguage })
       });
       const data = await res.json();
       this.sessionId = data.session_id;
-
-      // ✅ バックエンドの initial_message を使用（長期記憶対応）
-      const initialMessage = data.initial_message || this.t('initialGreeting');
-      this.addMessage('assistant', initialMessage, null, true);
+      
+      this.addMessage('assistant', this.t('initialGreeting'), null, true);
       
       const ackTexts = [
         this.t('ackConfirm'), this.t('ackSearch'), this.t('ackUnderstood'), 
@@ -277,7 +259,7 @@ export class CoreController {
       });
 
       await Promise.all([
-        this.speakTextGCP(initialMessage),
+        this.speakTextGCP(this.t('initialGreeting')), 
         ...ackPromises
       ]);
       
@@ -987,19 +969,16 @@ protected async toggleRecording() {
 
   protected updateUILanguage() {
     console.log('[Core] Updating UI language to:', this.currentLanguage);
-    console.log('[Core] Current mode:', this.currentMode);
-    console.log('[Core] Setting title for mode:', this.currentMode);
-
+    
     this.els.voiceStatus.innerHTML = this.t('voiceStatusStopped');
     this.els.userInput.placeholder = this.t('inputPlaceholder');
     this.els.micBtn.title = this.t('btnVoiceInput');
     this.els.speakerBtn.title = this.isTTSEnabled ? this.t('btnTTSOn') : this.t('btnTTSOff');
     this.els.sendBtn.textContent = this.t('btnSend');
     this.els.reservationBtn.innerHTML = this.t('btnReservation');
-
+    
     const pageTitle = document.getElementById('pageTitle');
-    const titleKey = this.currentMode === 'concierge' ? 'pageTitleConcierge' : 'pageTitle';
-    if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${this.t(titleKey)}`;
+    if (pageTitle) pageTitle.innerHTML = `<img src="/pwa-152x152.png" alt="Logo" class="app-logo" /> ${this.t('pageTitle')}`;
     const pageSubtitle = document.getElementById('pageSubtitle');
     if (pageSubtitle) pageSubtitle.textContent = this.t('pageSubtitle');
     const shopListTitle = document.getElementById('shopListTitle');
@@ -1009,9 +988,10 @@ protected async toggleRecording() {
     const pageFooter = document.getElementById('pageFooter');
     if (pageFooter) pageFooter.innerHTML = `${this.t('footerMessage')} ✨`;
 
-    // ❌ 初期メッセージは更新しない
-    // initializeSession() で設定されたバックエンドの initial_message を保持
-    // 言語切り替え時はセッションを再初期化するため、ここでの更新は不要
+    const initialMessage = this.els.chatArea.querySelector('.message.assistant[data-initial="true"] .message-text');
+    if (initialMessage) {
+      initialMessage.textContent = this.t('initialGreeting');
+    }
     
     const waitText = document.querySelector('.wait-text');
     if (waitText) waitText.textContent = this.t('waitMessage');
