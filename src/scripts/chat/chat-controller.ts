@@ -1,4 +1,5 @@
-// src/scripts/chat/chat-controller.ts（修正版・完全版）
+
+// src/scripts/chat/chat-controller.ts
 import { CoreController } from './core-controller';
 import { AudioManager } from './audio-manager'; 
 
@@ -32,20 +33,13 @@ export class ChatController extends CoreController {
     }
   }
 
-  // ★★★ 修正: モード切り替え処理の安定化 ★★★
+  // モード切り替え処理 - ページ遷移
   private toggleMode() {
     const isChecked = this.els.modeSwitch?.checked;
     if (isChecked) {
+      // コンシェルジュモードへページ遷移
       console.log('[ChatController] Switching to Concierge mode...');
-      
-      // ★ ステップ1: すべての処理を停止
-      this.stopAllActivities();
-      
-      // ★ ステップ2: 少し待ってからページ遷移（非同期処理の完了を待つ）
-      setTimeout(() => {
-        console.log('[ChatController] Navigating to /concierge');
-        window.location.href = '/concierge';
-      }, 150);
+      window.location.href = '/concierge';
     }
     // チャットモードは既に現在のページなので何もしない
   }
