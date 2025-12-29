@@ -1,5 +1,6 @@
+
 ---
-// src/pages/concierge.astro（修正版・完全版）
+// src/pages/concierge.astro
 import ConciergeComponent from '../components/Concierge.astro';
 import ShopCardList from '../components/ShopCardList.astro';
 
@@ -43,12 +44,13 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             padding: 20px;
         }
         
+        /* コンテナの中央配置 */
         .page-container {
             max-width: 1200px;
             margin: 0 auto;
         }
         
-        /* ★★★ 修正: ヘッダーを削除せず、コンパクト化 ★★★ */
+        /* ページヘッダー */
         .page-header {
             text-align: center;
             color: white;
@@ -82,13 +84,14 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             height: 40px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
+}
 
         .page-header p {
             font-size: 14px;
             opacity: 0.9;
         }
 
+        /* メインコンテンツ: PCではグリッド、スマホでは縦並び */
         .main-content {
             display: grid;
             gap: 24px;
@@ -102,10 +105,12 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             }
         }
 
+        /* チャットセクション */
         .chat-section {
             order: 1;
         }
 
+        /* ショップリストセクション */
         .shop-list-section {
             order: 2;
         }
@@ -150,38 +155,18 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             font-size: 13px;
         }
         
-        /* ★★★ 修正: スマホでの表示制御 ★★★ */
+        /* モバイルでのスタック表示: ショップリストが上、チャットが下 */
         @media (max-width: 1023px) {
             body {
                 padding: 0;
             }
 
-            /* ヘッダーをコンパクトに（display: none を削除） */
-            .page-header {
-                padding: 12px 0 16px;
-            }
-
-            .page-header h1 {
-                font-size: 20px;
-            }
-
-            .page-header p {
-                font-size: 12px;
-            }
-
-            /* フッターのみ非表示 */
+            .page-header,
             .page-footer {
                 display: none;
             }
 
-            /* スマホではショップリストを初期非表示 */
             .shop-list-section {
-                display: none;
-            }
-            
-            /* ショップが追加されたら表示し、チャットより上に配置 */
-            .shop-list-section.has-shops {
-                display: block !important;
                 order: 1;
             }
             
@@ -225,85 +210,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     </div>
 
     <script>
-        // ========================================
-        // ★★★ 緊急対応: Service Worker 完全削除 ★★★
-        // ========================================
-        
-        console.log('[Emergency] Starting Service Worker cleanup...');
-
-        // 1. 既存の Service Worker を完全削除
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                console.log('[SW] Found registrations:', registrations.length);
-                
-                for(let registration of registrations) {
-                    console.log('[SW] Unregistering:', registration.scope);
-                    registration.unregister().then(function(success) {
-                        console.log('[SW] Unregister success:', success);
-                    });
-                }
-            }).catch(function(err) {
-                console.error('[SW] Error getting registrations:', err);
-            });
-        }
-
-        // 2. すべてのキャッシュを削除
-        if ('caches' in window) {
-            caches.keys().then(function(names) {
-                console.log('[Cache] Found caches:', names.length);
-                
-                for (let name of names) {
-                    console.log('[Cache] Deleting:', name);
-                    caches.delete(name).then(function(success) {
-                        console.log('[Cache] Delete success:', success);
-                    });
-                }
-            }).catch(function(err) {
-                console.error('[Cache] Error deleting:', err);
-            });
-        }
-
-        // 3. 確認（2秒後）
-        setTimeout(() => {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistrations().then(regs => {
-                    console.log('✅ [Final Check] Service Workers remaining:', regs.length);
-                    if (regs.length === 0) {
-                        console.log('✅ Service Worker cleanup successful!');
-                    } else {
-                        console.warn('⚠️ Some Service Workers still remain:', regs);
-                    }
-                });
-            }
-            
-            if ('caches' in window) {
-                caches.keys().then(keys => {
-                    console.log('✅ [Final Check] Caches remaining:', keys.length);
-                    if (keys.length === 0) {
-                        console.log('✅ Cache cleanup successful!');
-                    } else {
-                        console.warn('⚠️ Some caches still remain:', keys);
-                    }
-                });
-            }
-        }, 2000);
-
-        // ========================================
-        // ★★★ Service Worker の新規登録を無効化 ★★★
-        // ========================================
-        
-        /*
-        // 問題解決後に再度有効化する場合はコメントを外す
-        import { registerSW } from 'virtual:pwa-register';
-        registerSW({ immediate: true });
-        */
-
-        console.log('✅ Service Worker registration is disabled');
-
-        // ========================================
         // ソフトリセット機能
-        // ========================================
-        
         document.addEventListener('DOMContentLoaded', () => {
             const pageTitle = document.getElementById('pageTitle');
             if (pageTitle) {
@@ -318,10 +225,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             }
         });
 
-        // ========================================
-        // PWAインストール案内
-        // ========================================
-        
+        // PWA インストール案内
         let deferredPrompt = null;
         const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
         const isInStandaloneMode = ('standalone' in window.navigator) && window.navigator.standalone;
@@ -569,6 +473,10 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
             const banner = document.getElementById('install-banner');
             if (banner) banner.remove();
         });
+
+        // Service Worker登録
+        import { registerSW } from 'virtual:pwa-register';
+        registerSW({ immediate: true });
     </script>
 </body>
 </html>
