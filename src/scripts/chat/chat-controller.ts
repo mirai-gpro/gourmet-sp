@@ -1,10 +1,12 @@
 // src/scripts/chat/chat-controller.ts
 import { CoreController } from './core-controller';
+import { AudioManager } from './audio-manager'; 
 
 export class ChatController extends CoreController {
   
   constructor(container: HTMLElement, apiBase: string) {
     super(container, apiBase);
+    this.audioManager = new AudioManager(4500);
     // チャットモードに設定
     this.currentMode = 'chat';
     this.init();
