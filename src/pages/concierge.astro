@@ -170,6 +170,16 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
                 display: none;
             }
 
+            /* ★追加: モバイルで初期状態のショップヘッダーを非表示 */
+            .shop-list-header {
+                display: none;
+            }
+            
+            /* ★追加: ショップが表示されたら表示 */
+            .shop-list-section.has-shops .shop-list-header {
+                display: block;
+            }
+
             .shop-list-section {
                 order: 1;
             }
