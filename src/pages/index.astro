@@ -91,8 +91,7 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
     }
 
     .gourmet-chat-container {
-      /* ★修正: スマホで高さを調整 */
-      max-height: none; /* 600px → none */
+      max-height: none;
       height: auto;
       min-height: 400px;
     }
@@ -176,6 +175,16 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_URL || '';
 
     /* モバイルでのスタック表示 */
     @media (max-width: 1023px) {
+      /* ★追加: モバイルで初期状態のショップヘッダーを非表示 */
+      .shop-list-header {
+        display: none;
+      }
+      
+      /* ★追加: ショップが表示されたら表示 */
+      .shop-list-section.has-shops .shop-list-header {
+        display: block;
+      }
+
       .shop-list-section {
         order: 1;
       }
