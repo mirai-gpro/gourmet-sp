@@ -26,7 +26,7 @@ export class CoreController {
   protected currentAISpeech = "";
   protected currentMode: 'chat' | 'concierge' = 'chat';
   
-  // ★追加: バックグラウンド状態の追跡（これだけ）
+  // ★追加: バックグラウンド状態の追跡
   protected isInBackground = false;
   
   protected isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -68,6 +68,7 @@ export class CoreController {
 
   protected async init() {
     console.log('[Core] Starting initialization...');
+
     this.bindEvents();
     this.initSocket();
 
@@ -148,7 +149,11 @@ export class CoreController {
 
   protected bindEvents() {
     this.els.sendBtn?.addEventListener('click', () => this.sendMessage());
-    this.els.micBtn?.addEventListener('click', () => this.toggleRecording());
+    
+    this.els.micBtn?.addEventListener('click', () => {
+      this.toggleRecording();
+    });
+
     this.els.speakerBtn?.addEventListener('click', () => this.toggleTTS());
     this.els.reservationBtn?.addEventListener('click', () => this.openReservationModal());
     this.els.stopBtn?.addEventListener('click', () => this.stopAllActivities());
@@ -170,37 +175,35 @@ export class CoreController {
       if (floatingButtons) floatingButtons.classList.remove('keyboard-active');
     });
 
-    // ★追加: バックグラウンド復帰時のSocket再接続のみ
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        this.isInBackground = true;
-      } else if (this.isInBackground) {
-        this.isInBackground = false;
-        // Socket接続の確認と再接続のみ
-        if (this.socket && !this.socket.connected) {
-          console.log('[Foreground] Reconnecting socket...');
-          this.socket.connect();
-        }
-      }
-    });
-
     const resetHandler = async () => { await this.resetAppContent(); };
     const resetWrapper = async () => {
       await resetHandler();
       document.addEventListener('gourmet-app:reset', resetWrapper, { once: true });
     };
     document.addEventListener('gourmet-app:reset', resetWrapper, { once: true });
+
+    // ★追加: バックグラウンド復帰時のSocket再接続のみ
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.isInBackground = true;
+      } else if (this.isInBackground) {
+        this.isInBackground = false;
+        if (this.socket && !this.socket.connected) {
+          console.log('[Foreground] Reconnecting socket...');
+          this.socket.connect();
+        }
+      }
+    });
   }
 
-  // ★修正: Socket.IO接続設定に再接続オプションを追加
+  // ★修正: Socket.IO接続設定に再接続オプションを追加（transportsは削除）
   protected initSocket() {
     // @ts-ignore
     this.socket = io(this.apiBase || window.location.origin, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5,
-      timeout: 10000,
-      transports: ['websocket', 'polling']
+      timeout: 10000
     });
     
     this.socket.on('connect', () => { });
