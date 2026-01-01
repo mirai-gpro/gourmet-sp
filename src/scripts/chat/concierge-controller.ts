@@ -382,7 +382,7 @@ export class ConciergeController extends CoreController {
     
     // 短すぎる入力チェック
     const textLength = transcript.trim().replace(/\s+/g, '').length;
-    if (textLength < 2) {
+    if (textLength < 4) {
         const msg = this.t('shortMsgWarning');
         this.addMessage('assistant', msg);
         if (this.isTTSEnabled && this.isUserInteracted) {
@@ -458,7 +458,7 @@ export class ConciergeController extends CoreController {
     if (!this.isFromVoiceInput) {
       this.addMessage('user', message);
       const textLength = message.trim().replace(/\s+/g, '').length;
-      if (textLength < 2) {
+      if (textLength < 4) {
            const msg = this.t('shortMsgWarning');
            this.addMessage('assistant', msg);
            if (this.isTTSEnabled && this.isUserInteracted) await this.speakTextGCP(msg, true);
