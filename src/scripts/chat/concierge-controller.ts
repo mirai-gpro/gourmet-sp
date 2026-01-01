@@ -1,4 +1,3 @@
-
 // src/scripts/chat/concierge-controller.ts
 import { CoreController } from './core-controller';
 import { AudioManager } from './audio-manager';
